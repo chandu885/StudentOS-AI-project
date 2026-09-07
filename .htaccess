@@ -1,0 +1,58 @@
+# .htaccess - Root directory
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Redirect to frontend
+    RewriteRule ^$ frontend/ [L]
+    RewriteRule ^(?!backend/|storage/|database/|docs/|tests/)(.*)$ frontend/$1 [L]
+    
+    # Handle Authorization Header
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+</IfModule>
+
+# Security Headers
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "DENY"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+    Header set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+</IfModule>
+
+# Disable directory listing
+Options -Indexes
+
+# Protect sensitive files
+<FilesMatch "\.(env|json|config|inc|ini|log|sql|lock)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# PHP Settings
+<IfModule mod_php8.c>
+    php_value upload_max_filesize 20M
+    php_value post_max_size 20M
+    php_value max_execution_time 300
+    php_value memory_limit 256M
+    php_value date.timezone Asia/Kolkata
+</IfModule>
+
+# Cache Control
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/webp "access plus 1 year"
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType font/woff2 "access plus 1 year"
+</IfModule>
+
+# Gzip Compression
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css text/plain text/xml text/javascript application/javascript application/json
+</IfModule>

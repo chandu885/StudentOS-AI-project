@@ -1,0 +1,208 @@
+/* frontend/assets/css/responsive.css - Comprehensive Responsive & Alignment Rules */
+
+/* Sidebar Toggle Button across all displays */
+.sidebar-toggle-btn {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+}
+
+
+/* Large Displays and Laptops */
+@media (max-width: 1200px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .hero-title {
+        font-size: 38px;
+    }
+}
+
+/* Tablets and Below */
+@media (max-width: 992px) {
+    .sidebar {
+        position: fixed;
+        left: -280px;
+        top: 0;
+        bottom: 0;
+        width: 280px;
+        z-index: var(--z-fixed);
+        transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: var(--shadow-xl);
+    }
+
+    .sidebar.open, .sidebar.show {
+        left: 0 !important;
+    }
+
+    .sidebar-overlay {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.65);
+        backdrop-filter: blur(3px);
+        z-index: calc(var(--z-fixed) - 1);
+        display: none;
+    }
+
+    .sidebar.open ~ .sidebar-overlay,
+    .sidebar.show ~ .sidebar-overlay {
+        display: block !important;
+    }
+
+    .dashboard-main {
+        margin-left: 0 !important;
+        width: 100%;
+    }
+
+    .nav-search-box {
+        width: 220px;
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .hero-grid {
+        grid-template-columns: 1fr;
+        gap: 36px;
+    }
+
+    .hero-visual {
+        order: 2;
+    }
+
+    .features-grid, .steps-grid, .testimonials-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .profile-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .support-quick-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .task-stats-bar {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Mobile Screens */
+@media (max-width: 768px) {
+    .dashboard-content {
+        padding: var(--spacing-md);
+    }
+
+    .welcome-section, .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--spacing-sm);
+    }
+
+    .quick-actions, .header-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .top-navbar {
+        padding: 0 var(--spacing-md);
+    }
+
+    .nav-search-box {
+        display: none;
+    }
+
+    .hide-mobile {
+        display: none !important;
+    }
+
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .features-grid, .steps-grid, .testimonials-grid, .support-quick-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .hero-title {
+        font-size: 30px;
+    }
+
+    .hero-subtitle {
+        font-size: 15px;
+    }
+
+    .hero-buttons {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .hero-buttons .btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .hero-stats {
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+
+    .landing-nav-links {
+        display: none;
+    }
+
+    .data-table th, .data-table td {
+        padding: 10px 12px;
+        font-size: var(--font-size-xs);
+    }
+
+    .modal-card {
+        width: 95%;
+        margin: 10px;
+    }
+
+    .toast-container {
+        left: 16px;
+        right: 16px;
+        bottom: 16px;
+    }
+
+    .toast {
+        min-width: unset;
+        width: 100%;
+    }
+    
+    .task-controls-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .task-filter-group {
+        overflow-x: auto;
+    }
+}
+
+/* Small Smart Phones */
+@media (max-width: 480px) {
+    .stat-card {
+        padding: var(--spacing-md);
+    }
+
+    .stat-icon {
+        width: 42px;
+        height: 42px;
+        font-size: 18px;
+    }
+
+    .stat-number {
+        font-size: var(--font-size-lg);
+    }
+    
+    .task-stats-bar {
+        grid-template-columns: 1fr;
+    }
+}
