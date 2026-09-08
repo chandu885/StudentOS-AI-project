@@ -51,10 +51,8 @@ if (empty($coursesList)) {
 // Final fallback to standard university degree programs
 if (empty($coursesList)) {
     $coursesList = [
-        ['id' => 1, 'name' => 'B.Tech in Computer Science', 'code' => 'BTECH-CSE', 'degree_type' => 'Bachelor'],
-        ['id' => 2, 'name' => 'Master of Computer Applications', 'code' => 'MCA', 'degree_type' => 'Master'],
-        ['id' => 3, 'name' => 'B.Tech in Electronics & Communication', 'code' => 'BTECH-ECE', 'degree_type' => 'Bachelor'],
-        ['id' => 4, 'name' => 'M.Tech in Artificial Intelligence', 'code' => 'MTECH-AI', 'degree_type' => 'Master']
+        ['id' => 1, 'name' => 'Bachelor of Business Administration', 'code' => 'BBA', 'degree_type' => 'Bachelor'],
+        ['id' => 2, 'name' => 'Bachelor of Computer Applications', 'code' => 'BCA', 'degree_type' => 'Bachelor'],
     ];
 }
 $courses = $coursesList;
@@ -72,9 +70,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'semester' => sanitize($_POST['semester'] ?? ''),
         'section' => '',
         'roll_number' => sanitize($_POST['roll_number'] ?? ''),
-        'phone' => sanitize($_POST['phone'] ?? ''),
-        'date_of_birth' => sanitize($_POST['date_of_birth'] ?? ''),
-        'address' => sanitize($_POST['address'] ?? '')
     ];
     
     // Validate required fields (department and section removed)
@@ -164,7 +159,6 @@ if (isset($_GET['department_id']) && is_numeric($_GET['department_id'])) {
                     <i class="fas fa-user-graduate"></i> Student Registration
                 </div>
                 <h1>Student Registration</h1>
-                <p>Register your account or <a href="student/login.php" style="color: var(--primary); font-weight: 600; text-decoration: underline;">sign in directly to the Student Portal</a></p>
             </div>
             
             <?php if (!empty($error)): ?>

@@ -73,7 +73,7 @@ $currentUser = $loggedIn ? ($_SESSION['user'] ?? null) : null;
                     </a>
                 <?php else: ?>
                     <a href="<?php echo htmlspecialchars(url('/faculty/login.php')); ?>" class="btn btn-outline" role="button" style="display: inline-flex; align-items: center; gap: 6px; border-color: rgba(99, 102, 241, 0.4);">
-                        <i class="fas fa-user-shield"></i> <span>Admin Login</span>
+                        <i class="fas fa-user-shield"></i> <span>Staff Login</span>
                     </a>
                     <a href="<?php echo htmlspecialchars(url('/register.php')); ?>" class="btn btn-outline" role="button" style="display: inline-flex; align-items: center; gap: 6px; border-color: rgba(99, 102, 241, 0.4);">
                         <i class="fas fa-user-plus"></i> <span>Register</span>
