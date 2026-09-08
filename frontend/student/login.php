@@ -22,7 +22,7 @@ if (isLoggedIn()) {
 }
 
 $error = '';
-$email = '';
+$email = sanitize($_GET['email'] ?? 'student@gmail.com');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = sanitize($_POST['email'] ?? '');
@@ -119,6 +119,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </a>
             </div>
             
+            <!-- Demo Credentials Quick Selector -->
+            <div style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: var(--radius-md); padding: 12px; margin-bottom: 18px;">
+                <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--primary); letter-spacing: 0.5px; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+                    <span><i class="fas fa-bolt"></i> Example Student Credentials</span>
+                    <button type="button" class="btn btn-primary" style="font-size: 11px; padding: 3px 8px; height: auto;" onclick="fillLogin('student@gmail.com', 'Student@12345')">
+                        Auto Fill
+                    </button>
+                </div>
+                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
+                    <div><strong>Email:</strong> <code style="color: var(--primary);">student@gmail.com</code> (or <code>student@studentos.ai</code>)</div>
+                    <div><strong>Password:</strong> <code style="color: var(--primary);">Student@12345</code></div>
+                </div>
+            </div>
+            
             <?php if (!empty($error)): ?>
                 <div class="alert alert-error">
                     <i class="fas fa-exclamation-circle"></i>
@@ -132,7 +146,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="input-group">
                         <span class="input-icon"><i class="fas fa-envelope"></i></span>
                         <input type="email" id="email" name="email" class="form-control"
-                               placeholder="student@studentos.ai" 
+                               placeholder="student@gmail.com" 
                                value="<?php echo htmlspecialchars($email); ?>" 
                                required autofocus>
                     </div>
@@ -162,6 +176,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <i class="fas fa-sign-in-alt"></i> Launch Student Dashboard
                 </button>
             </form>
+
+            <div style="text-align: center; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border-color); font-size: 13px;">
+                <span style="color: var(--text-secondary);">New student?</span>
+                <a href="../register.php" style="color: var(--primary); font-weight: 700; margin-left: 4px;">
+                    <i class="fas fa-user-plus"></i> Register an Account
+                </a>
+            </div>
             
             <div class="auth-footer">
                 <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
@@ -185,6 +206,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 input.type = 'password';
                 icon.className = 'fas fa-eye';
             }
+        }
+
+        function fillLogin(email, password) {
+            document.getElementById('email').value = email;
+            document.getElementById('password').value = password;
         }
     </script>
 </body>

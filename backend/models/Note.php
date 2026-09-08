@@ -69,7 +69,7 @@ class Note {
 
     public function createDocument($userId, $subjectId, $title, $filePath, $fileSize, $fileType, $desc = null) {
         $stmt = $this->db->prepare("INSERT INTO documents (user_id, subject_id, title, file_path, file_size, file_type, description) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("iisdiss", $userId, $subjectId, $title, $filePath, $fileSize, $fileType, $desc);
+        $stmt->bind_param("iississ", $userId, $subjectId, $title, $filePath, $fileSize, $fileType, $desc);
         if ($stmt->execute()) {
             return $this->db->lastInsertId();
         }

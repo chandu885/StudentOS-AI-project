@@ -99,3 +99,20 @@ function copyToClipboard(text) {
         showToast('Failed to copy', 'error');
     });
 }
+
+// Auth headers helper for API calls
+function getAuthHeaders(customHeaders = {}) {
+    const headers = Object.assign({}, customHeaders);
+    try {
+        const token = localStorage.getItem('auth_token');
+        const sessionToken = localStorage.getItem('session_token');
+        if (token) {
+            headers['Authorization'] = 'Bearer ' + token;
+        }
+        if (sessionToken) {
+            headers['X-Session-Token'] = sessionToken;
+        }
+    } catch(e) {}
+    return headers;
+}
+

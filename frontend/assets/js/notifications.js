@@ -7,8 +7,11 @@ async function fetchNotifications() {
         const notifBadge = document.getElementById('navbar-notif-badge');
         const notifList = document.getElementById('navbar-notif-list');
         
-        // Use relative path to proxy or direct API
-        const res = await fetch('/StudentOS-AI-project/backend/api/notifications.php');
+        const headers = typeof getAuthHeaders === 'function' ? getAuthHeaders() : {};
+        const res = await fetch('/StudentOS-AI-project/backend/api/notifications.php', {
+            credentials: 'same-origin',
+            headers: headers
+        });
         if (!res.ok) return;
         const data = await res.json();
         
@@ -39,9 +42,11 @@ async function fetchNotifications() {
 
 async function markNotificationRead(id) {
     try {
+        const headers = typeof getAuthHeaders === 'function' ? getAuthHeaders({ 'Content-Type': 'application/json' }) : { 'Content-Type': 'application/json' };
         await fetch('/StudentOS-AI-project/backend/api/notifications.php?path=read', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            headers: headers,
             body: JSON.stringify({ id: id })
         });
         fetchNotifications();

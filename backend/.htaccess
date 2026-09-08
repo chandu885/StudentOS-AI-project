@@ -15,7 +15,7 @@
     # Handle API Requests
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteRule ^ index.php [QSA,L]
+    RewriteRule ^ API/index.php [QSA,L]
 </IfModule>
 
 # CORS Headers

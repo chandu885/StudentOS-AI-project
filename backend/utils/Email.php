@@ -115,19 +115,19 @@ class Email {
         ];
         
         // Use SMTP if configured
-        $host = $this->config->get('mail_host');
-        if ($host && $host !== 'smtp.gmail.com') {
+        $host = $this->config->get('smtp_host', $this->config->get('mail_host'));
+        if ($host && $host !== 'smtp.gmail.com' && !empty($this->config->get('smtp_user'))) {
             // Custom SMTP implementation or use PHPMailer
             return $this->sendSMTP($to, $subject, $html);
         }
         
-        // Fallback to mail() function
-        return mail($to, $subject, $html, implode("\r\n", $headers));
+        // Fallback to mail() function safely
+        return @mail($to, $subject, $html, implode("\r\n", $headers));
     }
     
     private function sendSMTP($to, $subject, $html) {
         // This is a simplified version - use PHPMailer for production
-        // For now, fallback to mail()
-        return mail($to, $subject, $html, "MIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\nFrom: " . $this->config->get('mail_from'));
+        // For now, fallback to mail() safely
+        return @mail($to, $subject, $html, "MIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\nFrom: " . $this->config->get('mail_from'));
     }
 }

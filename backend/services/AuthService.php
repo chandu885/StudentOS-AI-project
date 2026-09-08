@@ -102,10 +102,14 @@ class AuthService {
             $token = $this->generateToken();
             $this->createVerificationToken($user['id'], $token);
             
-            // Send verification email
-            $this->email->sendVerificationEmail($user['email'], $user['first_name'], $token);
-            
             $db->commit();
+
+            // Send verification email safely outside active transaction
+            try {
+                $this->email->sendVerificationEmail($user['email'], $user['first_name'], $token);
+            } catch (Throwable $mEx) {
+                Logger::warning('Verification email could not be sent: ' . $mEx->getMessage());
+            }
             
             return ['success' => true, 'user' => $user];
             

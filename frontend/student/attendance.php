@@ -9,21 +9,23 @@ requireRole('student');
 
 $userId = $_SESSION['user']['id'];
 $attRes = apiCall('/attendance.php', 'GET');
-$attendanceRecords = $attRes['summary'] ?? [
-    ['subject_name' => 'Database Management Systems', 'total_classes' => 28, 'attended' => 25, 'percentage' => 89.2],
-    ['subject_name' => 'Data Structures & Algorithms', 'total_classes' => 30, 'attended' => 28, 'percentage' => 93.3],
-    ['subject_name' => 'Operating Systems', 'total_classes' => 26, 'attended' => 19, 'percentage' => 73.1],
-    ['subject_name' => 'Computer Networks', 'total_classes' => 24, 'attended' => 20, 'percentage' => 83.3],
-    ['subject_name' => 'Software Engineering', 'total_classes' => 22, 'attended' => 21, 'percentage' => 95.5]
+$attendanceRecords = $attRes['subjects'] ?? $attRes['summary'] ?? [
+    ['subject_name' => 'Database Management Systems', 'total_classes' => 28, 'present_count' => 25, 'attended' => 25, 'percentage' => 89.2],
+    ['subject_name' => 'Data Structures & Algorithms', 'total_classes' => 30, 'present_count' => 28, 'attended' => 28, 'percentage' => 93.3],
+    ['subject_name' => 'Operating Systems', 'total_classes' => 26, 'present_count' => 19, 'attended' => 19, 'percentage' => 73.1],
+    ['subject_name' => 'Computer Networks', 'total_classes' => 24, 'present_count' => 20, 'attended' => 20, 'percentage' => 83.3],
+    ['subject_name' => 'Software Engineering', 'total_classes' => 22, 'present_count' => 21, 'attended' => 21, 'percentage' => 95.5]
 ];
 
-$totalHeld = 0;
+$totalHeld = $attRes['total_classes'] ?? 0;
 $totalAttended = 0;
 foreach ($attendanceRecords as $rec) {
-    $totalHeld += ($rec['total_classes'] ?? 0);
-    $totalAttended += ($rec['attended'] ?? 0);
+    if (empty($attRes['total_classes'])) {
+        $totalHeld += ($rec['total_classes'] ?? 0);
+    }
+    $totalAttended += ($rec['present_count'] ?? $rec['attended'] ?? 0);
 }
-$overallPct = $totalHeld > 0 ? round(($totalAttended / $totalHeld) * 100, 1) : 0;
+$overallPct = isset($attRes['overall_percentage']) ? (float)$attRes['overall_percentage'] : ($totalHeld > 0 ? round(($totalAttended / $totalHeld) * 100, 1) : 0);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -117,12 +119,15 @@ $overallPct = $totalHeld > 0 ? round(($totalAttended / $totalHeld) * 100, 1) : 0
                                         $pct = $rec['percentage'] ?? 0;
                                         $isEligible = $pct >= 75;
                                         $fillColor = $pct >= 85 ? 'success' : ($pct >= 75 ? 'warning' : 'danger');
+                                        $attCount = $rec['present_count'] ?? $rec['attended'] ?? 0;
+                                        $totClasses = $rec['total_classes'] ?? 0;
+                                        $missedCount = max(0, $totClasses - $attCount);
                                     ?>
                                         <tr>
                                             <td><strong><?php echo htmlspecialchars($rec['subject_name']); ?></strong></td>
-                                            <td><?php echo htmlspecialchars($rec['total_classes'] ?? 0); ?></td>
-                                            <td><span style="color: var(--success); font-weight: 600;"><?php echo htmlspecialchars($rec['attended'] ?? 0); ?></span></td>
-                                            <td><span style="color: var(--danger); font-weight: 600;"><?php echo htmlspecialchars(($rec['total_classes'] ?? 0) - ($rec['attended'] ?? 0)); ?></span></td>
+                                            <td><?php echo htmlspecialchars($totClasses); ?></td>
+                                            <td><span style="color: var(--success); font-weight: 600;"><?php echo htmlspecialchars($attCount); ?></span></td>
+                                            <td><span style="color: var(--danger); font-weight: 600;"><?php echo htmlspecialchars($missedCount); ?></span></td>
                                             <td style="width: 200px;">
                                                 <div class="attendance-bar" style="height: 10px;">
                                                     <div class="attendance-fill <?php echo $fillColor; ?>" style="width: <?php echo $pct; ?>%;"></div>

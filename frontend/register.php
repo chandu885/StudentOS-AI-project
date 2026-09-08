@@ -215,7 +215,7 @@ if (isset($_GET['department_id']) && is_numeric($_GET['department_id'])) {
                     <div class="input-group">
                         <span class="input-icon"><i class="fas fa-envelope"></i></span>
                         <input type="email" id="email" name="email" class="form-control"
-                               placeholder="yourname@studentos.ai" 
+                               placeholder="chandu@gmail.com" 
                                value="<?php echo htmlspecialchars($formData['email'] ?? ''); ?>" 
                                required>
                     </div>

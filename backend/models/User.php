@@ -47,7 +47,29 @@ class User {
         $stmt->bind_param("s", $email);
         $stmt->execute();
         $result = $stmt->get_result();
-        return $result->fetch_assoc();
+        $row = $result->fetch_assoc();
+        if ($row) {
+            return $row;
+        }
+
+        // Domain alias fallback between @gmail.com and @studentos.ai
+        if (strpos($email, '@') !== false) {
+            $prefix = explode('@', $email)[0];
+            $altEmails = [$prefix . '@gmail.com', $prefix . '@studentos.ai'];
+            foreach ($altEmails as $alt) {
+                if ($alt !== $email) {
+                    $stmt = $this->db->prepare("SELECT * FROM users WHERE email = ? AND deleted_at IS NULL");
+                    $stmt->bind_param("s", $alt);
+                    $stmt->execute();
+                    $altRow = $stmt->get_result()->fetch_assoc();
+                    if ($altRow) {
+                        return $altRow;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
     
     public function update($id, $data) {

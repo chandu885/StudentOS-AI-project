@@ -87,7 +87,7 @@ $recommendations = $recRes['recommendations'] ?? [
                                             <span class="badge badge-<?php echo $prioClass; ?>"><?php echo ucfirst($prio); ?> Priority</span>
                                         </div>
                                     </div>
-                                    <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin: 0;"><?php echo htmlspecialchars($rec['description']); ?></p>
+                                    <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin: 0;"><?php echo htmlspecialchars($rec['suggestion'] ?? $rec['description'] ?? ''); ?></p>
                                 </div>
                             </div>
                         </div>

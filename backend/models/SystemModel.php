@@ -21,8 +21,8 @@ class SystemModel {
     }
 
     public function updateSystemSetting($key, $value) {
-        $stmt = $this->db->prepare("UPDATE system_settings SET value = ?, updated_at = NOW() WHERE `key` = ?");
-        $stmt->bind_param("ss", $value, $key);
+        $stmt = $this->db->prepare("INSERT INTO system_settings (`key`, value, updated_at) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE value = VALUES(value), updated_at = NOW()");
+        $stmt->bind_param("ss", $key, $value);
         return $stmt->execute();
     }
 
@@ -37,8 +37,8 @@ class SystemModel {
     }
 
     public function updateAISetting($key, $value) {
-        $stmt = $this->db->prepare("UPDATE ai_settings SET setting_value = ?, updated_at = NOW() WHERE setting_key = ?");
-        $stmt->bind_param("ss", $value, $key);
+        $stmt = $this->db->prepare("INSERT INTO ai_settings (setting_key, setting_value, updated_at) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = NOW()");
+        $stmt->bind_param("ss", $key, $value);
         return $stmt->execute();
     }
 

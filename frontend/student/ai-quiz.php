@@ -124,21 +124,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                         <div class="card-body">
                             <div style="display: flex; flex-direction: column; gap: 24px;">
-                                <?php foreach ($quizQuestions as $idx => $q): ?>
-                                    <div class="quiz-question-item" style="padding: 16px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-lg);" data-correct="<?php echo $q['correct_index']; ?>">
+                                <?php foreach ($quizQuestions as $idx => $q): 
+                                    $correctIdx = $q['correct_index'] ?? (isset($q['correct_answer'], $q['options']) && is_array($q['options']) ? array_search($q['correct_answer'], $q['options']) : 0);
+                                    if ($correctIdx === false) $correctIdx = 0;
+                                    $correctIdx = (int)$correctIdx;
+                                ?>
+                                    <div class="quiz-question-item" style="padding: 16px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-lg);" data-correct="<?php echo $correctIdx; ?>">
                                         <p style="font-size: 15px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px;">
-                                            <?php echo ($idx + 1); ?>. <?php echo htmlspecialchars($q['question']); ?>
+                                            <?php echo ($idx + 1); ?>. <?php echo htmlspecialchars($q['question'] ?? 'Question'); ?>
                                         </p>
                                         <div style="display: flex; flex-direction: column; gap: 8px;">
-                                            <?php foreach ($q['options'] as $optIdx => $opt): ?>
-                                                <label style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); cursor: pointer; font-size: 13px;">
-                                                    <input type="radio" name="q_<?php echo $idx; ?>" value="<?php echo $optIdx; ?>" onchange="checkAnswer(this, <?php echo $q['correct_index']; ?>)">
-                                                    <span><?php echo htmlspecialchars($opt); ?></span>
-                                                </label>
-                                            <?php endforeach; ?>
+                                            <?php if (!empty($q['options']) && is_array($q['options'])): ?>
+                                                <?php foreach ($q['options'] as $optIdx => $opt): ?>
+                                                    <label style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); cursor: pointer; font-size: 13px;">
+                                                        <input type="radio" name="q_<?php echo $idx; ?>" value="<?php echo $optIdx; ?>" onchange="checkAnswer(this, <?php echo $correctIdx; ?>)">
+                                                        <span><?php echo htmlspecialchars($opt); ?></span>
+                                                    </label>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
                                         </div>
                                         <div class="explanation-box" style="display: none; margin-top: 12px; padding: 10px 14px; border-radius: var(--radius-md); font-size: 13px; line-height: 1.5;">
-                                            <i class="fas fa-info-circle"></i> <strong>Explanation:</strong> <?php echo htmlspecialchars($q['explanation']); ?>
+                                            <i class="fas fa-info-circle"></i> <strong>Explanation:</strong> <?php echo htmlspecialchars($q['explanation'] ?? 'Review lecture notes for more detail.'); ?>
                                         </div>
                                     </div>
                                 <?php endforeach; ?>

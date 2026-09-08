@@ -1,6 +1,8 @@
 <?php
 // backend/utils/Logger.php
 
+require_once __DIR__ . '/../config/config.php';
+
 class Logger {
     private static $logFile;
     private static $enabled = true;
@@ -42,6 +44,6 @@ class Logger {
         $contextStr = !empty($context) ? ' ' . json_encode($context) : '';
         $logMessage = "[$timestamp] $level: $message$contextStr" . PHP_EOL;
         
-        file_put_contents(self::$logFile, $logMessage, FILE_APPEND);
+        file_put_contents(self::$logFile, $logMessage, FILE_APPEND | LOCK_EX);
     }
 }

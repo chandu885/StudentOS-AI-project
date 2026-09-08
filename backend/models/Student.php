@@ -75,18 +75,19 @@ class Student {
         }
         
         if (empty($fields)) {
-            return $this->findById($id);
+            return $this->findById($id) ?: $this->findByUserId($id);
         }
         
         $values[] = $id;
-        $types .= "i";
+        $values[] = $id;
+        $types .= "ii";
         
-        $sql = "UPDATE student_profiles SET " . implode(", ", $fields) . ", updated_at = NOW() WHERE id = ?";
+        $sql = "UPDATE student_profiles SET " . implode(", ", $fields) . ", updated_at = NOW() WHERE id = ? OR user_id = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param($types, ...$values);
         $stmt->execute();
         
-        return $this->findById($id);
+        return $this->findById($id) ?: $this->findByUserId($id);
     }
     
     public function getDashboard($userId) {
@@ -95,17 +96,19 @@ class Student {
             return null;
         }
         
+        $studentUserId = (int)$student['user_id'];
+
         // Get today's classes
-        $classes = $this->getTodayClasses($student['id']);
+        $classes = $this->getTodayClasses($studentUserId);
         
         // Get pending assignments
-        $assignments = $this->getPendingAssignments($student['id']);
+        $assignments = $this->getPendingAssignments($studentUserId);
         
         // Get attendance summary
-        $attendance = $this->getAttendanceSummary($student['id']);
+        $attendance = $this->getAttendanceSummary($studentUserId);
         
         // Get upcoming exams
-        $exams = $this->getUpcomingExams($student['id']);
+        $exams = $this->getUpcomingExams($studentUserId);
         
         return [
             'student' => $student,
@@ -116,26 +119,24 @@ class Student {
         ];
     }
     
-    private function getTodayClasses($studentId) {
+    private function getTodayClasses($studentUserId) {
         $dayOfWeek = date('l');
         $stmt = $this->db->prepare(
-            "SELECT cs.*, s.name as subject_name, u.first_name as faculty_name 
+            "SELECT cs.*, s.name as subject_name, CONCAT(u.first_name, ' ', u.last_name) as faculty_name 
              FROM class_schedules cs
              JOIN subjects s ON cs.subject_id = s.id
-             JOIN faculty_profiles fp ON cs.faculty_id = fp.id
-             JOIN users u ON fp.user_id = u.id
+             LEFT JOIN users u ON cs.faculty_id = u.id
              JOIN student_subjects ss ON ss.subject_id = cs.subject_id
-             WHERE ss.student_id = ? AND cs.day_of_week = ? AND cs.academic_year = ?
+             WHERE ss.student_id = ? AND cs.day_of_week = ?
              ORDER BY cs.start_time"
         );
-        $academicYear = date('Y') . '-' . (date('Y') + 1);
-        $stmt->bind_param("iss", $studentId, $dayOfWeek, $academicYear);
+        $stmt->bind_param("is", $studentUserId, $dayOfWeek);
         $stmt->execute();
         $result = $stmt->get_result();
         return $result->fetch_all(MYSQLI_ASSOC);
     }
     
-    private function getPendingAssignments($studentId) {
+    private function getPendingAssignments($studentUserId) {
         $stmt = $this->db->prepare(
             "SELECT a.*, s.name as subject_name 
              FROM assignments a
@@ -143,37 +144,37 @@ class Student {
              JOIN student_subjects ss ON ss.subject_id = s.id
              WHERE ss.student_id = ? 
              AND a.deadline > NOW() 
-             AND a.status = 'Published'
+             AND (LOWER(a.status) = 'published' OR a.status IS NULL)
              AND a.id NOT IN (
                  SELECT assignment_id FROM assignment_submissions 
                  WHERE student_id = ?
              )
              ORDER BY a.deadline ASC"
         );
-        $stmt->bind_param("ii", $studentId, $studentId);
+        $stmt->bind_param("ii", $studentUserId, $studentUserId);
         $stmt->execute();
         $result = $stmt->get_result();
         return $result->fetch_all(MYSQLI_ASSOC);
     }
     
-    private function getAttendanceSummary($studentId) {
+    private function getAttendanceSummary($studentUserId) {
         $stmt = $this->db->prepare(
             "SELECT s.name, 
-                    COUNT(CASE WHEN a.status = 'Present' THEN 1 END) as present,
+                    COUNT(CASE WHEN LOWER(a.status) = 'present' THEN 1 END) as present,
                     COUNT(*) as total,
-                    ROUND(COUNT(CASE WHEN a.status = 'Present' THEN 1 END) * 100 / COUNT(*), 2) as percentage
+                    ROUND(COUNT(CASE WHEN LOWER(a.status) = 'present' THEN 1 END) * 100 / NULLIF(COUNT(*), 0), 2) as percentage
              FROM attendance a
              JOIN subjects s ON a.subject_id = s.id
              WHERE a.student_id = ?
              GROUP BY a.subject_id"
         );
-        $stmt->bind_param("i", $studentId);
+        $stmt->bind_param("i", $studentUserId);
         $stmt->execute();
         $result = $stmt->get_result();
         return $result->fetch_all(MYSQLI_ASSOC);
     }
     
-    private function getUpcomingExams($studentId) {
+    private function getUpcomingExams($studentUserId) {
         $stmt = $this->db->prepare(
             "SELECT e.*, s.name as subject_name 
              FROM exams e
@@ -181,11 +182,11 @@ class Student {
              JOIN student_subjects ss ON ss.subject_id = s.id
              WHERE ss.student_id = ? 
              AND e.exam_date >= CURDATE()
-             AND e.status = 'Published'
+             AND (LOWER(e.status) IN ('scheduled', 'in_progress', 'published') OR e.status IS NULL)
              ORDER BY e.exam_date ASC
              LIMIT 5"
         );
-        $stmt->bind_param("i", $studentId);
+        $stmt->bind_param("i", $studentUserId);
         $stmt->execute();
         $result = $stmt->get_result();
         return $result->fetch_all(MYSQLI_ASSOC);

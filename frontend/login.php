@@ -24,7 +24,17 @@ if (isLoggedIn()) {
 }
 
 $error = '';
-$email = '';
+$email = sanitize($_GET['email'] ?? '');
+if (empty($email) && isset($_GET['role'])) {
+    $roleMap = [
+        'student' => 'student@gmail.com',
+        'faculty' => 'faculty@gmail.com',
+        'admin' => 'admin@gmail.com',
+        'superadmin' => 'superadmin@gmail.com',
+        'super-admin' => 'superadmin@gmail.com'
+    ];
+    $email = $roleMap[strtolower($_GET['role'])] ?? '';
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = sanitize($_POST['email'] ?? '');
@@ -99,7 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <span>StudentOS AI</span>
                 </a>
                 <div class="auth-role-badge auth-badge-student">
-                    <i class="fas fa-user-graduate"></i> Student & General Portal
+                    <i class="fas fa-user-graduate"></i> Student & Universal Portal
                 </div>
                 <h1>Welcome Back</h1>
                 <p>Sign in to access your courses, study planner, and AI assistant</p>
@@ -120,6 +130,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <i class="fas fa-crown"></i> Super Admin
                 </a>
             </div>
+
+            <!-- Demo Credentials Quick Selector -->
+            <div style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: var(--radius-md); padding: 12px; margin-bottom: 18px;">
+                <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--primary); letter-spacing: 0.5px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
+                    <span><i class="fas fa-bolt"></i> One-Click Demo Credentials</span>
+                    <span style="font-size: 10px; color: var(--text-muted); font-weight: 500;">Click to fill</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+                    <button type="button" class="btn btn-outline" style="font-size: 11px; padding: 6px 8px; justify-content: flex-start; text-align: left; height: auto;" onclick="fillLogin('student@gmail.com', 'Student@12345')">
+                        <i class="fas fa-user-graduate" style="color: var(--primary);"></i>
+                        <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            <strong>Student:</strong> student@gmail.com
+                        </div>
+                    </button>
+                    <button type="button" class="btn btn-outline" style="font-size: 11px; padding: 6px 8px; justify-content: flex-start; text-align: left; height: auto;" onclick="fillLogin('faculty@gmail.com', 'Faculty@12345')">
+                        <i class="fas fa-chalkboard-teacher" style="color: var(--success);"></i>
+                        <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            <strong>Faculty:</strong> faculty@gmail.com
+                        </div>
+                    </button>
+                    <button type="button" class="btn btn-outline" style="font-size: 11px; padding: 6px 8px; justify-content: flex-start; text-align: left; height: auto;" onclick="fillLogin('admin@gmail.com', 'Admin@12345')">
+                        <i class="fas fa-shield-alt" style="color: var(--warning);"></i>
+                        <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            <strong>Admin:</strong> admin@gmail.com
+                        </div>
+                    </button>
+                    <button type="button" class="btn btn-outline" style="font-size: 11px; padding: 6px 8px; justify-content: flex-start; text-align: left; height: auto;" onclick="fillLogin('superadmin@gmail.com', 'Admin@12345')">
+                        <i class="fas fa-crown" style="color: var(--danger);"></i>
+                        <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            <strong>Super Admin:</strong> superadmin@gmail.com
+                        </div>
+                    </button>
+                </div>
+            </div>
             
             <?php if (!empty($error)): ?>
                 <div class="alert alert-error">
@@ -134,7 +178,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="input-group">
                         <span class="input-icon"><i class="fas fa-envelope"></i></span>
                         <input type="email" id="email" name="email" class="form-control"
-                               placeholder="student@studentos.ai" 
+                               placeholder="student@gmail.com" 
                                value="<?php echo htmlspecialchars($email); ?>" 
                                required autofocus>
                     </div>
@@ -164,13 +208,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <i class="fas fa-sign-in-alt"></i> Sign In to Account
                 </button>
             </form>
+
+            <div style="text-align: center; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border-color); font-size: 13px;">
+                <span style="color: var(--text-secondary);">New to StudentOS AI?</span>
+                <a href="register.php" style="color: var(--primary); font-weight: 700; margin-left: 4px;">
+                    <i class="fas fa-user-plus"></i> Register as Student
+                </a>
+            </div>
             
             <div class="auth-footer">
                 <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
                     <i class="fas fa-shield-alt"></i> Institutional accounts are provisioned by University Administration.
                 </p>
                 <div style="font-size: 11.5px; color: var(--text-secondary);">
-                    Staff portal access: <a href="faculty/login.php" style="color: #22C55E; font-weight: 600;">Faculty</a> • <a href="admin/login.php" style="color: #F59E0B; font-weight: 600;">Admin</a> • <a href="super-admin/login.php" style="color: #EF4444; font-weight: 600;">Super Admin</a>
+                    Direct portals: <a href="student/login.php" style="color: #6366F1; font-weight: 600;">Student</a> • <a href="faculty/login.php" style="color: #22C55E; font-weight: 600;">Faculty</a> • <a href="admin/login.php" style="color: #F59E0B; font-weight: 600;">Admin</a> • <a href="super-admin/login.php" style="color: #EF4444; font-weight: 600;">Super Admin</a>
                 </div>
             </div>
         </div>
@@ -188,6 +239,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 icon.className = 'fas fa-eye';
             }
         }
+
+        function fillLogin(email, password) {
+            document.getElementById('email').value = email;
+            document.getElementById('password').value = password;
     </script>
 </body>
 </html>

@@ -50,16 +50,25 @@ if (empty($input) && !empty($_POST)) {
 $scriptName = basename($_SERVER['SCRIPT_NAME'], '.php');
 $rawPath = $_GET['path'] ?? '';
 
-// If called via a specific file (e.g. auth.php?path=login)
+// If called via a specific file (e.g. auth.php?path=login or tasks.php?action=status)
 if ($scriptName !== 'index' && !empty($scriptName)) {
     $resource = $scriptName;
-    $action = $rawPath;
+    $action = !empty($rawPath) ? $rawPath : ($_GET['action'] ?? null);
     $id = $_GET['id'] ?? null;
 } else {
     $parts = explode('/', trim($rawPath, '/'));
     $resource = $parts[0] ?? '';
-    $id = $parts[1] ?? ($_GET['id'] ?? null);
-    $action = $parts[2] ?? ($_GET['action'] ?? null);
+    if (isset($parts[1]) && !is_numeric($parts[1])) {
+        $id = $_GET['id'] ?? null;
+        $action = $parts[1];
+    } else {
+        $id = $parts[1] ?? ($_GET['id'] ?? null);
+        $action = $parts[2] ?? ($_GET['action'] ?? null);
+    }
+}
+
+if (empty($action) && !empty($_GET['action'])) {
+    $action = $_GET['action'];
 }
 
 // Helper send response
@@ -326,10 +335,29 @@ try {
             }
             break;
 
+        // ---------------- SUPPORT ----------------
+        case 'support':
+            $user = requireAuth();
+            $sysModel = new SystemModel();
+            if ($method === 'POST') {
+                $subject = $input['subject'] ?? '';
+                $message = $input['description'] ?? ($input['message'] ?? '');
+                $priority = $input['priority'] ?? 'medium';
+                if (!empty($subject) && !empty($message)) {
+                    $created = $sysModel->createTicket($user['id'], $subject, $message, $priority);
+                    jsonOut(['success' => (bool)$created], $created ? 201 : 400);
+                } else {
+                    jsonOut(['success' => false, 'error' => 'Subject and message are required'], 400);
+                }
+            } else {
+                jsonOut(['success' => true, 'tickets' => $sysModel->getTickets($user['id'], $user['role_id'])]);
+            }
+            break;
+
         default:
             jsonOut(['error' => "Endpoint '$resource' not found"], 404);
     }
-} catch (Exception $e) {
+} catch (Throwable $e) {
     Logger::error('API Unhandled Exception: ' . $e->getMessage(), ['resource' => $resource, 'action' => $action]);
     jsonOut(['error' => 'Server error: ' . $e->getMessage()], 500);
 }

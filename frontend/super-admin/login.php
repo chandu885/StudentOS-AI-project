@@ -115,6 +115,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </a>
             </div>
             
+            <!-- Demo Credentials Quick Selector -->
+            <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: var(--radius-md); padding: 12px; margin-bottom: 18px;">
+                <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--danger); letter-spacing: 0.5px; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+                    <span><i class="fas fa-bolt"></i> Example Super Admin Credentials</span>
+                    <button type="button" class="btn btn-danger" style="font-size: 11px; padding: 3px 8px; height: auto; background: var(--danger); border: none; color: #fff;" onclick="fillLogin('superadmin@gmail.com', 'Admin@12345')">
+                        Auto Fill
+                    </button>
+                </div>
+                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
+                    <div><strong>Email:</strong> <code style="color: var(--danger);">superadmin@gmail.com</code> (or <code>superadmin@studentos.ai</code>)</div>
+                    <div><strong>Password:</strong> <code style="color: var(--danger);">Admin@12345</code></div>
+                </div>
+            </div>
+            
             <?php if (!empty($error)): ?>
                 <div class="alert alert-error">
                     <i class="fas fa-exclamation-triangle"></i>
@@ -128,8 +142,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="input-group">
                         <span class="input-icon"><i class="fas fa-envelope"></i></span>
                         <input type="email" id="email" name="email" class="form-control"
-                               placeholder="superadmin@studentos.ai" 
-                               value="<?php echo htmlspecialchars($email); ?>" 
+                               placeholder="superadmin@gmail.com" 
+                               value="<?php echo htmlspecialchars($email ?: 'superadmin@gmail.com'); ?>" 
                                required autofocus>
                     </div>
                 </div>
@@ -179,6 +193,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 input.type = 'password';
                 icon.className = 'fas fa-eye';
             }
+        }
+
+        function fillLogin(email, password) {
+            document.getElementById('email').value = email;
+            document.getElementById('password').value = password;
         }
     </script>
 </body>

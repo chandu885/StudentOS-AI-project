@@ -5,14 +5,43 @@ require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/helpers.php';
 
+require_once BASE_PATH . '/backend/models/SystemModel.php';
+
 requireRole('super-admin');
 
 $userId = $_SESSION['user']['id'];
+$systemModel = new SystemModel();
 $successMsg = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['gemini_api_key'])) {
+        $keyVal = trim($_POST['gemini_api_key']);
+        if ($keyVal !== '' && strpos($keyVal, 'XXXXX') === false) {
+            $systemModel->updateAISetting('gemini_api_key', $keyVal);
+        }
+    }
+    if (isset($_POST['model'])) {
+        $systemModel->updateAISetting('default_model', trim($_POST['model']));
+    }
+    if (isset($_POST['temperature'])) {
+        $systemModel->updateAISetting('temperature', trim($_POST['temperature']));
+    }
+    if (isset($_POST['chunk_size'])) {
+        $systemModel->updateAISetting('chunk_size', trim($_POST['chunk_size']));
+    }
+    if (isset($_POST['top_k'])) {
+        $systemModel->updateAISetting('top_k', trim($_POST['top_k']));
+    }
     $successMsg = 'Gemini AI engine parameters and token quotas successfully updated!';
 }
+
+$aiSettings = $systemModel->getAISettings();
+$currentApiKey = $aiSettings['gemini_api_key'] ?? '';
+$maskedKey = !empty($currentApiKey) ? substr($currentApiKey, 0, 6) . '...' . substr($currentApiKey, -4) : '';
+$currentModel = $aiSettings['default_model'] ?? 'gemini-1.5-flash';
+$currentTemp = $aiSettings['temperature'] ?? '0.7';
+$currentChunkSize = $aiSettings['chunk_size'] ?? '512';
+$currentTopK = $aiSettings['top_k'] ?? '4';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -57,21 +86,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <form method="POST" action="ai-settings.php">
                             <div class="form-group">
                                 <label for="apiKey">Gemini API Key</label>
-                                <input type="password" name="gemini_api_key" id="apiKey" class="form-control" value="AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXX" required>
-                                <small style="font-size: 11px; color: var(--text-muted);">Stored securely encrypted in server environment.</small>
+                                <input type="text" name="gemini_api_key" id="apiKey" class="form-control" value="<?php echo htmlspecialchars($currentApiKey); ?>" placeholder="AIzaSy...">
+                                <small style="font-size: 11px; color: var(--text-muted);">Stored securely in server database for AI Tutor, Quiz, and RAG operations.</small>
                             </div>
 
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                                 <div class="form-group">
                                     <label for="aiModel">Primary Reasoning Model</label>
                                     <select name="model" id="aiModel" class="form-control">
-                                        <option value="gemini-1.5-flash" selected>Gemini 1.5 Flash (Fast, High-Throughput)</option>
-                                        <option value="gemini-1.5-pro">Gemini 1.5 Pro (Deep Reasoning & Multimodal)</option>
+                                        <option value="gemini-1.5-flash" <?php echo $currentModel === 'gemini-1.5-flash' ? 'selected' : ''; ?>>Gemini 1.5 Flash (Fast, High-Throughput)</option>
+                                        <option value="gemini-1.5-pro" <?php echo $currentModel === 'gemini-1.5-pro' ? 'selected' : ''; ?>>Gemini 1.5 Pro (Deep Reasoning & Multimodal)</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
                                     <label for="temperature">Model Temperature (Creativity vs Determinism)</label>
-                                    <input type="number" step="0.1" name="temperature" id="temperature" class="form-control" value="0.3" min="0.0" max="1.0">
+                                    <input type="number" step="0.1" name="temperature" id="temperature" class="form-control" value="<?php echo htmlspecialchars($currentTemp); ?>" min="0.0" max="1.0">
                                 </div>
                             </div>
 
@@ -80,11 +109,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                                     <div class="form-group">
                                         <label for="chunkSize">Chunk Size (Tokens)</label>
-                                        <input type="number" name="chunk_size" id="chunkSize" class="form-control" value="512">
+                                        <input type="number" name="chunk_size" id="chunkSize" class="form-control" value="<?php echo htmlspecialchars($currentChunkSize); ?>">
                                     </div>
                                     <div class="form-group">
                                         <label for="topK">RAG Top-K Nearest Chunks</label>
-                                        <input type="number" name="top_k" id="topK" class="form-control" value="4">
+                                        <input type="number" name="top_k" id="topK" class="form-control" value="<?php echo htmlspecialchars($currentTopK); ?>">
                                     </div>
                                 </div>
                             </div>

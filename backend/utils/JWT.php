@@ -61,7 +61,10 @@ class JWT {
     
     private static function base64UrlDecode($data) {
         $base64 = str_replace(['-', '_'], ['+', '/'], $data);
-        $base64 = str_pad($base64, strlen($base64) % 4, '=', STR_PAD_RIGHT);
+        $remainder = strlen($base64) % 4;
+        if ($remainder) {
+            $base64 .= str_repeat('=', 4 - $remainder);
+        }
         return base64_decode($base64);
     }
 }

@@ -103,19 +103,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             </button>
                         </div>
                         <div class="card-body">
-                            <div style="display: flex; flex-direction: column; gap: 14px;">
-                                <?php foreach ($generatedPlan as $step): ?>
-                                    <div style="display: flex; gap: 16px; padding: 16px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); border-left: 4px solid var(--ai-accent);">
-                                        <div style="min-width: 110px;">
-                                            <span class="badge badge-purple"><?php echo htmlspecialchars($step['day'] ?? 'Phase'); ?></span>
+                            <?php if (is_array($generatedPlan)): ?>
+                                <div style="display: flex; flex-direction: column; gap: 14px;">
+                                    <?php foreach ($generatedPlan as $step): ?>
+                                        <div style="display: flex; gap: 16px; padding: 16px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); border-left: 4px solid var(--ai-accent);">
+                                            <div style="min-width: 110px;">
+                                                <span class="badge badge-purple"><?php echo htmlspecialchars($step['day'] ?? 'Phase'); ?></span>
+                                            </div>
+                                            <div>
+                                                <strong style="color: var(--text-primary); font-size: 14px;"><?php echo htmlspecialchars($step['focus'] ?? ''); ?></strong>
+                                                <p style="font-size: 13px; color: var(--text-secondary); margin-top: 4px; line-height: 1.5;"><?php echo htmlspecialchars($step['tasks'] ?? ''); ?></p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <strong style="color: var(--text-primary); font-size: 14px;"><?php echo htmlspecialchars($step['focus'] ?? ''); ?></strong>
-                                            <p style="font-size: 13px; color: var(--text-secondary); margin-top: 4px; line-height: 1.5;"><?php echo htmlspecialchars($step['tasks'] ?? ''); ?></p>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php else: ?>
+                                <div style="padding: 16px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); line-height: 1.7; font-size: 14px; color: var(--text-primary);">
+                                    <?php echo renderMarkdown($generatedPlan); ?>
+                                </div>
+                            <?php endif; ?>
                         </div>
                     </div>
                 <?php endif; ?>

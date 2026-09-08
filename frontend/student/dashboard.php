@@ -224,15 +224,18 @@ $recommendations = apiCall('/ai.php?path=recommendations', 'GET');
                         <a href="ai-recommendations.php" class="link">View All</a>
                     </div>
                     <div class="card-body">
-                        <?php if (!empty($recommendations['data'])): ?>
-                            <?php foreach (array_slice($recommendations['data'], 0, 3) as $rec): ?>
+                        <?php 
+                            $recList = $recommendations['recommendations'] ?? $recommendations['data'] ?? [];
+                        ?>
+                        <?php if (!empty($recList)): ?>
+                            <?php foreach (array_slice($recList, 0, 3) as $rec): ?>
                                 <div class="recommendation-item">
                                     <div class="rec-icon">
-                                        <i class="fas fa-<?php echo $rec['icon'] ?? 'lightbulb'; ?>"></i>
+                                        <i class="fas fa-<?php echo htmlspecialchars($rec['icon'] ?? 'lightbulb'); ?>"></i>
                                     </div>
                                     <div class="rec-content">
-                                        <h4><?php echo htmlspecialchars($rec['title']); ?></h4>
-                                        <p><?php echo htmlspecialchars($rec['description']); ?></p>
+                                        <h4><?php echo htmlspecialchars($rec['title'] ?? 'Recommendation'); ?></h4>
+                                        <p><?php echo htmlspecialchars($rec['suggestion'] ?? $rec['description'] ?? ''); ?></p>
                                     </div>
                                 </div>
                             <?php endforeach; ?>

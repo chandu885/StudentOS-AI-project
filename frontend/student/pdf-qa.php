@@ -116,9 +116,13 @@ $documents = [
         container.scrollTop = container.scrollHeight;
 
         try {
+            const headers = typeof getAuthHeaders === 'function' 
+                ? getAuthHeaders({ 'Content-Type': 'application/json' }) 
+                : { 'Content-Type': 'application/json' };
             const res = await fetch('/StudentOS-AI-project/backend/api/ai.php?path=pdf-qa', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                headers: headers,
                 body: JSON.stringify({ document_id: currentDocId, question: question })
             });
             const data = await res.json();

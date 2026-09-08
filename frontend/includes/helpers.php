@@ -130,4 +130,19 @@ function getDbConnection() {
         $conn->set_charset('utf8mb4');
     }
     return $conn;
-}
+}
+
+function renderMarkdown($text) {
+    if (empty($text)) return '';
+    $html = htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+    $html = preg_replace('/^### (.*?)$/m', '<h4 style="margin-top:16px; margin-bottom:8px; color:var(--primary); font-weight:600;">$1</h4>', $html);
+    $html = preg_replace('/^## (.*?)$/m', '<h3 style="margin-top:20px; margin-bottom:10px; color:var(--text-primary); font-weight:700;">$1</h3>', $html);
+    $html = preg_replace('/^# (.*?)$/m', '<h2 style="margin-top:24px; margin-bottom:12px; color:var(--text-primary); font-weight:800;">$1</h2>', $html);
+    $html = preg_replace('/\*\*(.*?)\*\*/s', '<strong>$1</strong>', $html);
+    $html = preg_replace('/\*([^\*]+)\*/s', '<em>$1</em>', $html);
+    $html = preg_replace('/^[•\-\*]\s+(.*?)$/m', '<div style="display:flex; gap:8px; margin-bottom:4px; margin-left:12px;"><i class="fas fa-check-circle" style="color:var(--ai-accent); font-size:12px; margin-top:4px;"></i><span>$1</span></div>', $html);
+    $html = nl2br($html);
+    return $html;
+}
+
+

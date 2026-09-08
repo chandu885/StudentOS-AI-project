@@ -117,6 +117,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </a>
             </div>
             
+            <!-- Demo Credentials Quick Selector -->
+            <div style="background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.25); border-radius: var(--radius-md); padding: 12px; margin-bottom: 18px;">
+                <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--success); letter-spacing: 0.5px; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+                    <span><i class="fas fa-bolt"></i> Example Faculty Credentials</span>
+                    <button type="button" class="btn btn-success" style="font-size: 11px; padding: 3px 8px; height: auto; background: var(--success); border: none;" onclick="fillLogin('faculty@gmail.com', 'Faculty@12345')">
+                        Auto Fill
+                    </button>
+                </div>
+                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
+                    <div><strong>Email:</strong> <code style="color: var(--success);">faculty@gmail.com</code> (or <code>faculty@studentos.ai</code>)</div>
+                    <div><strong>Password:</strong> <code style="color: var(--success);">Faculty@12345</code></div>
+                </div>
+            </div>
+            
             <?php if (!empty($error)): ?>
                 <div class="alert alert-error">
                     <i class="fas fa-exclamation-circle"></i>
@@ -130,8 +144,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="input-group">
                         <span class="input-icon"><i class="fas fa-envelope"></i></span>
                         <input type="email" id="email" name="email" class="form-control"
-                               placeholder="faculty@studentos.ai" 
-                               value="<?php echo htmlspecialchars($email); ?>" 
+                               placeholder="faculty@gmail.com" 
+                               value="<?php echo htmlspecialchars($email ?: 'faculty@gmail.com'); ?>" 
                                required autofocus>
                     </div>
                 </div>
@@ -162,7 +176,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </form>
             
             <div class="auth-footer">
-                <p>Not a faculty member? <a href="../student/login.php">Go to Student Login</a></p>
+                <p>Not a faculty member? <a href="../student/login.php">Go to Student Login</a> • <a href="../register.php">Register Student</a></p>
                 <div style="margin-top: 14px; font-size: 11.5px; color: var(--text-secondary);">
                     <i class="fas fa-shield-alt"></i> Administrative staff? Switch to <a href="../admin/login.php" style="color: #F59E0B; font-weight: 600;">Admin Portal</a>.
                 </div>
@@ -181,6 +195,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 input.type = 'password';
                 icon.className = 'fas fa-eye';
             }
+        }
+
+        function fillLogin(email, password) {
+            document.getElementById('email').value = email;
+            document.getElementById('password').value = password;
         }
     </script>
 </body>

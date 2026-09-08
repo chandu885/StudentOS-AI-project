@@ -79,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                         <div class="card-body">
                             <div id="summaryBox" style="font-size: 14px; line-height: 1.7; color: var(--text-primary);">
-                                <?php echo nl2br(htmlspecialchars($summaryOutput)); ?>
+                                <?php echo renderMarkdown($summaryOutput); ?>
                             </div>
                         </div>
                     </div>

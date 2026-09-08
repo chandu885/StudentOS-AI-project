@@ -154,4 +154,19 @@ document.addEventListener('keydown', function(e) {
         if (search) search.focus();
     }
 });
+
+// Synchronize session tokens to localStorage for client-side API calls
+(function() {
+    try {
+        <?php if (!empty($_SESSION['auth_token'])): ?>
+            localStorage.setItem('auth_token', <?php echo json_encode($_SESSION['auth_token']); ?>);
+            <?php if (!empty($_SESSION['session_token'])): ?>
+            localStorage.setItem('session_token', <?php echo json_encode($_SESSION['session_token']); ?>);
+            <?php endif; ?>
+        <?php else: ?>
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('session_token');
+        <?php endif; ?>
+    } catch(e) {}
+})();
 </script>

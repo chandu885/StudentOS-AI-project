@@ -116,9 +116,13 @@ $initialSubject = sanitize($_GET['subject'] ?? '');
         container.scrollTop = container.scrollHeight;
 
         try {
+            const headers = typeof getAuthHeaders === 'function' 
+                ? getAuthHeaders({ 'Content-Type': 'application/json' }) 
+                : { 'Content-Type': 'application/json' };
             const res = await fetch('/StudentOS-AI-project/backend/api/ai.php?path=assistant', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                headers: headers,
                 body: JSON.stringify({ question: question, conversation_id: activeConversationId })
             });
             const data = await res.json();

@@ -166,6 +166,14 @@ class AIService {
             $questions = $this->getFallbackQuiz($topic);
         }
 
+        foreach ($questions as &$q) {
+            if (!isset($q['correct_index']) && isset($q['correct_answer']) && is_array($q['options'])) {
+                $idx = array_search($q['correct_answer'], $q['options']);
+                $q['correct_index'] = ($idx !== false) ? $idx : 0;
+            }
+        }
+        unset($q);
+
         $quizId = $this->aiModel->createQuiz($userId, $subjectId, $topic, $difficulty, $questions);
 
         return [
@@ -231,14 +239,18 @@ class AIService {
         ];
     }
 
+    private function isValidApiKey($key) {
+        return !empty($key) && $key !== 'your_gemini_api_key_here' && strpos($key, 'AIza') === 0 && strlen($key) > 25;
+    }
+
     /**
      * Call Gemini API with automatic fallback
      */
     private function callGemini($systemInstruction, $userPrompt) {
-        if (!empty($this->apiKey)) {
+        if ($this->isValidApiKey($this->apiKey)) {
             $url = "https://generativelanguage.googleapis.com/v1beta/models/{$this->modelName}:generateContent?key=" . $this->apiKey;
             $payload = [
-                'system_instruction' => [
+                'systemInstruction' => [
                     'parts' => [['text' => $systemInstruction]]
                 ],
                 'contents' => [
@@ -258,7 +270,9 @@ class AIService {
             curl_setopt($ch, CURLOPT_POST, true);
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
             curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 25);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 
             $response = curl_exec($ch);
             $err = curl_error($ch);
@@ -280,13 +294,57 @@ class AIService {
 
     private function generateLocalResponse($query) {
         $q = strtolower($query);
+
+        // Document RAG excerpts
+        if (strpos($query, 'DOCUMENT EXCERPTS:') !== false) {
+            preg_match('/DOCUMENT EXCERPTS:\s*(.*?)\s*QUESTION:\s*(.*)$/si', $query, $m);
+            $excerpts = trim($m[1] ?? '');
+            $userQ = trim($m[2] ?? '');
+            if (!empty($excerpts) && strpos($excerpts, 'not indexed') === false) {
+                return "### 📄 Document RAG Synthesis\n\n"
+                     . "Based on the retrieved excerpts from your course document:\n\n"
+                     . $excerpts . "\n\n"
+                     . "**Key Takeaway:** The retrieved lecture notes directly address: *" . htmlspecialchars($userQ) . "*. Make sure to study these definitions and their proofs for upcoming examinations.";
+            }
+        }
+
+        // Study plan requests
+        if (strpos($q, 'day-by-day') !== false || strpos($q, 'study plan') !== false || strpos($q, 'exam preparation') !== false) {
+            return "### 📅 Structured Academic Study Plan\n\n"
+                 . "**Day 1–2: Theoretical Foundations & Architecture**\n"
+                 . "- Review core concepts, definitions, and architectural diagrams.\n"
+                 . "- Complete 5 self-assessment diagnostic questions.\n\n"
+                 . "**Day 3–4: Core Problem Solving & Decompositions**\n"
+                 . "- Solve medium-difficulty algorithmic problems and case proofs.\n"
+                 . "- Review previous semester examination patterns.\n\n"
+                 . "**Day 5–6: Advanced Applications & Lab Implementations**\n"
+                 . "- Practice practical implementations, edge cases, and optimizations.\n"
+                 . "- Complete a 60-minute timed active recall session.\n\n"
+                 . "**Day 7: Mock Exam & Comprehensive Revision**\n"
+                 . "- Take an AI-generated mock quiz.\n"
+                 . "- Focus on weak spots identified in review.";
+        }
+
+        // Summarizer requests
+        if (strpos($q, 'summarize the following') !== false || strpos($q, 'summarizer') !== false) {
+            return "### 📌 High-Yield Academic Summary\n\n"
+                 . "**Core Definitions:**\n"
+                 . "- Key concepts synthesized into focused, examinable points.\n\n"
+                 . "**Key Formulas & Axioms:**\n"
+                 . "- Fundamental laws, properties, and constraints applicable to coursework.\n\n"
+                 . "**Top 3 Exam Takeaways:**\n"
+                 . "1. Master theoretical foundations before attempting practical decompositions.\n"
+                 . "2. Verify edge conditions and constraint preservation on each step.\n"
+                 . "3. Use spaced active recall to solidify retention.";
+        }
+
         if (strpos($q, 'normaliz') !== false || strpos($q, 'bcnf') !== false || strpos($q, '3nf') !== false) {
             return "### Database Normalization Overview\n\n"
                  . "**Normalization** is the systematic process of organizing relational tables to minimize redundancy and prevent insert/update/delete anomalies.\n\n"
                  . "1. **1NF**: All table columns hold atomic (indivisible) values with no repeating groups.\n"
                  . "2. **2NF**: Table is in 1NF and contains no *partial functional dependencies* (all non-key attributes fully depend on the entire candidate key).\n"
-                 . "3. **3NF**: Table is in 2NF and has no *transitive dependencies* (for every FD $X \\to A$, either $X$ is a superkey or $A$ is prime).\n"
-                 . "4. **BCNF (Boyce-Codd Normal Form)**: A stricter variant of 3NF. For every non-trivial functional dependency $X \\to A$, $X$ MUST be a superkey.";
+                 . "3. **3NF**: Table is in 2NF and has no *transitive dependencies* (for every FD \$X \\to A\$, either \$X\$ is a superkey or \$A\$ is prime).\n"
+                 . "4. **BCNF (Boyce-Codd Normal Form)**: A stricter variant of 3NF. For every non-trivial functional dependency \$X \\to A\$, \$X\$ MUST be a superkey.";
         }
 
         if (strpos($q, 'class') !== false || strpos($q, 'tomorrow') !== false || strpos($q, 'today') !== false || strpos($q, 'schedule') !== false) {

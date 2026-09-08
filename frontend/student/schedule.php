@@ -53,7 +53,8 @@ $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
                 <div style="display: flex; flex-direction: column; gap: 20px;">
                     <?php foreach ($days as $day): 
                         $dayClasses = array_filter($schedules, function($c) use ($day) {
-                            return strcasecmp($c['day'] ?? '', $day) === 0;
+                            $classDay = $c['day_of_week'] ?? $c['day'] ?? '';
+                            return strcasecmp($classDay, $day) === 0;
                         });
                     ?>
                         <div class="card" style="margin-bottom: 0;">
@@ -64,16 +65,20 @@ $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
                             <div class="card-body" style="padding: 12px 20px;">
                                 <?php if (!empty($dayClasses)): ?>
                                     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px;">
-                                        <?php foreach ($dayClasses as $cls): ?>
+                                        <?php foreach ($dayClasses as $cls): 
+                                            $faculty = !empty($cls['faculty_name']) ? $cls['faculty_name'] : trim(($cls['faculty_first'] ?? '') . ' ' . ($cls['faculty_last'] ?? ''));
+                                            if (empty($faculty)) $faculty = 'Instructor';
+                                            $room = $cls['room_number'] ?? $cls['room'] ?? 'TBD';
+                                        ?>
                                             <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 14px; border-left: 4px solid var(--primary);">
                                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                                                     <span style="font-size: 11px; font-weight: 700; color: var(--primary);">
                                                         <?php echo date('h:i A', strtotime($cls['start_time'])); ?> - <?php echo date('h:i A', strtotime($cls['end_time'])); ?>
                                                     </span>
-                                                    <span class="badge badge-primary"><?php echo htmlspecialchars($cls['room'] ?? 'TBD'); ?></span>
+                                                    <span class="badge badge-primary"><?php echo htmlspecialchars($room); ?></span>
                                                 </div>
                                                 <h4 style="font-size: 14px; color: var(--text-primary); margin-bottom: 4px;"><?php echo htmlspecialchars($cls['subject_name']); ?></h4>
-                                                <p style="font-size: 12px; color: var(--text-muted);"><i class="fas fa-user"></i> <?php echo htmlspecialchars($cls['faculty_name']); ?></p>
+                                                <p style="font-size: 12px; color: var(--text-muted);"><i class="fas fa-user"></i> <?php echo htmlspecialchars($faculty); ?></p>
                                             </div>
                                         <?php endforeach; ?>
                                     </div>

@@ -24,6 +24,28 @@ $currentUser = $loggedIn ? ($_SESSION['user'] ?? null) : null;
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        .demo-card {
+            transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+        }
+        .demo-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(99, 102, 241, 0.5) !important;
+            box-shadow: 0 16px 32px -8px rgba(0, 0, 0, 0.45), 0 0 20px rgba(99, 102, 241, 0.15) !important;
+        }
+        .module-card {
+            transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+        }
+        .module-card:hover {
+            transform: translateY(-3px);
+            border-color: var(--primary) !important;
+            background: rgba(99, 102, 241, 0.04) !important;
+        }
+        .btn-copy-chip:hover {
+            opacity: 0.8;
+            text-decoration: underline;
+        }
+    </style>
 </head>
 <body class="landing-page">
 
@@ -38,7 +60,6 @@ $currentUser = $loggedIn ? ($_SESSION['user'] ?? null) : null;
             <nav class="landing-nav-links">
                 <a href="#features">Features</a>
                 <a href="#how-it-works">How It Works</a>
-                <a href="#testimonials">Testimonials</a>
                 <a href="#faq">FAQ</a>
             </nav>
 
@@ -51,11 +72,11 @@ $currentUser = $loggedIn ? ($_SESSION['user'] ?? null) : null;
                         <i class="fas fa-sign-out-alt"></i> <span>Log Out</span>
                     </a>
                 <?php else: ?>
-                    <a href="<?php echo htmlspecialchars(url('/login.php')); ?>" class="btn btn-outline btn-login-action" role="button" style="display: inline-flex; align-items: center; gap: 6px;">
-                        <i class="fas fa-sign-in-alt"></i> <span>Sign In</span>
+                    <a href="<?php echo htmlspecialchars(url('/register.php')); ?>" class="btn btn-outline" role="button" style="display: inline-flex; align-items: center; gap: 6px; border-color: rgba(99, 102, 241, 0.4);">
+                        <i class="fas fa-user-plus"></i> <span>Register</span>
                     </a>
                     <a href="<?php echo htmlspecialchars(url('/student/login.php')); ?>" class="btn btn-primary" role="button" style="display: inline-flex; align-items: center; gap: 6px;">
-                        <i class="fas fa-user-graduate"></i> <span>Student Login</span>
+                        <i class="fas fa-user-graduate"></i> <span>Login</span>
                     </a>
                 <?php endif; ?>
             </div>
@@ -88,11 +109,11 @@ $currentUser = $loggedIn ? ($_SESSION['user'] ?? null) : null;
                                     <i class="fas fa-rocket"></i> Launch My Dashboard
                                 </a>
                             <?php else: ?>
-                                <a href="<?php echo htmlspecialchars(url('/student/login.php')); ?>" class="btn btn-primary btn-lg" role="button">
-                                    <i class="fas fa-user-graduate"></i> Student Login
+                                <a href="<?php echo htmlspecialchars(url('/login.php')); ?>" class="btn btn-primary btn-lg" role="button">
+                                    <i class="fas fa-user-graduate"></i> Login
                                 </a>
-                                <a href="<?php echo htmlspecialchars(url('/login.php')); ?>" class="btn btn-outline btn-lg" role="button">
-                                    <i class="fas fa-lock"></i> Portal Login
+                                <a href="<?php echo htmlspecialchars(url('/register.php')); ?>" class="btn btn-outline btn-lg" role="button" style="border-color: rgba(99, 102, 241, 0.5); color: #fff;">
+                                    <i class="fas fa-user-plus"></i> Register
                                 </a>
                             <?php endif; ?>
                         </div>
@@ -187,6 +208,7 @@ $currentUser = $loggedIn ? ($_SESSION['user'] ?? null) : null;
             </div>
         </section>
 
+
         <!-- Features Showcase Section -->
         <section id="features" class="features">
             <div class="container">
@@ -255,10 +277,11 @@ $currentUser = $loggedIn ? ($_SESSION['user'] ?? null) : null;
                             <span class="badge badge-purple">Role Enforced</span>
                             <span class="badge badge-danger">Audit Trails</span>
                         </div>
-                    </div>
                 </div>
             </div>
         </section>
+
+       
 
         <!-- How It Works Section -->
         <section id="how-it-works" class="how-it-works">
@@ -428,6 +451,35 @@ $currentUser = $loggedIn ? ($_SESSION['user'] ?? null) : null;
         if (!isActive) {
             item.classList.add('active');
         }
+    }
+
+    // Copy Demo Credentials Helper
+    function copyText(text, btn) {
+        if (!navigator.clipboard) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            showCopiedFeedback(btn);
+            return;
+        }
+        navigator.clipboard.writeText(text).then(function() {
+            showCopiedFeedback(btn);
+        }).catch(function(err) {
+            console.error('Clipboard copy failed:', err);
+        });
+    }
+
+    function showCopiedFeedback(btn) {
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check" style="color: #34D399;"></i> Copied!';
+        btn.style.pointerEvents = 'none';
+        setTimeout(function() {
+            btn.innerHTML = originalHtml;
+            btn.style.pointerEvents = 'auto';
+        }, 1800);
     }
     </script>
 </body>

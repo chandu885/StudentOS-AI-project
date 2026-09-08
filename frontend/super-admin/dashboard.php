@@ -74,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $successMsg = "Database backup snapshot successfully generated ({$backupName})!";
     } elseif ($action === 'invalidate_sessions') {
         if ($conn) {
-            $conn->query("UPDATE sessions SET is_valid = 0 WHERE user_id != $userId");
+            $conn->query("UPDATE user_sessions SET expires_at = NOW() WHERE user_id != $userId");
             $conn->query("INSERT INTO audit_logs (user_id, action, resource, details, ip_address) VALUES ($userId, 'SESSIONS_INVALIDATED', 'sessions', 'All concurrent user sessions forcibly invalidated', '$ip')");
         }
         $successMsg = 'Concurrent active sessions have been invalidated across the institution!';

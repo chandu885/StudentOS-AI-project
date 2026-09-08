@@ -10,10 +10,12 @@ requireRole('student');
 $userId = $_SESSION['user']['id'];
 $query = sanitize($_GET['q'] ?? '');
 $aiResponse = null;
+$searchResults = [];
 
 if (!empty($query)) {
     $res = apiCall('/ai.php?path=search&q=' . urlencode($query), 'GET');
-    $aiResponse = $res['result'] ?? $res['answer'] ?? null;
+    $aiResponse = $res['synthesis'] ?? $res['result'] ?? $res['answer'] ?? null;
+    $searchResults = $res['results'] ?? [];
 }
 ?>
 <!DOCTYPE html>
@@ -66,15 +68,30 @@ if (!empty($query)) {
                         <div class="card-body">
                             <div style="font-size: 14px; line-height: 1.7; color: var(--text-primary); margin-bottom: 20px;">
                                 <?php if ($aiResponse): ?>
-                                    <?php echo nl2br(htmlspecialchars($aiResponse)); ?>
+                                    <?php echo renderMarkdown($aiResponse); ?>
                                 <?php else: ?>
-                                    Based on your current academic schedule and database records, you have 2 pending assignments: 
-                                    <strong>ER Diagram Design</strong> for DBMS due in 3 days, and <strong>Red-Black Trees</strong> for DSA due in 6 days. 
-                                    Your next examination is DBMS Midterm on March 15 in Hall A.
+                                    No records or direct answers found matching "<?php echo htmlspecialchars($query); ?>".
                                 <?php endif; ?>
                             </div>
 
-                            <div style="border-top: 1px solid var(--border-color); padding-top: 14px; font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">
+                            <?php if (!empty($searchResults)): ?>
+                                <h4 style="font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 12px;">Matched Academic Records</h4>
+                                <div style="display: flex; flex-direction: column; gap: 10px;">
+                                    <?php foreach ($searchResults as $item): ?>
+                                        <div style="padding: 12px 16px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); display: flex; justify-content: space-between; align-items: center;">
+                                            <div>
+                                                <span class="badge badge-primary" style="margin-right: 8px; text-transform: uppercase; font-size: 10px;"><?php echo htmlspecialchars($item['type'] ?? 'record'); ?></span>
+                                                <strong style="font-size: 14px; color: var(--text-primary);"><?php echo htmlspecialchars($item['title'] ?? $item['name'] ?? ''); ?></strong>
+                                                <?php if (!empty($item['content']) || !empty($item['description']) || !empty($item['syllabus'])): ?>
+                                                    <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;"><?php echo htmlspecialchars(truncate($item['content'] ?? $item['description'] ?? $item['syllabus'] ?? '', 120)); ?></p>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
+
+                            <div style="border-top: 1px solid var(--border-color); padding-top: 14px; margin-top: 16px; font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">
                                 <i class="fas fa-info-circle"></i> Sources consulted: Student Schedule, Assignments Database, and Lecture Notes Repository.
                             </div>
                         </div>
