@@ -51,25 +51,39 @@ if (empty($coursesList)) {
 // Final fallback to standard university degree programs
 if (empty($coursesList)) {
     $coursesList = [
-        ['id' => 1, 'name' => 'Bachelor of Business Administration', 'code' => 'BBA', 'degree_type' => 'Bachelor'],
-        ['id' => 2, 'name' => 'Bachelor of Computer Applications', 'code' => 'BCA', 'degree_type' => 'Bachelor'],
+        ['id' => 1, 'name' => 'BBA', 'code' => 'BBA', 'degree_type' => 'Bachelor', 'department_id' => 4],
+        ['id' => 2, 'name' => 'BCA', 'code' => 'BCA', 'degree_type' => 'Bachelor', 'department_id' => 1],
     ];
 }
 $courses = $coursesList;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $courseId = (int)($_POST['course_id'] ?? 0);
+    $deptId = !empty($_POST['department_id']) ? (int)$_POST['department_id'] : 0;
+    if (!$deptId && $courseId) {
+        foreach ($courses as $c) {
+            if ((int)($c['id'] ?? 0) === $courseId && !empty($c['department_id'])) {
+                $deptId = (int)$c['department_id'];
+                break;
+            }
+        }
+    }
+    if (!$deptId) {
+        $deptId = ($courseId === 1) ? 4 : 1;
+    }
+
     $formData = [
         'first_name' => sanitize($_POST['first_name'] ?? ''),
         'last_name' => sanitize($_POST['last_name'] ?? ''),
         'email' => sanitize($_POST['email'] ?? ''),
         'password' => $_POST['password'] ?? '',
         'password_confirm' => $_POST['password_confirm'] ?? '',
-        'student_id' => sanitize($_POST['student_id'] ?? ''),
-        'department_id' => !empty($_POST['department_id']) ? (int)$_POST['department_id'] : 1,
-        'course_id' => (int)($_POST['course_id'] ?? 0),
+        'student_id' => strtoupper(sanitize($_POST['student_id'] ?? '')),
+        'department_id' => $deptId,
+        'course_id' => $courseId,
         'semester' => sanitize($_POST['semester'] ?? ''),
-        'section' => '',
-        'roll_number' => sanitize($_POST['roll_number'] ?? ''),
+        'section' => 'A',
+        'roll_number' => strtoupper(sanitize($_POST['roll_number'] ?? '')),
     ];
     
     // Validate required fields (department and section removed)
@@ -86,6 +100,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     if (strlen($formData['password']) < 8) {
         $errors[] = 'Password must be at least 8 characters';
+    } elseif (!preg_match('/[A-Z]/', $formData['password']) || !preg_match('/[a-z]/', $formData['password']) || !preg_match('/[0-9]/', $formData['password']) || !preg_match('/[!@#$%^&*(),.?":{}|<>]/', $formData['password'])) {
+        $errors[] = 'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character (e.g. Student@123)';
     }
     
     if (!filter_var($formData['email'], FILTER_VALIDATE_EMAIL)) {
@@ -224,8 +240,12 @@ if (isset($_GET['department_id']) && is_numeric($_GET['department_id'])) {
                             <input type="text" id="student_id" name="student_id" class="form-control"
                                    placeholder="e.g. STU-2026-001" 
                                    value="<?php echo htmlspecialchars($formData['student_id'] ?? ''); ?>" 
+                                   style="text-transform: uppercase;"
+                                   oninput="this.value = this.value.toUpperCase()"
+                                   autocomplete="off"
                                    required>
                         </div>
+                        <small style="font-size: 11px; color: var(--text-muted); margin-top: 4px; display: block;">Must be entered in CAPITAL letters (auto-uppercased)</small>
                     </div>
                     <div class="form-group">
                         <label for="roll_number">Class Roll Number</label>
@@ -250,12 +270,20 @@ if (isset($_GET['department_id']) && is_numeric($_GET['department_id'])) {
                                 <?php if (!empty($courses)): ?>
                                     <?php foreach ($courses as $course): 
                                         $cId = $course['id'] ?? '';
-                                        $cName = $course['name'] ?? ($course['course_name'] ?? ('Course #' . $cId));
-                                        $cCode = !empty($course['code']) ? ' (' . htmlspecialchars($course['code']) . ')' : '';
+                                        $code = strtoupper(trim($course['code'] ?? ''));
+                                        $name = trim($course['name'] ?? ($course['course_name'] ?? ('Course #' . $cId)));
+                                        // Display 'BBA' and 'BCA' as requested
+                                        if (in_array($code, ['BBA', 'BCA'])) {
+                                            $displayLabel = $code;
+                                        } elseif ($name === $code || empty($code)) {
+                                            $displayLabel = $name;
+                                        } else {
+                                            $displayLabel = $name . ' (' . $code . ')';
+                                        }
                                         $selected = ((string)($formData['course_id'] ?? '') === (string)$cId) ? 'selected' : '';
                                     ?>
                                         <option value="<?php echo htmlspecialchars($cId); ?>" <?php echo $selected; ?>>
-                                            <?php echo htmlspecialchars($cName) . $cCode; ?>
+                                            <?php echo htmlspecialchars($displayLabel); ?>
                                         </option>
                                     <?php endforeach; ?>
                                 <?php else: ?>
@@ -285,7 +313,7 @@ if (isset($_GET['department_id']) && is_numeric($_GET['department_id'])) {
                         <div class="input-group">
                             <span class="input-icon"><i class="fas fa-lock"></i></span>
                             <input type="password" id="password" name="password" class="form-control has-toggle"
-                                   placeholder="Min 8 characters" required>
+                                   placeholder="Min 8 chars with uppercase, digit & symbol" required>
                             <button type="button" class="toggle-password" onclick="togglePassword('password', this)" title="Show/Hide password">
                                 <i class="fas fa-eye"></i>
                             </button>
@@ -335,8 +363,22 @@ if (isset($_GET['department_id']) && is_numeric($_GET['department_id'])) {
             }
         }
         
+        // Auto-uppercase Student ID / Roll Code
+        const studentIdInput = document.getElementById('student_id');
+        if (studentIdInput) {
+            studentIdInput.addEventListener('input', function() {
+                this.value = this.value.toUpperCase();
+            });
+            studentIdInput.addEventListener('blur', function() {
+                this.value = this.value.toUpperCase().trim();
+            });
+        }
+
         // Client-side quick validation
         document.getElementById('registerForm').addEventListener('submit', function(e) {
+            if (studentIdInput) {
+                studentIdInput.value = studentIdInput.value.toUpperCase().trim();
+            }
             const p1 = document.getElementById('password').value;
             const p2 = document.getElementById('password_confirm').value;
             if (p1 !== p2) {
@@ -347,6 +389,11 @@ if (isset($_GET['department_id']) && is_numeric($_GET['department_id'])) {
             if (p1.length < 8) {
                 e.preventDefault();
                 alert('Password must be at least 8 characters long.');
+                return false;
+            }
+            if (!/[A-Z]/.test(p1) || !/[a-z]/.test(p1) || !/[0-9]/.test(p1) || !/[!@#$%^&*(),.?":{}|<>]/.test(p1)) {
+                e.preventDefault();
+                alert('Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character (e.g. Student@123).');
                 return false;
             }
         });

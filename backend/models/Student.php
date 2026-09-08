@@ -11,23 +11,34 @@ class Student {
     }
     
     public function create($data) {
+        $userId = (int)$data['user_id'];
+        $studentId = strtoupper(trim($data['student_id']));
+        $departmentId = (int)$data['department_id'];
+        $courseId = (int)$data['course_id'];
+        $semester = (string)($data['semester'] ?? '1');
+        $section = !empty($data['section']) ? (string)$data['section'] : 'A';
+        $rollNumber = !empty($data['roll_number']) ? (string)$data['roll_number'] : null;
+        $phone = !empty($data['phone']) ? (string)$data['phone'] : null;
+        $dateOfBirth = !empty($data['date_of_birth']) ? (string)$data['date_of_birth'] : null;
+        $address = !empty($data['address']) ? (string)$data['address'] : null;
+
         $stmt = $this->db->prepare(
             "INSERT INTO student_profiles 
             (user_id, student_id, department_id, course_id, semester, section, roll_number, phone, date_of_birth, address) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
         $stmt->bind_param(
-            "isiiisssss",
-            $data['user_id'],
-            $data['student_id'],
-            $data['department_id'],
-            $data['course_id'],
-            $data['semester'],
-            $data['section'],
-            $data['roll_number'],
-            $data['phone'],
-            $data['date_of_birth'],
-            $data['address']
+            "isiissssss",
+            $userId,
+            $studentId,
+            $departmentId,
+            $courseId,
+            $semester,
+            $section,
+            $rollNumber,
+            $phone,
+            $dateOfBirth,
+            $address
         );
         
         if ($stmt->execute()) {
@@ -37,7 +48,13 @@ class Student {
     }
     
     public function findById($id) {
-        $stmt = $this->db->prepare("SELECT * FROM student_profiles WHERE id = ?");
+        $stmt = $this->db->prepare(
+            "SELECT sp.*, d.name AS department_name, d.code AS department_code, c.name AS course_name, c.code AS course_code 
+             FROM student_profiles sp 
+             LEFT JOIN departments d ON sp.department_id = d.id 
+             LEFT JOIN courses c ON sp.course_id = c.id 
+             WHERE sp.id = ?"
+        );
         $stmt->bind_param("i", $id);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -45,7 +62,13 @@ class Student {
     }
     
     public function findByUserId($userId) {
-        $stmt = $this->db->prepare("SELECT * FROM student_profiles WHERE user_id = ?");
+        $stmt = $this->db->prepare(
+            "SELECT sp.*, d.name AS department_name, d.code AS department_code, c.name AS course_name, c.code AS course_code 
+             FROM student_profiles sp 
+             LEFT JOIN departments d ON sp.department_id = d.id 
+             LEFT JOIN courses c ON sp.course_id = c.id 
+             WHERE sp.user_id = ?"
+        );
         $stmt->bind_param("i", $userId);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -53,7 +76,13 @@ class Student {
     }
     
     public function findByStudentId($studentId) {
-        $stmt = $this->db->prepare("SELECT * FROM student_profiles WHERE student_id = ?");
+        $stmt = $this->db->prepare(
+            "SELECT sp.*, d.name AS department_name, d.code AS department_code, c.name AS course_name, c.code AS course_code 
+             FROM student_profiles sp 
+             LEFT JOIN departments d ON sp.department_id = d.id 
+             LEFT JOIN courses c ON sp.course_id = c.id 
+             WHERE sp.student_id = ?"
+        );
         $stmt->bind_param("s", $studentId);
         $stmt->execute();
         $result = $stmt->get_result();

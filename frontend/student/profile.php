@@ -19,8 +19,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $updateData = [
             'first_name' => sanitize($_POST['first_name'] ?? ''),
             'last_name' => sanitize($_POST['last_name'] ?? ''),
-            'phone' => sanitize($_POST['phone'] ?? ''),
-            'address' => sanitize($_POST['address'] ?? ''),
             'bio' => sanitize($_POST['bio'] ?? '')
         ];
         
@@ -50,18 +48,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$profileRes = apiCall('/students.php?path=profile', 'GET');
-$profile = $profileRes['profile'] ?? $profileRes['data'] ?? [
+$profile = [
     'roll_number' => 'STU-2026-0104',
     'department_name' => 'Computer Science & Engineering',
-    'course_name' => 'B.Tech Computer Science',
+    'department_id' => 1,
+    'course_name' => 'BCA',
+    'course_code' => 'BCA',
     'semester' => 'Semester 6',
     'cgpa' => '8.84',
     'credits_earned' => '114 / 160',
-    'phone' => '+1 (555) 234-5678',
-    'address' => '42 Campus Vista, University City',
-    'bio' => 'Honors student in Computer Science. Focus on Systems Architecture, Distributed Databases, and Artificial Intelligence.'
+    'bio' => 'Student focusing on software engineering, database systems, and modern web applications.'
 ];
+
+$profileRes = apiCall('/students.php?path=profile', 'GET');
+if (!empty($profileRes['profile']) && is_array($profileRes['profile'])) {
+    $profile = array_merge($profile, $profileRes['profile']);
+} elseif (!empty($profileRes['data']) && is_array($profileRes['data'])) {
+    $profile = array_merge($profile, $profileRes['data']);
+}
+
+// Ensure direct database profile integration for logged-in user
+$db = getDbConnection();
+if ($db) {
+    $stmt = $db->prepare(
+        "SELECT sp.*, d.name AS department_name, d.code AS department_code, c.name AS course_name, c.code AS course_code 
+         FROM student_profiles sp 
+         LEFT JOIN departments d ON sp.department_id = d.id 
+         LEFT JOIN courses c ON sp.course_id = c.id 
+         WHERE sp.user_id = ?"
+    );
+    if ($stmt) {
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $dbProf = $stmt->get_result()->fetch_assoc();
+        if ($dbProf) {
+            $profile = array_merge($profile, $dbProf);
+        }
+    }
+}
+
+// Determine 'BCA' or 'BBA' based on the department
+$deptId = (int)($profile['department_id'] ?? 1);
+$deptName = $profile['department_name'] ?? '';
+$deptCode = strtoupper($profile['department_code'] ?? '');
+$courseCode = strtoupper($profile['course_code'] ?? '');
+
+if ($deptId === 4 || stripos($deptName, 'Management') !== false || stripos($deptName, 'Business') !== false || $deptCode === 'MGMT' || $courseCode === 'BBA') {
+    $degreeProgram = 'BBA';
+    $displayDepartment = !empty($deptName) ? $deptName : 'School of Business & Management';
+} else {
+    $degreeProgram = 'BCA';
+    $displayDepartment = !empty($deptName) ? $deptName : 'Computer Science & Engineering';
+}
 
 $user = $_SESSION['user'];
 $initials = getInitials(($user['first_name'] ?? 'Alex') . ' ' . ($user['last_name'] ?? 'Johnson'));
@@ -117,20 +155,22 @@ $initials = getInitials(($user['first_name'] ?? 'Alex') . ' ' . ($user['last_nam
                             <?php echo htmlspecialchars(($user['first_name'] ?? 'Alex') . ' ' . ($user['last_name'] ?? 'Johnson')); ?>
                         </h3>
                         <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;"><?php echo htmlspecialchars($user['email'] ?? 'student@studentos.ai'); ?></p>
-                        <span class="badge badge-primary">Student</span>
+                        <span class="badge badge-primary" style="font-weight: 700; font-size: 13px; padding: 4px 12px; margin-bottom: 12px;">
+                            <i class="fas fa-graduation-cap"></i> <?php echo htmlspecialchars($degreeProgram); ?> Student
+                        </span>
 
                         <div class="profile-meta-list">
                             <div class="profile-meta-row">
                                 <span style="color: var(--text-muted);">Roll Number:</span>
-                                <strong><?php echo htmlspecialchars($profile['roll_number'] ?? 'STU-2026-0104'); ?></strong>
+                                <strong><?php echo htmlspecialchars($profile['roll_number'] ?? $profile['student_id'] ?? 'STU-2026-0104'); ?></strong>
                             </div>
                             <div class="profile-meta-row">
-                                <span style="color: var(--text-muted);">Program:</span>
-                                <strong><?php echo htmlspecialchars($profile['course_name'] ?? 'B.Tech CSE'); ?></strong>
+                                <span style="color: var(--text-muted);">Degree / Course:</span>
+                                <span class="badge badge-primary" style="font-weight: 700; font-size: 13px;"><?php echo htmlspecialchars($degreeProgram); ?></span>
                             </div>
                             <div class="profile-meta-row">
                                 <span style="color: var(--text-muted);">Department:</span>
-                                <strong><?php echo htmlspecialchars($profile['department_name'] ?? 'Computer Science'); ?></strong>
+                                <strong><?php echo htmlspecialchars($displayDepartment); ?></strong>
                             </div>
                             <div class="profile-meta-row">
                                 <span style="color: var(--text-muted);">Current Term:</span>
@@ -184,19 +224,21 @@ $initials = getInitials(($user['first_name'] ?? 'Alex') . ' ' . ($user['last_nam
                                         <div style="font-size: 14px; font-weight: 600; margin-top: 4px;"><?php echo htmlspecialchars($user['email'] ?? 'student@studentos.ai'); ?></div>
                                     </div>
                                     <div style="background: var(--bg-primary); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-                                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Contact Number</div>
-                                        <div style="font-size: 14px; font-weight: 600; margin-top: 4px;"><?php echo htmlspecialchars($profile['phone'] ?? '+1 (555) 234-5678'); ?></div>
+                                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Department</div>
+                                        <div style="font-size: 14px; font-weight: 600; margin-top: 4px;"><?php echo htmlspecialchars($displayDepartment); ?></div>
                                     </div>
                                     <div style="background: var(--bg-primary); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-                                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Campus Residential Address</div>
-                                        <div style="font-size: 14px; font-weight: 600; margin-top: 4px;"><?php echo htmlspecialchars($profile['address'] ?? '42 Campus Vista, University City'); ?></div>
+                                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Degree Program</div>
+                                        <div style="font-size: 14px; font-weight: 700; color: var(--primary); margin-top: 4px;">
+                                            <span class="badge badge-primary" style="font-size: 13px; font-weight: 700; padding: 4px 10px;"><?php echo htmlspecialchars($degreeProgram); ?></span>
+                                        </div>
                                     </div>
                                 </div>
 
                                 <div style="background: var(--bg-primary); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 24px;">
                                     <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">Academic Bio / Objectives</div>
                                     <div style="font-size: 14px; color: var(--text-secondary); line-height: 1.6;">
-                                        <?php echo nl2br(htmlspecialchars($profile['bio'] ?? 'Honors student in Computer Science. Focus on Systems Architecture and Artificial Intelligence.')); ?>
+                                        <?php echo nl2br(htmlspecialchars($profile['bio'] ?? 'Honors student focusing on Applied Computing, Systems Architecture, and Software Engineering.')); ?>
                                     </div>
                                 </div>
 
@@ -226,18 +268,8 @@ $initials = getInitials(($user['first_name'] ?? 'Alex') . ' ' . ($user['last_nam
                                     </div>
 
                                     <div class="form-group">
-                                        <label for="phone">Phone Number</label>
-                                        <input type="text" name="phone" id="phone" class="form-control" value="<?php echo htmlspecialchars($profile['phone'] ?? ''); ?>">
-                                    </div>
-
-                                    <div class="form-group">
-                                        <label for="address">Residential Address</label>
-                                        <input type="text" name="address" id="address" class="form-control" value="<?php echo htmlspecialchars($profile['address'] ?? ''); ?>">
-                                    </div>
-
-                                    <div class="form-group">
                                         <label for="bio">Bio / Academic Interests</label>
-                                        <textarea name="bio" id="bio" class="form-control" rows="3"><?php echo htmlspecialchars($profile['bio'] ?? ''); ?></textarea>
+                                        <textarea name="bio" id="bio" class="form-control" rows="4" placeholder="Share your academic interests, focus areas, and learning goals..."><?php echo htmlspecialchars($profile['bio'] ?? ''); ?></textarea>
                                     </div>
 
                                     <button type="submit" class="btn btn-primary">

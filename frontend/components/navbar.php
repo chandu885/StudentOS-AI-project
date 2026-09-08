@@ -33,6 +33,13 @@ if (($user['role_id'] ?? 4) == 1) {
             <i class="fas fa-bars"></i>
         </button>
         
+        <a href="<?php echo htmlspecialchars(url(getDashboardUrl())); ?>" class="navbar-brand-header" title="BSTUDENTOS Dashboard">
+            <div class="navbar-brand-icon">
+                <i class="fas fa-graduation-cap"></i>
+            </div>
+            <span class="navbar-brand-title">BSTUDENTOS</span>
+        </a>
+        
         <div class="nav-search-box">
             <i class="fas fa-search search-icon"></i>
             <input type="text" placeholder="Search anything... (Ctrl+K)" id="globalSearchInput" onkeydown="if(event.key==='Enter') window.location.href='<?php echo htmlspecialchars(url($portalPrefix . '/search.php')); ?>?q=' + encodeURIComponent(this.value)">

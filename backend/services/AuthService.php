@@ -24,6 +24,28 @@ class AuthService {
     }
     
     public function registerStudent($data) {
+        // Normalize Student ID to uppercase
+        if (!empty($data['student_id'])) {
+            $data['student_id'] = strtoupper(trim($data['student_id']));
+        }
+
+        // Derive department_id from selected course if missing
+        if (empty($data['department_id']) && !empty($data['course_id'])) {
+            $cStmt = Database::getInstance()->prepare("SELECT department_id FROM courses WHERE id = ?");
+            if ($cStmt) {
+                $cId = (int)$data['course_id'];
+                $cStmt->bind_param("i", $cId);
+                $cStmt->execute();
+                $cRes = $cStmt->get_result()->fetch_assoc();
+                if ($cRes && !empty($cRes['department_id'])) {
+                    $data['department_id'] = (int)$cRes['department_id'];
+                }
+            }
+        }
+        if (empty($data['department_id'])) {
+            $data['department_id'] = ((int)($data['course_id'] ?? 0) === 1) ? 4 : 1;
+        }
+
         // Validate required fields
         $required = ['first_name', 'last_name', 'email', 'password', 'student_id', 'department_id', 'course_id', 'semester'];
         foreach ($required as $field) {
@@ -70,7 +92,7 @@ class AuthService {
                 'password' => $data['password'],
                 'first_name' => $data['first_name'],
                 'last_name' => $data['last_name'],
-                'is_verified' => 0,
+                'is_verified' => 1,
                 'is_active' => 1
             ];
             

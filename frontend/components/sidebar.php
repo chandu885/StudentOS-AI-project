@@ -77,9 +77,9 @@ elseif ($userRole == 1) {
 
 <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
-        <a href="<?php echo htmlspecialchars(url(getDashboardUrl())); ?>" class="sidebar-brand" title="StudentOS AI Dashboard">
+        <a href="<?php echo htmlspecialchars(url(getDashboardUrl())); ?>" class="sidebar-brand" title="BSTUDENTOS Dashboard">
             <i class="fas fa-graduation-cap"></i>
-            <span>StudentOS AI</span>
+            <span>BSTUDENTOS</span>
         </a>
         <button class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle Sidebar" aria-label="Toggle Sidebar">
             <i class="fas fa-bars"></i>

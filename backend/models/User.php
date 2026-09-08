@@ -12,6 +12,8 @@ class User {
     
     public function create($data) {
         $passwordHash = password_hash($data['password'], PASSWORD_BCRYPT, ['cost' => 12]);
+        $isVerified = isset($data['is_verified']) ? (int)$data['is_verified'] : 1;
+        $isActive = isset($data['is_active']) ? (int)$data['is_active'] : 1;
         
         $stmt = $this->db->prepare(
             "INSERT INTO users (role_id, email, password_hash, first_name, last_name, is_verified, is_active) 
@@ -24,8 +26,8 @@ class User {
             $passwordHash,
             $data['first_name'],
             $data['last_name'],
-            $data['is_verified'] ?? 0,
-            $data['is_active'] ?? 1
+            $isVerified,
+            $isActive
         );
         
         if ($stmt->execute()) {
