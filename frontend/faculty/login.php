@@ -103,9 +103,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <!-- Role Selector Tabs -->
             <div class="auth-role-tabs">
-                <a href="../student/login.php" class="auth-role-tab">
-                    <i class="fas fa-user-graduate"></i> Student
-                </a>
                 <a href="login.php" class="auth-role-tab active faculty">
                     <i class="fas fa-chalkboard-teacher"></i> Faculty
                 </a>
@@ -115,20 +112,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <a href="../super-admin/login.php" class="auth-role-tab">
                     <i class="fas fa-crown"></i> Super Admin
                 </a>
-            </div>
-            
-            <!-- Demo Credentials Quick Selector -->
-            <div style="background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.25); border-radius: var(--radius-md); padding: 12px; margin-bottom: 18px;">
-                <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--success); letter-spacing: 0.5px; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
-                    <span><i class="fas fa-bolt"></i> Example Faculty Credentials</span>
-                    <button type="button" class="btn btn-success" style="font-size: 11px; padding: 3px 8px; height: auto; background: var(--success); border: none;" onclick="fillLogin('faculty@gmail.com', 'Faculty@12345')">
-                        Auto Fill
-                    </button>
-                </div>
-                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
-                    <div><strong>Email:</strong> <code style="color: var(--success);">faculty@gmail.com</code> (or <code>faculty@studentos.ai</code>)</div>
-                    <div><strong>Password:</strong> <code style="color: var(--success);">Faculty@12345</code></div>
-                </div>
             </div>
             
             <?php if (!empty($error)): ?>
@@ -167,7 +150,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <input type="checkbox" name="remember" id="remember" <?php echo isset($_POST['remember']) ? 'checked' : ''; ?>>
                         <span>Remember credentials</span>
                     </label>
-                    <a href="../forgot-password.php" class="forgot-link">Forgot Password?</a>
                 </div>
                 
                 <button type="submit" class="btn btn-primary btn-block btn-lg" style="background: linear-gradient(135deg, #22C55E, #16A34A); border: none;">
@@ -175,12 +157,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </button>
             </form>
             
-            <div class="auth-footer">
-                <p>Not a faculty member? <a href="../student/login.php">Go to Student Login</a> • <a href="../register.php">Register Student</a></p>
-                <div style="margin-top: 14px; font-size: 11.5px; color: var(--text-secondary);">
-                    <i class="fas fa-shield-alt"></i> Administrative staff? Switch to <a href="../admin/login.php" style="color: #F59E0B; font-weight: 600;">Admin Portal</a>.
-                </div>
-            </div>
         </div>
     </div>
     

@@ -103,35 +103,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <p>Access your classes, study roadmap, grades, and AI study companion</p>
             </div>
 
-            <!-- Role Selector Tabs -->
-            <div class="auth-role-tabs">
-                <a href="login.php" class="auth-role-tab active">
-                    <i class="fas fa-user-graduate"></i> Student
-                </a>
-                <a href="../faculty/login.php" class="auth-role-tab">
-                    <i class="fas fa-chalkboard-teacher"></i> Faculty
-                </a>
-                <a href="../admin/login.php" class="auth-role-tab">
-                    <i class="fas fa-shield-alt"></i> Admin
-                </a>
-                <a href="../super-admin/login.php" class="auth-role-tab">
-                    <i class="fas fa-crown"></i> Super Admin
-                </a>
-            </div>
+
             
-            <!-- Demo Credentials Quick Selector -->
-            <div style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: var(--radius-md); padding: 12px; margin-bottom: 18px;">
-                <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--primary); letter-spacing: 0.5px; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
-                    <span><i class="fas fa-bolt"></i> Example Student Credentials</span>
-                    <button type="button" class="btn btn-primary" style="font-size: 11px; padding: 3px 8px; height: auto;" onclick="fillLogin('student@gmail.com', 'Student@12345')">
-                        Auto Fill
-                    </button>
-                </div>
-                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
-                    <div><strong>Email:</strong> <code style="color: var(--primary);">student@gmail.com</code> (or <code>student@studentos.ai</code>)</div>
-                    <div><strong>Password:</strong> <code style="color: var(--primary);">Student@12345</code></div>
-                </div>
-            </div>
+
             
             <?php if (!empty($error)): ?>
                 <div class="alert alert-error">
@@ -188,9 +162,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
                     <i class="fas fa-shield-alt"></i> Student accounts are provisioned by Institutional Administration.
                 </p>
-                <div style="font-size: 11.5px; color: var(--text-secondary);">
-                    Need staff access? Switch to <a href="../faculty/login.php" style="color: #22C55E; font-weight: 600;">Faculty Portal</a> or <a href="../admin/login.php" style="color: #F59E0B; font-weight: 600;">Admin Portal</a>.
-                </div>
             </div>
         </div>
     </div>

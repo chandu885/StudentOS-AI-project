@@ -183,9 +183,7 @@ if (isset($_GET['department_id']) && is_numeric($_GET['department_id'])) {
             
             <form method="POST" action="register.php" class="auth-form" id="registerForm">
                 <!-- Section 1: Account Credentials -->
-                <div class="form-section-title">
-                    <i class="fas fa-user-shield"></i> 1. Account Credentials & Name
-                </div>
+        
 
                 <div class="form-row">
                     <div class="form-group">
@@ -211,7 +209,7 @@ if (isset($_GET['department_id']) && is_numeric($_GET['department_id'])) {
                 </div>
                 
                 <div class="form-group">
-                    <label for="email">Student Institutional Email <span style="color: var(--danger);">*</span></label>
+                    <label for="email">Student Email <span style="color: var(--danger);">*</span></label>
                     <div class="input-group">
                         <span class="input-icon"><i class="fas fa-envelope"></i></span>
                         <input type="email" id="email" name="email" class="form-control"
@@ -221,35 +219,8 @@ if (isset($_GET['department_id']) && is_numeric($_GET['department_id'])) {
                     </div>
                 </div>
                 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="password">Password <span style="color: var(--danger);">*</span></label>
-                        <div class="input-group">
-                            <span class="input-icon"><i class="fas fa-lock"></i></span>
-                            <input type="password" id="password" name="password" class="form-control has-toggle"
-                                   placeholder="Min 8 characters" required>
-                            <button type="button" class="toggle-password" onclick="togglePassword('password', this)" title="Show/Hide password">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="password_confirm">Confirm Password <span style="color: var(--danger);">*</span></label>
-                        <div class="input-group">
-                            <span class="input-icon"><i class="fas fa-shield-alt"></i></span>
-                            <input type="password" id="password_confirm" name="password_confirm" class="form-control has-toggle"
-                                   placeholder="Re-enter password" required>
-                            <button type="button" class="toggle-password" onclick="togglePassword('password_confirm', this)" title="Show/Hide password">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
+
                 
-                <!-- Section 2: Academic Details -->
-                <div class="form-section-title">
-                    <i class="fas fa-graduation-cap"></i> 2. Academic Enrollment
-                </div>
 
                 <div class="form-row">
                     <div class="form-group">
@@ -272,6 +243,8 @@ if (isset($_GET['department_id']) && is_numeric($_GET['department_id'])) {
                         </div>
                     </div>
                 </div>
+
+            
                 
                 <div class="form-row">
                     <div class="form-group">
@@ -292,10 +265,8 @@ if (isset($_GET['department_id']) && is_numeric($_GET['department_id'])) {
                                         </option>
                                     <?php endforeach; ?>
                                 <?php else: ?>
-                                    <option value="1" <?php echo ($formData['course_id'] ?? '') == 1 ? 'selected' : ''; ?>>B.Tech in Computer Science (BTECH-CSE)</option>
-                                    <option value="2" <?php echo ($formData['course_id'] ?? '') == 2 ? 'selected' : ''; ?>>Master of Computer Applications (MCA)</option>
-                                    <option value="3" <?php echo ($formData['course_id'] ?? '') == 3 ? 'selected' : ''; ?>>B.Tech in Electronics & Communication (BTECH-ECE)</option>
-                                    <option value="4" <?php echo ($formData['course_id'] ?? '') == 4 ? 'selected' : ''; ?>>M.Tech in Artificial Intelligence (MTECH-AI)</option>
+                                    <option value="1" <?php echo ($formData['course_id'] ?? '') == 1 ? 'selected' : ''; ?>>BBA</option>
+                                    <option value="2" <?php echo ($formData['course_id'] ?? '') == 2 ? 'selected' : ''; ?>>BCA</option>
                                 <?php endif; ?>
                             </select>
                         </div>
@@ -314,33 +285,30 @@ if (isset($_GET['department_id']) && is_numeric($_GET['department_id'])) {
                     </div>
                 </div>
                 
-                <!-- Section 3: Contact & Personal Info -->
-                <div class="form-section-title">
-                    <i class="fas fa-address-book"></i> 3. Contact & Additional Information
-                </div>
-
-                <div class="form-row">
+                            <div class="form-row">
                     <div class="form-group">
-                        <label for="phone">Phone Contact</label>
+                        <label for="password">Password <span style="color: var(--danger);">*</span></label>
                         <div class="input-group">
-                            <span class="input-icon"><i class="fas fa-phone"></i></span>
-                            <input type="tel" id="phone" name="phone" class="form-control"
-                                   placeholder="+91 98765 43210" 
-                                   value="<?php echo htmlspecialchars($formData['phone'] ?? ''); ?>">
+                            <span class="input-icon"><i class="fas fa-lock"></i></span>
+                            <input type="password" id="password" name="password" class="form-control has-toggle"
+                                   placeholder="Min 8 characters" required>
+                            <button type="button" class="toggle-password" onclick="togglePassword('password', this)" title="Show/Hide password">
+                                <i class="fas fa-eye"></i>
+                            </button>
                         </div>
                     </div>
                     <div class="form-group">
-                        <label for="date_of_birth">Date of Birth</label>
-                        <input type="date" id="date_of_birth" name="date_of_birth" class="form-control"
-                               value="<?php echo htmlspecialchars($formData['date_of_birth'] ?? ''); ?>">
+                        <label for="password_confirm">Confirm Password <span style="color: var(--danger);">*</span></label>
+                        <div class="input-group">
+                            <span class="input-icon"><i class="fas fa-shield-alt"></i></span>
+                            <input type="password" id="password_confirm" name="password_confirm" class="form-control has-toggle"
+                                   placeholder="Re-enter password" required>
+                            <button type="button" class="toggle-password" onclick="togglePassword('password_confirm', this)" title="Show/Hide password">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
                     </div>
-                </div>
-                
-                <div class="form-group">
-                    <label for="address">Residential Address</label>
-                    <textarea id="address" name="address" rows="2" class="form-control"
-                              placeholder="City, State, Postal Code"><?php echo htmlspecialchars($formData['address'] ?? ''); ?></textarea>
-                </div>
+                </div> 
                 
                 <div class="form-group" style="margin-top: 8px;">
                     <label class="checkbox-label">

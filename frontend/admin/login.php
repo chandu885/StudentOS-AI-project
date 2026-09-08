@@ -105,9 +105,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <!-- Role Selector Tabs -->
             <div class="auth-role-tabs">
-                <a href="../student/login.php" class="auth-role-tab">
-                    <i class="fas fa-user-graduate"></i> Student
-                </a>
                 <a href="../faculty/login.php" class="auth-role-tab">
                     <i class="fas fa-chalkboard-teacher"></i> Faculty
                 </a>
@@ -119,19 +116,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </a>
             </div>
             
-            <!-- Demo Credentials Quick Selector -->
-            <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: var(--radius-md); padding: 12px; margin-bottom: 18px;">
-                <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--warning); letter-spacing: 0.5px; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
-                    <span><i class="fas fa-bolt"></i> Example Admin Credentials</span>
-                    <button type="button" class="btn btn-warning" style="font-size: 11px; padding: 3px 8px; height: auto; background: var(--warning); border: none; color: #fff;" onclick="fillLogin('admin@gmail.com', 'Admin@12345')">
-                        Auto Fill
-                    </button>
-                </div>
-                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
-                    <div><strong>Email:</strong> <code style="color: var(--warning);">admin@gmail.com</code> (or <code>admin@studentos.ai</code>)</div>
-                    <div><strong>Password:</strong> <code style="color: var(--warning);">Admin@12345</code></div>
-                </div>
-            </div>
             
             <?php if (!empty($error)): ?>
                 <div class="alert alert-error">
@@ -169,20 +153,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <input type="checkbox" name="remember" id="remember" <?php echo isset($_POST['remember']) ? 'checked' : ''; ?>>
                         <span>Remember credentials</span>
                     </label>
-                    <a href="../forgot-password.php" class="forgot-link">Forgot Password?</a>
                 </div>
                 
                 <button type="submit" class="btn btn-primary btn-block btn-lg" style="background: linear-gradient(135deg, #F59E0B, #D97706); border: none;">
                     <i class="fas fa-shield-alt"></i> Access Admin Console
                 </button>
             </form>
-            
-            <div class="auth-footer">
-                <p>Not an administrator? <a href="../student/login.php">Student Portal</a> • <a href="../faculty/login.php">Faculty Portal</a> • <a href="../register.php">Register</a></p>
-                <div style="margin-top: 14px; font-size: 11.5px; color: var(--text-secondary);">
-                    <i class="fas fa-crown"></i> Root system governance? Proceed to <a href="../super-admin/login.php" style="color: #EF4444; font-weight: 600;">Super Admin Portal</a>.
-                </div>
-            </div>
+
         </div>
     </div>
     

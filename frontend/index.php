@@ -72,11 +72,14 @@ $currentUser = $loggedIn ? ($_SESSION['user'] ?? null) : null;
                         <i class="fas fa-sign-out-alt"></i> <span>Log Out</span>
                     </a>
                 <?php else: ?>
+                    <a href="<?php echo htmlspecialchars(url('/faculty/login.php')); ?>" class="btn btn-outline" role="button" style="display: inline-flex; align-items: center; gap: 6px; border-color: rgba(99, 102, 241, 0.4);">
+                        <i class="fas fa-user-shield"></i> <span>Admin Login</span>
+                    </a>
                     <a href="<?php echo htmlspecialchars(url('/register.php')); ?>" class="btn btn-outline" role="button" style="display: inline-flex; align-items: center; gap: 6px; border-color: rgba(99, 102, 241, 0.4);">
                         <i class="fas fa-user-plus"></i> <span>Register</span>
                     </a>
                     <a href="<?php echo htmlspecialchars(url('/student/login.php')); ?>" class="btn btn-primary" role="button" style="display: inline-flex; align-items: center; gap: 6px;">
-                        <i class="fas fa-user-graduate"></i> <span>Login</span>
+                        <i class="fas fa-user-graduate"></i> <span>Student Login</span>
                     </a>
                 <?php endif; ?>
             </div>
