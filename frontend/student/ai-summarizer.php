@@ -17,7 +17,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $res = apiCall('/ai.php?path=summarize', 'POST', ['text' => $inputText]);
         $summaryOutput = $res['summary'] ?? $res['result'] ?? null;
         if (!$summaryOutput) {
-            $summaryOutput = "### Key Summary\n- **Core Thesis:** The provided lecture material covers fundamental architectural and operational concepts.\n- **Primary Takeaway:** Normalization eliminates update, insertion, and deletion anomalies while maintaining lossless decomposition.\n- **Critical Formulas/Theorems:** Boyce-Codd Normal Form requires every functional dependency X -> Y to have X as a candidate/superkey.\n\n### Exam Focus Points\n1. Be prepared to verify whether a given dependency preserves dependencies after decomposition.\n2. Understand the difference between 3NF and BCNF with canonical examples.";
+            $sentences = preg_split('/(?<=[.?!])\s+/', trim($inputText));
+            $cleanSentences = array_filter(array_map('trim', $sentences));
+            if (!empty($cleanSentences)) {
+                $takeaways = array_slice($cleanSentences, 0, 5);
+                $summaryOutput = "### Key Summary\n- " . implode("\n- ", $takeaways);
+            } else {
+                $summaryOutput = "No summary could be generated for the provided text. Please provide valid text content.";
+            }
         }
     }
 }
@@ -28,13 +35,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Lecture Summarizer - StudentOS AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/variables.css">
     <link rel="stylesheet" href="../assets/css/reset.css">
     <link rel="stylesheet" href="../assets/css/global.css">
     <link rel="stylesheet" href="../assets/css/components.css">
     <link rel="stylesheet" href="../assets/css/responsive.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="dashboard-layout">

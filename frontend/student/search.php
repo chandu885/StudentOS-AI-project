@@ -8,15 +8,20 @@ require_once __DIR__ . '/../includes/helpers.php';
 requireRole('student');
 
 $userId = $_SESSION['user']['id'];
+$db = getDbConnection();
 $query = sanitize($_GET['q'] ?? '');
 $results = [];
 
-if (!empty($query)) {
-    // Search across user notes
-    $notesRes = apiCall('/notes.php', 'GET');
-    $allNotes = $notesRes['notes'] ?? [];
-    foreach ($allNotes as $note) {
-        if (stripos($note['title'] ?? '', $query) !== false || stripos($note['content'] ?? '', $query) !== false) {
+if (!empty($query) && $db) {
+    $searchPattern = '%' . $query . '%';
+
+    // 1. Search across user notes
+    $nStmt = $db->prepare("SELECT id, title, content FROM `notes` WHERE user_id = ? AND (title LIKE ? OR content LIKE ? OR tags LIKE ?)");
+    if ($nStmt) {
+        $nStmt->bind_param("isss", $userId, $searchPattern, $searchPattern, $searchPattern);
+        $nStmt->execute();
+        $nRes = $nStmt->get_result();
+        while ($note = $nRes->fetch_assoc()) {
             $results[] = [
                 'type' => 'Note',
                 'title' => $note['title'],
@@ -28,18 +33,74 @@ if (!empty($query)) {
         }
     }
 
-    // Search tasks
-    $tasksRes = apiCall('/tasks.php', 'GET');
-    $allTasks = $tasksRes['tasks'] ?? [];
-    foreach ($allTasks as $task) {
-        if (stripos($task['title'] ?? '', $query) !== false) {
+    // 2. Search user tasks
+    $tStmt = $db->prepare("SELECT id, title, description, deadline FROM `tasks` WHERE user_id = ? AND (title LIKE ? OR description LIKE ?)");
+    if ($tStmt) {
+        $tStmt->bind_param("iss", $userId, $searchPattern, $searchPattern);
+        $tStmt->execute();
+        $tRes = $tStmt->get_result();
+        while ($task = $tRes->fetch_assoc()) {
             $results[] = [
                 'type' => 'Task',
                 'title' => $task['title'],
-                'snippet' => 'Due ' . date('M d, Y', strtotime($task['due_date'])),
+                'snippet' => !empty($task['deadline']) ? 'Due ' . date('M d, Y', strtotime($task['deadline'])) : 'Pending task',
                 'link' => 'tasks.php',
                 'icon' => 'fa-tasks',
                 'badge' => 'badge-warning'
+            ];
+        }
+    }
+
+    // 3. Search enrolled subjects
+    $sStmt = $db->prepare("SELECT s.id, s.name, s.code, s.syllabus FROM `student_subjects` ss JOIN `subjects` s ON ss.subject_id = s.id WHERE ss.student_id = ? AND (s.name LIKE ? OR s.code LIKE ? OR s.syllabus LIKE ?)");
+    if ($sStmt) {
+        $sStmt->bind_param("isss", $userId, $searchPattern, $searchPattern, $searchPattern);
+        $sStmt->execute();
+        $sRes = $sStmt->get_result();
+        while ($sub = $sRes->fetch_assoc()) {
+            $results[] = [
+                'type' => 'Subject',
+                'title' => $sub['code'] . ' - ' . $sub['name'],
+                'snippet' => truncate($sub['syllabus'] ?? 'Enrolled course subject', 120),
+                'link' => 'subjects.php',
+                'icon' => 'fa-book',
+                'badge' => 'badge-purple'
+            ];
+        }
+    }
+
+    // 4. Search documents
+    $dStmt = $db->prepare("SELECT id, title, description FROM `documents` WHERE (user_id = ? OR is_public = 1) AND (title LIKE ? OR description LIKE ?)");
+    if ($dStmt) {
+        $dStmt->bind_param("iss", $userId, $searchPattern, $searchPattern);
+        $dStmt->execute();
+        $dRes = $dStmt->get_result();
+        while ($doc = $dRes->fetch_assoc()) {
+            $results[] = [
+                'type' => 'Document',
+                'title' => $doc['title'],
+                'snippet' => truncate($doc['description'] ?? 'Course material PDF', 120),
+                'link' => 'documents.php',
+                'icon' => 'fa-file-pdf',
+                'badge' => 'badge-info'
+            ];
+        }
+    }
+
+    // 5. Search notices
+    $noStmt = $db->prepare("SELECT id, title, content FROM `notices` WHERE title LIKE ? OR content LIKE ?");
+    if ($noStmt) {
+        $noStmt->bind_param("ss", $searchPattern, $searchPattern);
+        $noStmt->execute();
+        $noRes = $noStmt->get_result();
+        while ($not = $noRes->fetch_assoc()) {
+            $results[] = [
+                'type' => 'Notice',
+                'title' => $not['title'],
+                'snippet' => truncate($not['content'], 120),
+                'link' => 'notices.php',
+                'icon' => 'fa-bullhorn',
+                'badge' => 'badge-danger'
             ];
         }
     }
@@ -51,13 +112,16 @@ if (!empty($query)) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Search Results - StudentOS AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
     <link rel="stylesheet" href="../assets/css/variables.css">
     <link rel="stylesheet" href="../assets/css/reset.css">
     <link rel="stylesheet" href="../assets/css/global.css">
     <link rel="stylesheet" href="../assets/css/components.css">
     <link rel="stylesheet" href="../assets/css/responsive.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="dashboard-layout">

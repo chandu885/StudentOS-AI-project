@@ -8,11 +8,26 @@ require_once __DIR__ . '/../includes/helpers.php';
 requireRole('student');
 
 $userId = $_SESSION['user']['id'];
+$db = getDbConnection();
 $generatedPlan = null;
 $errorMsg = '';
 
+// Fetch student's enrolled subjects
+$subjects = [];
+if ($db) {
+    $subStmt = $db->prepare("SELECT s.id, s.name, s.code FROM `student_subjects` ss JOIN `subjects` s ON ss.subject_id = s.id WHERE ss.student_id = ? ORDER BY s.name ASC");
+    if ($subStmt) {
+        $subStmt->bind_param("i", $userId);
+        $subStmt->execute();
+        $subRes = $subStmt->get_result();
+        while ($sr = $subRes->fetch_assoc()) {
+            $subjects[] = $sr;
+        }
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $subjectId = (int)($_POST['subject_id'] ?? 1);
+    $subjectId = (int)($_POST['subject_id'] ?? ($subjects[0]['id'] ?? 1));
     $examDate = sanitize($_POST['exam_date'] ?? date('Y-m-d', strtotime('+14 days')));
     $days = (int)($_POST['days'] ?? 14);
 
@@ -24,12 +39,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!empty($res['plan']) || !empty($res['data'])) {
         $generatedPlan = $res['plan'] ?? $res['data'];
     } else {
+        // Find subject name
+        $subName = 'Core Subject';
+        foreach ($subjects as $s) {
+            if ($s['id'] == $subjectId) {
+                $subName = $s['name'];
+                break;
+            }
+        }
+        
         $generatedPlan = [
-            ['day' => 'Days 1 - 3', 'focus' => 'Foundations & Unit 1', 'tasks' => 'Review Entity-Relationship Model, Keys, and Relational Algebra. Solve 10 sample schema conversions.'],
-            ['day' => 'Days 4 - 7', 'focus' => 'Functional Dependencies & Normalization', 'tasks' => 'Deep dive into 1NF, 2NF, 3NF, and BCNF. Practice decomposition with lossless join & dependency preservation.'],
-            ['day' => 'Days 8 - 11', 'focus' => 'Transaction Processing & Concurrency', 'tasks' => 'Study ACID properties, Serializability, Two-Phase Locking (2PL), and Deadlock recovery algorithms.'],
-            ['day' => 'Days 12 - 14', 'focus' => 'Full Mock Exams & Rapid Revision', 'tasks' => 'Solve 2 previous year midterm question papers under timed conditions (90 mins each).']
+            ['day' => 'Days 1 - ' . ceil($days * 0.25), 'focus' => 'Foundations & Unit 1 (' . $subName . ')', 'tasks' => 'Review core concepts, definitions, and principles. Practice standard schema and analysis problems.'],
+            ['day' => 'Days ' . (ceil($days * 0.25) + 1) . ' - ' . ceil($days * 0.5), 'focus' => 'Core Architecture & Advanced Concepts', 'tasks' => 'Deep dive into specialized algorithms and theoretical proofs for ' . $subName . '.'],
+            ['day' => 'Days ' . (ceil($days * 0.5) + 1) . ' - ' . ceil($days * 0.75), 'focus' => 'Practical Applications & Problem Sets', 'tasks' => 'Solve 15 sample end-of-chapter problems and previous semester test papers.'],
+            ['day' => 'Days ' . (ceil($days * 0.75) + 1) . ' - ' . $days, 'focus' => 'Full Mock Exams & Rapid Revision', 'tasks' => 'Timed revision under exam conditions, flashcards review, and key formula memorization.']
         ];
+    }
+
+    // Persist plan in DB
+    if ($db && !empty($generatedPlan)) {
+        $contentToStore = is_array($generatedPlan) ? json_encode($generatedPlan) : (string)$generatedPlan;
+        $planTitle = $subName . ' Revision Plan (' . $days . ' Days)';
+        $pStmt = $db->prepare("INSERT INTO `ai_study_plans` (user_id, subject_id, title, plan_content, start_date, end_date, is_active, created_at) VALUES (?, ?, ?, ?, CURDATE(), ?, 1, NOW())");
+        if ($pStmt) {
+            $pStmt->bind_param("iisss", $userId, $subjectId, $planTitle, $contentToStore, $examDate);
+            $pStmt->execute();
+        }
+    }
+}
+
+// Load existing active plan if no post
+if (!$generatedPlan && $db) {
+    $planStmt = $db->prepare("SELECT * FROM `ai_study_plans` WHERE `user_id` = ? AND `is_active` = 1 ORDER BY `created_at` DESC LIMIT 1");
+    if ($planStmt) {
+        $planStmt->bind_param("i", $userId);
+        $planStmt->execute();
+        $planRow = $planStmt->get_result()->fetch_assoc();
+        if ($planRow) {
+            $dec = json_decode($planRow['plan_content'], true);
+            $generatedPlan = (json_last_error() === JSON_ERROR_NONE && is_array($dec)) ? $dec : $planRow['plan_content'];
+        }
     }
 }
 ?>
@@ -39,13 +88,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Study Planner - StudentOS AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
     <link rel="stylesheet" href="../assets/css/variables.css">
     <link rel="stylesheet" href="../assets/css/reset.css">
     <link rel="stylesheet" href="../assets/css/global.css">
     <link rel="stylesheet" href="../assets/css/components.css">
     <link rel="stylesheet" href="../assets/css/responsive.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="dashboard-layout">
@@ -72,10 +124,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <div class="form-group" style="margin-bottom: 0;">
                                     <label for="subject_id">Subject</label>
                                     <select name="subject_id" id="subject_id" class="form-control">
-                                        <option value="1">Database Management Systems</option>
-                                        <option value="2">Data Structures & Algorithms</option>
-                                        <option value="3">Operating Systems</option>
-                                        <option value="4">Computer Networks</option>
+                                        <?php if (!empty($subjects)): ?>
+                                            <?php foreach ($subjects as $s): ?>
+                                                <option value="<?php echo $s['id']; ?>"><?php echo htmlspecialchars($s['name']); ?></option>
+                                            <?php endforeach; ?>
+                                        <?php else: ?>
+                                            <option value="1">Database Management Systems</option>
+                                        <?php endif; ?>
                                     </select>
                                 </div>
                                 <div class="form-group" style="margin-bottom: 0;">

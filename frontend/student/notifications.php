@@ -9,17 +9,32 @@ requireRole('student');
 
 $userId = $_SESSION['user']['id'];
 
+$db = getDbConnection();
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'read_all') {
+    if ($db) {
+        $upStmt = $db->prepare("UPDATE `notifications` SET `is_read` = 1 WHERE `user_id` = ?");
+        if ($upStmt) {
+            $upStmt->bind_param("i", $userId);
+            $upStmt->execute();
+        }
+    }
     apiCall('/notifications.php?action=read-all', 'POST');
     redirect('/student/notifications.php');
 }
 
-$notifRes = apiCall('/notifications.php', 'GET');
-$notifications = $notifRes['notifications'] ?? [
-    ['id' => 1, 'title' => 'New Assignment Posted', 'message' => 'Dr. Robert Smith posted a new assignment: ER Diagram Design.', 'is_read' => 0, 'created_at' => date('Y-m-d H:i:s', strtotime('-2 hours'))],
-    ['id' => 2, 'title' => 'Midterm Exam Schedule Released', 'message' => 'The Midterm examination timetable for Semester 6 is now live.', 'is_read' => 0, 'created_at' => date('Y-m-d H:i:s', strtotime('-1 day'))],
-    ['id' => 3, 'title' => 'Attendance Advisory', 'message' => 'Your Operating Systems attendance is currently at 73.1%. Minimum required is 75%.', 'is_read' => 1, 'created_at' => date('Y-m-d H:i:s', strtotime('-3 days'))]
-];
+$notifications = [];
+if ($db) {
+    $stmt = $db->prepare("SELECT * FROM `notifications` WHERE `user_id` = ? OR `user_id` = 0 ORDER BY `created_at` DESC");
+    if ($stmt) {
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        while ($row = $res->fetch_assoc()) {
+            $notifications[] = $row;
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -27,13 +42,16 @@ $notifications = $notifRes['notifications'] ?? [
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Notifications - StudentOS AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
     <link rel="stylesheet" href="../assets/css/variables.css">
     <link rel="stylesheet" href="../assets/css/reset.css">
     <link rel="stylesheet" href="../assets/css/global.css">
     <link rel="stylesheet" href="../assets/css/components.css">
     <link rel="stylesheet" href="../assets/css/responsive.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="dashboard-layout">

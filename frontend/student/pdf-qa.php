@@ -8,13 +8,25 @@ require_once __DIR__ . '/../includes/helpers.php';
 requireRole('student');
 
 $userId = $_SESSION['user']['id'];
-$docId = (int)($_GET['doc_id'] ?? 1);
+$db = getDbConnection();
 
-$documents = [
-    1 => 'DBMS_Unit_3_Normalization_Complete.pdf',
-    2 => 'Data_Structures_Algorithms_Lectures_1_to_10.pdf',
-    3 => 'OS_Concurrency_Deadlocks_Slides.pdf'
-];
+$documents = [];
+if ($db) {
+    $stmt = $db->prepare("SELECT id, title, description, file_path FROM documents WHERE is_public = 1 OR user_id = ? ORDER BY id ASC");
+    if ($stmt) {
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        while ($row = $res->fetch_assoc()) {
+            $documents[$row['id']] = $row['title'];
+        }
+        $stmt->close();
+    }
+}
+
+$firstDocId = !empty($documents) ? (int)array_key_first($documents) : 0;
+$docId = isset($_GET['doc_id']) && isset($documents[(int)$_GET['doc_id']]) ? (int)$_GET['doc_id'] : $firstDocId;
+$activeDocTitle = $documents[$docId] ?? 'Document';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -22,13 +34,16 @@ $documents = [
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PDF Q&A / Document RAG - StudentOS AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/variables.css">
     <link rel="stylesheet" href="../assets/css/reset.css">
     <link rel="stylesheet" href="../assets/css/global.css">
     <link rel="stylesheet" href="../assets/css/components.css">
     <link rel="stylesheet" href="../assets/css/responsive.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="dashboard-layout">
@@ -45,41 +60,52 @@ $documents = [
                     </div>
                 </div>
 
-                <div class="card">
-                    <div class="card-body" style="padding: 16px 20px;">
-                        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
-                            <div style="display: flex; align-items: center; gap: 12px;">
-                                <i class="fas fa-file-pdf" style="font-size: 28px; color: var(--danger);"></i>
-                                <div>
-                                    <label style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Active Document</label>
-                                    <select id="docSelect" class="form-control" style="width: auto; height: 36px; padding: 4px 10px; margin-top: 2px;" onchange="window.location.href='pdf-qa.php?doc_id=' + this.value">
-                                        <?php foreach ($documents as $id => $name): ?>
-                                            <option value="<?php echo $id; ?>" <?php echo $id === $docId ? 'selected' : ''; ?>><?php echo htmlspecialchars($name); ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
+                <?php if (empty($documents)): ?>
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="empty-state">
+                                <i class="fas fa-file-pdf"></i>
+                                <p>No documents found in the database. Upload documents to start chatting with them.</p>
+                            </div>
+                        </div>
+                    </div>
+                <?php else: ?>
+                    <div class="card">
+                        <div class="card-body" style="padding: 16px 20px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <i class="fas fa-file-pdf" style="font-size: 28px; color: var(--danger);"></i>
+                                    <div>
+                                        <label style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Active Document</label>
+                                        <select id="docSelect" class="form-control" style="width: auto; height: 36px; padding: 4px 10px; margin-top: 2px;" onchange="window.location.href='pdf-qa.php?doc_id=' + this.value">
+                                            <?php foreach ($documents as $id => $name): ?>
+                                                <option value="<?php echo $id; ?>" <?php echo $id === $docId ? 'selected' : ''; ?>><?php echo htmlspecialchars($name); ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                </div>
+                                <span class="badge badge-success"><i class="fas fa-check-circle"></i> Vector Indexed (FAISS)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chat Box -->
+                    <div class="ai-chat-box" style="height: 520px;">
+                        <div class="ai-chat-messages" id="ragMessages">
+                            <div class="ai-message bot">
+                                <div class="ai-avatar" style="background: var(--danger);"><i class="fas fa-file-pdf"></i></div>
+                                <div class="ai-bubble">
+                                    I am ready to answer questions based on <strong><?php echo htmlspecialchars($activeDocTitle); ?></strong>. Ask me to explain definitions, find theorems, or synthesize specific sections!
                                 </div>
                             </div>
-                            <span class="badge badge-success"><i class="fas fa-check-circle"></i> Vector Indexed (FAISS)</span>
+                        </div>
+
+                        <div class="ai-chat-input-bar">
+                            <input type="text" id="ragInput" placeholder="Ask a question about this document..." onkeydown="if(event.key==='Enter') sendRagQuestion()">
+                            <button class="btn btn-primary" onclick="sendRagQuestion()"><i class="fas fa-paper-plane"></i> Ask Document</button>
                         </div>
                     </div>
-                </div>
-
-                <!-- Chat Box -->
-                <div class="ai-chat-box" style="height: 520px;">
-                    <div class="ai-chat-messages" id="ragMessages">
-                        <div class="ai-message bot">
-                            <div class="ai-avatar" style="background: var(--danger);"><i class="fas fa-file-pdf"></i></div>
-                            <div class="ai-bubble">
-                                I am ready to answer questions based on <strong><?php echo htmlspecialchars($documents[$docId] ?? 'document'); ?></strong>. Ask me to explain definitions, find theorems, or synthesize specific sections!
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="ai-chat-input-bar">
-                        <input type="text" id="ragInput" placeholder="Ask a question about this document..." onkeydown="if(event.key==='Enter') sendRagQuestion()">
-                        <button class="btn btn-primary" onclick="sendRagQuestion()"><i class="fas fa-paper-plane"></i> Ask Document</button>
-                    </div>
-                </div>
+                <?php endif; ?>
             </div>
             <?php include_once __DIR__ . '/../components/footer.php'; ?>
         </main>
@@ -132,16 +158,16 @@ $documents = [
                 botBubble.querySelector('.ai-bubble').innerHTML = `
                     ${data.answer.replace(/\n/g, '<br>')}
                     <div style="margin-top:8px;font-size:11px;color:var(--text-muted);border-top:1px solid var(--border-color);padding-top:4px;">
-                        <i class="fas fa-bookmark"></i> Document Citation: ${data.citation || 'Page 24, Section 3.2'}
+                        <i class="fas fa-bookmark"></i> Document Citation: ${data.citation || (data.sources && data.sources.length ? data.sources.join(', ') : 'Document Reference')}
                     </div>
                 `;
             } else {
-                botBubble.querySelector('.ai-bubble').innerHTML = 'According to the selected document, Boyce-Codd Normal Form (BCNF) strictly requires that for every functional dependency X → Y, X must be a superkey.';
+                botBubble.querySelector('.ai-bubble').innerHTML = data && data.error ? escapeHTML(data.error) : 'Unable to retrieve answer for the specified document.';
             }
         } catch (err) {
             const botBubble = document.getElementById(typingId);
             if (botBubble) {
-                botBubble.querySelector('.ai-bubble').innerHTML = 'Document RAG returned: Boyce-Codd Normal Form (BCNF) removes all redundancy resulting from functional dependencies.';
+                botBubble.querySelector('.ai-bubble').innerHTML = 'Unable to connect to Document AI service. Please verify your connection.';
             }
         }
         container.scrollTop = container.scrollHeight;

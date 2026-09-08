@@ -10,12 +10,7 @@ requireRole('student');
 $userId = $_SESSION['user']['id'];
 $successMsg = '';
 
-if (!isset($_SESSION['student_tickets'])) {
-    $_SESSION['student_tickets'] = [
-        ['id' => 'TKT-1042', 'subject' => 'Discrepancy in Attendance for OS Lab on Feb 24', 'category' => 'Attendance', 'priority' => 'medium', 'status' => 'in_progress', 'created_at' => '2026-02-25', 'response' => 'Department coordinator is reviewing the laboratory biometric logs.'],
-        ['id' => 'TKT-0988', 'subject' => 'Access error downloading syllabus PDF for CS304', 'category' => 'Technical', 'priority' => 'low', 'status' => 'resolved', 'created_at' => '2026-02-10', 'response' => 'Permissions refreshed. PDF is now publicly accessible in your documents portal.']
-    ];
-}
+$db = getDbConnection();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $subject = sanitize($_POST['subject'] ?? '');
@@ -23,24 +18,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $message = sanitize($_POST['message'] ?? '');
     $priority = sanitize($_POST['priority'] ?? 'medium');
 
-    if (!empty($subject) && !empty($message)) {
-        $newTicket = [
-            'id' => 'TKT-' . rand(1100, 9999),
-            'subject' => $subject,
-            'category' => $category,
-            'priority' => $priority,
-            'status' => 'pending',
-            'created_at' => date('Y-m-d'),
-            'response' => 'Ticket received by campus IT helpdesk. Average response time is 2-4 hours.'
-        ];
-        
-        apiCall('/support.php', 'POST', $newTicket);
-        array_unshift($_SESSION['student_tickets'], $newTicket);
-        $successMsg = 'Support ticket #' . $newTicket['id'] . ' logged successfully! Helpdesk has been notified.';
+    if (!empty($subject) && !empty($message) && $db) {
+        $stmt = $db->prepare("INSERT INTO `support_tickets` (user_id, subject, description, priority, status, response, assigned_to, created_at, updated_at) VALUES (?, ?, ?, ?, 'open', 'Ticket received by campus IT helpdesk. Average response time is 2-4 hours.', 2, NOW(), NOW())");
+        if ($stmt) {
+            $stmt->bind_param("isss", $userId, $subject, $message, $priority);
+            if ($stmt->execute()) {
+                $newId = $stmt->insert_id;
+                $successMsg = 'Support ticket #TKT-' . $newId . ' logged successfully! Helpdesk has been notified.';
+            }
+        }
     }
 }
 
-$tickets = $_SESSION['student_tickets'];
+// Fetch tickets from database
+$tickets = [];
+if ($db) {
+    $stmt = $db->prepare("SELECT * FROM `support_tickets` WHERE `user_id` = ? ORDER BY `created_at` DESC");
+    if ($stmt) {
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        while ($row = $res->fetch_assoc()) {
+            $tickets[] = [
+                'id' => 'TKT-' . str_pad($row['id'], 4, '0', STR_PAD_LEFT),
+                'subject' => $row['subject'],
+                'category' => 'Support Request',
+                'priority' => $row['priority'] ?? 'medium',
+                'status' => $row['status'] ?? 'open',
+                'created_at' => $row['created_at'],
+                'response' => $row['response'] ?? ''
+            ];
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -48,13 +58,16 @@ $tickets = $_SESSION['student_tickets'];
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Help & Support - StudentOS AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
     <link rel="stylesheet" href="../assets/css/variables.css">
     <link rel="stylesheet" href="../assets/css/reset.css">
     <link rel="stylesheet" href="../assets/css/global.css">
     <link rel="stylesheet" href="../assets/css/components.css">
     <link rel="stylesheet" href="../assets/css/responsive.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="dashboard-layout">
@@ -159,33 +172,41 @@ $tickets = $_SESSION['student_tickets'];
                                 <h3><i class="fas fa-ticket-alt"></i> My Ticket Status (<?php echo count($tickets); ?>)</h3>
                             </div>
                             <div class="card-body">
-                                <div style="display: flex; flex-direction: column; gap: 14px;">
-                                    <?php foreach ($tickets as $t): 
-                                        $isResolved = ($t['status'] ?? '') === 'resolved';
-                                        $prio = strtolower($t['priority'] ?? 'medium');
-                                    ?>
-                                        <div style="padding: 14px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-lg);">
-                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                                                <span style="font-size: 11.5px; font-weight: 700; color: var(--primary);"><?php echo htmlspecialchars($t['id']); ?></span>
-                                                <span class="badge badge-<?php echo $isResolved ? 'success' : 'warning'; ?>">
-                                                    <?php echo ucfirst(str_replace('_', ' ', $t['status'])); ?>
-                                                </span>
-                                            </div>
-                                            <h4 style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">
-                                                <?php echo htmlspecialchars($t['subject']); ?>
-                                            </h4>
-                                            <?php if (!empty($t['response'])): ?>
-                                                <div style="font-size: 12px; color: var(--text-secondary); background: var(--bg-card); padding: 8px 12px; border-radius: var(--radius-sm); border-left: 3px solid var(--primary); margin: 6px 0;">
-                                                    <strong>Staff Update:</strong> <?php echo htmlspecialchars($t['response']); ?>
+                                <?php if (empty($tickets)): ?>
+                                    <div style="text-align: center; padding: 32px; color: var(--text-muted);">
+                                        <i class="fas fa-ticket-alt" style="font-size: 32px; margin-bottom: 10px; display: block;"></i>
+                                        <strong style="color: var(--text-primary);">No Support Tickets</strong>
+                                        <p style="font-size: 13px; margin-top: 4px;">Submit a request on the left if you need assistance with exams, attendance, or fees.</p>
+                                    </div>
+                                <?php else: ?>
+                                    <div style="display: flex; flex-direction: column; gap: 14px;">
+                                        <?php foreach ($tickets as $t): 
+                                            $isResolved = ($t['status'] ?? '') === 'resolved';
+                                            $prio = strtolower($t['priority'] ?? 'medium');
+                                        ?>
+                                            <div style="padding: 14px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-lg);">
+                                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                                    <span style="font-size: 11.5px; font-weight: 700; color: var(--primary);"><?php echo htmlspecialchars($t['id']); ?></span>
+                                                    <span class="badge badge-<?php echo $isResolved ? 'success' : 'warning'; ?>">
+                                                        <?php echo ucfirst(str_replace('_', ' ', $t['status'])); ?>
+                                                    </span>
                                                 </div>
-                                            <?php endif; ?>
-                                            <div style="font-size: 11.5px; color: var(--text-muted); display: flex; justify-content: space-between; margin-top: 6px;">
-                                                <span><i class="fas fa-tag"></i> <?php echo htmlspecialchars($t['category']); ?></span>
-                                                <span><i class="fas fa-clock"></i> <?php echo date('M d, Y', strtotime($t['created_at'])); ?></span>
+                                                <h4 style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">
+                                                    <?php echo htmlspecialchars($t['subject']); ?>
+                                                </h4>
+                                                <?php if (!empty($t['response'])): ?>
+                                                    <div style="font-size: 12px; color: var(--text-secondary); background: var(--bg-card); padding: 8px 12px; border-radius: var(--radius-sm); border-left: 3px solid var(--primary); margin: 6px 0;">
+                                                        <strong>Staff Update:</strong> <?php echo htmlspecialchars($t['response']); ?>
+                                                    </div>
+                                                <?php endif; ?>
+                                                <div style="font-size: 11.5px; color: var(--text-muted); display: flex; justify-content: space-between; margin-top: 6px;">
+                                                    <span><i class="fas fa-tag"></i> <?php echo htmlspecialchars($t['category']); ?></span>
+                                                    <span><i class="fas fa-clock"></i> <?php echo date('M d, Y', strtotime($t['created_at'])); ?></span>
+                                                </div>
                                             </div>
-                                        </div>
-                                    <?php endforeach; ?>
-                                </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
                             </div>
                         </div>
 

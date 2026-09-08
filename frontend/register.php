@@ -22,38 +22,16 @@ $error = '';
 $success = '';
 $formData = [];
 
-// Fetch active courses for degree selection
+// Fetch active courses for degree selection directly from database
 $coursesList = [];
-$coursesResponse = apiCall('/academic.php?path=courses', 'GET');
-if (is_array($coursesResponse)) {
-    if (!empty($coursesResponse['courses']) && is_array($coursesResponse['courses'])) {
-        $coursesList = $coursesResponse['courses'];
-    } elseif (!empty($coursesResponse['data']) && is_array($coursesResponse['data'])) {
-        $coursesList = $coursesResponse['data'];
-    } elseif (isset($coursesResponse[0]['id'])) {
-        $coursesList = $coursesResponse;
-    }
-}
-
-// Fallback to direct DB query if API did not return rows
-if (empty($coursesList)) {
-    $db = getDbConnection();
-    if ($db) {
-        $res = $db->query("SELECT id, name, code, degree_type FROM courses WHERE status = 'active' ORDER BY name ASC");
-        if ($res && $res->num_rows > 0) {
-            while ($r = $res->fetch_assoc()) {
-                $coursesList[] = $r;
-            }
+$db = getDbConnection();
+if ($db) {
+    $res = $db->query("SELECT id, name, code, degree_type, department_id FROM courses WHERE status = 'active' ORDER BY name ASC");
+    if ($res && $res->num_rows > 0) {
+        while ($r = $res->fetch_assoc()) {
+            $coursesList[] = $r;
         }
     }
-}
-
-// Final fallback to standard university degree programs
-if (empty($coursesList)) {
-    $coursesList = [
-        ['id' => 1, 'name' => 'BBA', 'code' => 'BBA', 'degree_type' => 'Bachelor', 'department_id' => 4],
-        ['id' => 2, 'name' => 'BCA', 'code' => 'BCA', 'degree_type' => 'Bachelor', 'department_id' => 1],
-    ];
 }
 $courses = $coursesList;
 
@@ -152,12 +130,15 @@ if (isset($_GET['department_id']) && is_numeric($_GET['department_id'])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Registration - StudentOS AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="assets/css/variables.css">
     <link rel="stylesheet" href="assets/css/reset.css">
     <link rel="stylesheet" href="assets/css/global.css">
     <link rel="stylesheet" href="assets/css/components.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body class="auth-page">
     <div class="auth-container">

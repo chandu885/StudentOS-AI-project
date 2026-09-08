@@ -11,15 +11,7 @@ $userId = $_SESSION['user']['id'];
 $successMsg = '';
 $errorMsg = '';
 
-// Initialize default tasks if not in session
-if (!isset($_SESSION['student_tasks'])) {
-    $_SESSION['student_tasks'] = [
-        ['id' => 1, 'title' => 'Complete Chapter 4 Notes on BCNF Normalization', 'description' => 'Review 3NF vs BCNF dependency preservation rules', 'priority' => 'high', 'due_date' => date('Y-m-d', strtotime('+1 day')), 'status' => 'pending'],
-        ['id' => 2, 'title' => 'Submit OS Lab Exercise 3: Semaphores & Mutex', 'description' => 'Implement producer-consumer problem in C with POSIX threads', 'priority' => 'medium', 'due_date' => date('Y-m-d', strtotime('+3 days')), 'status' => 'pending'],
-        ['id' => 3, 'title' => 'Review DSA QuickSort & MergeSort Recurrence Analysis', 'description' => 'Use Master Theorem to calculate worst and average cases', 'priority' => 'low', 'due_date' => date('Y-m-d', strtotime('+4 days')), 'status' => 'completed'],
-        ['id' => 4, 'title' => 'Prepare 20 Flashcards for Computer Networks Midterm', 'description' => 'TCP 3-way handshake and OSI vs TCP/IP layer comparison', 'priority' => 'high', 'due_date' => date('Y-m-d', strtotime('+2 days')), 'status' => 'pending']
-    ];
-}
+$db = getDbConnection();
 
 // Handle Task actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -31,54 +23,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $priority = sanitize($_POST['priority'] ?? 'medium');
         $dueDate = sanitize($_POST['due_date'] ?? date('Y-m-d'));
         
-        if (!empty($title)) {
-            $newId = time();
-            $newTask = [
-                'id' => $newId,
-                'title' => $title,
-                'description' => $description,
-                'priority' => $priority,
-                'due_date' => $dueDate,
-                'status' => 'pending'
-            ];
-            
-            // Try API call
-            apiCall('/tasks.php', 'POST', $newTask);
-            
-            // Persist in session
-            array_unshift($_SESSION['student_tasks'], $newTask);
-            $successMsg = 'Task added successfully!';
+        if (!empty($title) && $db) {
+            $stmt = $db->prepare("INSERT INTO `tasks` (user_id, title, description, priority, status, category, deadline, created_at, updated_at) VALUES (?, ?, ?, ?, 'todo', 'academic', ?, NOW(), NOW())");
+            if ($stmt) {
+                $deadlineTime = $dueDate . ' 23:59:00';
+                $stmt->bind_param("issss", $userId, $title, $description, $priority, $deadlineTime);
+                if ($stmt->execute()) {
+                    $successMsg = 'Task added successfully!';
+                } else {
+                    $errorMsg = 'Failed to create task in database.';
+                }
+            }
         } else {
             $errorMsg = 'Please enter a task title.';
         }
     } elseif ($action === 'toggle_status') {
         $taskId = (int)($_POST['task_id'] ?? 0);
         $newStatus = sanitize($_POST['status'] ?? 'completed');
+        $dbStatus = ($newStatus === 'completed') ? 'completed' : 'todo';
         
-        apiCall('/tasks.php?action=status', 'POST', [
-            'task_id' => $taskId,
-            'status' => $newStatus
-        ]);
-        
-        foreach ($_SESSION['student_tasks'] as &$t) {
-            if ($t['id'] == $taskId) {
-                $t['status'] = $newStatus;
-                break;
+        if ($taskId > 0 && $db) {
+            $stmt = $db->prepare("UPDATE `tasks` SET `status` = ?, `updated_at` = NOW() WHERE `id` = ? AND `user_id` = ?");
+            if ($stmt) {
+                $stmt->bind_param("sii", $dbStatus, $taskId, $userId);
+                $stmt->execute();
+                $successMsg = 'Task status updated!';
             }
         }
-        $successMsg = 'Task status updated!';
     } elseif ($action === 'delete') {
         $taskId = (int)($_POST['task_id'] ?? 0);
-        apiCall("/tasks.php?id={$taskId}", 'DELETE');
-        
-        $_SESSION['student_tasks'] = array_values(array_filter($_SESSION['student_tasks'], function($t) use ($taskId) {
-            return $t['id'] != $taskId;
-        }));
-        $successMsg = 'Task deleted successfully!';
+        if ($taskId > 0 && $db) {
+            $stmt = $db->prepare("DELETE FROM `tasks` WHERE `id` = ? AND `user_id` = ?");
+            if ($stmt) {
+                $stmt->bind_param("ii", $taskId, $userId);
+                $stmt->execute();
+                $successMsg = 'Task deleted successfully!';
+            }
+        }
     }
 }
 
-$tasks = $_SESSION['student_tasks'];
+// Fetch tasks directly from MySQL database
+$tasks = [];
+if ($db) {
+    $stmt = $db->prepare("SELECT * FROM `tasks` WHERE `user_id` = ? ORDER BY `deadline` ASC, `created_at` DESC");
+    if ($stmt) {
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        while ($row = $res->fetch_assoc()) {
+            $tasks[] = [
+                'id' => $row['id'],
+                'title' => $row['title'],
+                'description' => $row['description'] ?? '',
+                'priority' => $row['priority'] ?? 'medium',
+                'due_date' => !empty($row['deadline']) ? date('Y-m-d', strtotime($row['deadline'])) : date('Y-m-d'),
+                'status' => ($row['status'] === 'completed') ? 'completed' : 'pending'
+            ];
+        }
+    }
+}
 
 // Compute metrics
 $totalCount = count($tasks);
@@ -91,7 +95,7 @@ foreach ($tasks as $t) {
         $completedCount++;
     } else {
         $pendingCount++;
-        if (strtolower($t['priority'] ?? '') === 'high') {
+        if (strtolower($t['priority'] ?? '') === 'high' || strtolower($t['priority'] ?? '') === 'urgent') {
             $highPrioCount++;
         }
     }
@@ -103,13 +107,16 @@ foreach ($tasks as $t) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Task Manager - StudentOS AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
     <link rel="stylesheet" href="../assets/css/variables.css">
     <link rel="stylesheet" href="../assets/css/reset.css">
     <link rel="stylesheet" href="../assets/css/global.css">
     <link rel="stylesheet" href="../assets/css/components.css">
     <link rel="stylesheet" href="../assets/css/responsive.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="dashboard-layout">

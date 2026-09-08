@@ -9,42 +9,118 @@ requireRole('student');
 
 $userId = $_SESSION['user']['id'];
 
-// Fetch dashboard data via API
-$dashboardData = apiCall('/students.php?path=dashboard', 'GET');
+// Fetch live data directly from Database
+$db = getDbConnection();
+$todayClasses = [];
+$pendingAssignments = [];
+$attendanceSummary = [];
+$upcomingExams = [];
 
-// Get today's classes
-$todayClasses = !empty($dashboardData['today_classes']) ? $dashboardData['today_classes'] : [
-    ['subject_name' => 'Operating Systems & Architecture', 'faculty_name' => 'Dr. Robert Vance', 'room' => 'CS-302', 'start_time' => '09:00:00'],
-    ['subject_name' => 'Database Management Systems', 'faculty_name' => 'Prof. Catherine Davis', 'room' => 'CS-104', 'start_time' => '11:00:00'],
-    ['subject_name' => 'Design & Analysis of Algorithms Lab', 'faculty_name' => 'Prof. Alex Mercer', 'room' => 'Lab-4', 'start_time' => '14:00:00']
-];
+if ($db && $userId) {
+    // 1. Classes from database
+    $dayOfWeek = date('l');
+    $stmt = $db->prepare(
+        "SELECT cs.*, s.name as subject_name, CONCAT(u.first_name, ' ', u.last_name) as faculty_name 
+         FROM class_schedules cs
+         JOIN subjects s ON cs.subject_id = s.id
+         LEFT JOIN users u ON cs.faculty_id = u.id
+         JOIN student_subjects ss ON ss.subject_id = cs.subject_id
+         WHERE ss.student_id = ? AND cs.day_of_week = ?
+         ORDER BY cs.start_time"
+    );
+    if ($stmt) {
+        $stmt->bind_param("is", $userId, $dayOfWeek);
+        $stmt->execute();
+        $todayClasses = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+    }
+    
+    // If no classes today, fetch upcoming schedules for student's subjects
+    if (empty($todayClasses)) {
+        $stmt = $db->prepare(
+            "SELECT cs.*, s.name as subject_name, CONCAT(u.first_name, ' ', u.last_name) as faculty_name 
+             FROM class_schedules cs
+             JOIN subjects s ON cs.subject_id = s.id
+             LEFT JOIN users u ON cs.faculty_id = u.id
+             JOIN student_subjects ss ON ss.subject_id = cs.subject_id
+             WHERE ss.student_id = ?
+             ORDER BY FIELD(cs.day_of_week, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'), cs.start_time
+             LIMIT 4"
+        );
+        if ($stmt) {
+            $stmt->bind_param("i", $userId);
+            $stmt->execute();
+            $todayClasses = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+            $stmt->close();
+        }
+    }
 
-// Get pending assignments
-$pendingAssignments = !empty($dashboardData['pending_assignments']) ? $dashboardData['pending_assignments'] : [
-    ['title' => 'Implement B-Tree Indexing in C++', 'subject_name' => 'DBMS', 'due_date' => date('Y-m-d', strtotime('+2 days')), 'priority' => 'high'],
-    ['title' => 'POSIX Threads & Mutex Synchronization', 'subject_name' => 'Operating Systems', 'due_date' => date('Y-m-d', strtotime('+4 days')), 'priority' => 'medium'],
-    ['title' => 'Master Theorem Proofs & Recurrences', 'subject_name' => 'Algorithms', 'due_date' => date('Y-m-d', strtotime('+6 days')), 'priority' => 'low']
-];
+    // 2. Pending Assignments from database
+    $stmt = $db->prepare(
+        "SELECT a.*, s.name as subject_name 
+         FROM assignments a
+         JOIN subjects s ON a.subject_id = s.id
+         JOIN student_subjects ss ON ss.subject_id = s.id
+         WHERE ss.student_id = ? 
+         AND a.id NOT IN (SELECT assignment_id FROM assignment_submissions WHERE student_id = ?)
+         ORDER BY a.deadline ASC
+         LIMIT 5"
+    );
+    if ($stmt) {
+        $stmt->bind_param("ii", $userId, $userId);
+        $stmt->execute();
+        $pendingAssignments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+    }
 
-// Get attendance summary
-$attendanceSummary = !empty($dashboardData['attendance']) ? $dashboardData['attendance'] : [
-    ['subject_name' => 'Operating Systems', 'percentage' => 88],
-    ['subject_name' => 'Database Management Systems', 'percentage' => 92],
-    ['subject_name' => 'Algorithms', 'percentage' => 85],
-    ['subject_name' => 'Computer Networks', 'percentage' => 80]
-];
+    // 3. Attendance Summary from database
+    $stmt = $db->prepare(
+        "SELECT s.name as subject_name, 
+                COUNT(CASE WHEN LOWER(a.status) = 'present' THEN 1 END) as present,
+                COUNT(*) as total,
+                ROUND(COUNT(CASE WHEN LOWER(a.status) = 'present' THEN 1 END) * 100 / NULLIF(COUNT(*), 0), 1) as percentage
+         FROM attendance a
+         JOIN subjects s ON a.subject_id = s.id
+         WHERE a.student_id = ?
+         GROUP BY a.subject_id"
+    );
+    if ($stmt) {
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $attendanceSummary = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+    }
 
-// Get upcoming exams
-$upcomingExams = !empty($dashboardData['upcoming_exams']) ? $dashboardData['upcoming_exams'] : [
-    ['subject_name' => 'Operating Systems Midterm Assessment', 'exam_date' => date('Y-m-d', strtotime('+5 days')), 'room' => 'Auditorium A'],
-    ['subject_name' => 'DBMS Practical Evaluation', 'exam_date' => date('Y-m-d', strtotime('+12 days')), 'room' => 'Lab 3']
-];
+    // 4. Upcoming Exams from database
+    $stmt = $db->prepare(
+        "SELECT e.*, s.name as subject_name 
+         FROM exams e
+         JOIN subjects s ON e.subject_id = s.id
+         JOIN student_subjects ss ON ss.subject_id = s.id
+         WHERE ss.student_id = ?
+         ORDER BY e.exam_date ASC
+         LIMIT 4"
+    );
+    if ($stmt) {
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $upcomingExams = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+    }
+}
 
-// Get notifications
-$notifications = apiCall('/notifications.php', 'GET');
-
-// Get AI recommendations
-$recommendations = apiCall('/ai.php?path=recommendations', 'GET');
+// Notifications and recommendations
+$notifications = [];
+if ($db && $userId) {
+    $stmt = $db->prepare("SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 5");
+    if ($stmt) {
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $notifications = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+    }
+}
+$recommendations = [];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -52,13 +128,22 @@ $recommendations = apiCall('/ai.php?path=recommendations', 'GET');
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Dashboard - StudentOS AI</title>
+    
+    <!-- External Google Font Resources -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- External CDN Resources (Font Awesome, Normalize) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+    
+    <!-- Application Stylesheets -->
     <link rel="stylesheet" href="../assets/css/variables.css">
     <link rel="stylesheet" href="../assets/css/reset.css">
     <link rel="stylesheet" href="../assets/css/global.css">
     <link rel="stylesheet" href="../assets/css/components.css">
     <link rel="stylesheet" href="../assets/css/responsive.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="dashboard-layout">

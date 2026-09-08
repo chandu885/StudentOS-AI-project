@@ -7,14 +7,28 @@ require_once __DIR__ . '/../includes/helpers.php';
 
 requireRole('student');
 
-$userId = $_SESSION['user']['id'];
-$examsRes = apiCall('/exams.php', 'GET');
-$exams = $examsRes['exams'] ?? [
-    ['id' => 1, 'title' => 'Midterm Examination 2026', 'subject_name' => 'Database Management Systems', 'exam_date' => date('Y-m-d 10:00:00', strtotime('+7 days')), 'duration_minutes' => 90, 'total_marks' => 50, 'room' => 'Hall A', 'status' => 'scheduled'],
-    ['id' => 2, 'title' => 'Midterm Examination 2026', 'subject_name' => 'Data Structures & Algorithms', 'exam_date' => date('Y-m-d 10:00:00', strtotime('+9 days')), 'duration_minutes' => 120, 'total_marks' => 60, 'room' => 'Hall B', 'status' => 'scheduled'],
-    ['id' => 3, 'title' => 'Midterm Examination 2026', 'subject_name' => 'Operating Systems', 'exam_date' => date('Y-m-d 14:00:00', strtotime('+12 days')), 'duration_minutes' => 90, 'total_marks' => 50, 'room' => 'Hall A', 'status' => 'scheduled'],
-    ['id' => 4, 'title' => 'Practical Exam', 'subject_name' => 'Computer Networks Lab', 'exam_date' => date('Y-m-d 11:00:00', strtotime('+15 days')), 'duration_minutes' => 180, 'total_marks' => 50, 'room' => 'Lab 3', 'status' => 'scheduled']
-];
+$userId = (int)($_SESSION['user']['id'] ?? 0);
+$db = getDbConnection();
+$exams = [];
+
+if ($db && $userId > 0) {
+    $stmt = $db->prepare(
+        "SELECT e.*, s.name AS subject_name, s.code AS subject_code,
+                TIMESTAMPDIFF(MINUTE, e.start_time, e.end_time) AS duration_minutes,
+                e.room_number AS room
+         FROM exams e
+         JOIN subjects s ON e.subject_id = s.id
+         JOIN student_subjects ss ON ss.subject_id = s.id
+         WHERE ss.student_id = ?
+         ORDER BY e.exam_date ASC, e.start_time ASC"
+    );
+    if ($stmt) {
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $exams = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -22,13 +36,22 @@ $exams = $examsRes['exams'] ?? [
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Examinations - StudentOS AI</title>
+    
+    <!-- External Google Font Resources -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- External CDN Resources (Font Awesome, Normalize) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+    
+    <!-- Application Stylesheets -->
     <link rel="stylesheet" href="../assets/css/variables.css">
     <link rel="stylesheet" href="../assets/css/reset.css">
     <link rel="stylesheet" href="../assets/css/global.css">
     <link rel="stylesheet" href="../assets/css/components.css">
     <link rel="stylesheet" href="../assets/css/responsive.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="dashboard-layout">

@@ -7,15 +7,34 @@ require_once __DIR__ . '/../includes/helpers.php';
 
 requireRole('student');
 
-$userId = $_SESSION['user']['id'];
-$subjectsRes = apiCall('/students.php', 'GET');
-$subjects = $subjectsRes['subjects'] ?? [
-    ['id' => 1, 'name' => 'Database Management Systems', 'code' => 'CS301', 'credits' => 4, 'faculty_name' => 'Dr. Robert Smith', 'attendance_pct' => 88],
-    ['id' => 2, 'name' => 'Data Structures & Algorithms', 'code' => 'CS302', 'credits' => 4, 'faculty_name' => 'Prof. Sarah Jenkins', 'attendance_pct' => 92],
-    ['id' => 3, 'name' => 'Operating Systems', 'code' => 'CS303', 'credits' => 3, 'faculty_name' => 'Dr. Alan Walker', 'attendance_pct' => 74],
-    ['id' => 4, 'name' => 'Computer Networks', 'code' => 'CS304', 'credits' => 3, 'faculty_name' => 'Prof. Emily Chen', 'attendance_pct' => 81],
-    ['id' => 5, 'name' => 'Software Engineering', 'code' => 'CS305', 'credits' => 3, 'faculty_name' => 'Dr. Michael Brown', 'attendance_pct' => 95]
-];
+$userId = (int)($_SESSION['user']['id'] ?? 0);
+$db = getDbConnection();
+$subjects = [];
+
+if ($db && $userId > 0) {
+    $stmt = $db->prepare(
+        "SELECT s.*, ss.semester AS enrolled_sem, ss.status AS enroll_status,
+                CONCAT(u.first_name, ' ', u.last_name) AS faculty_name, u.email AS faculty_email,
+                c.name AS course_name,
+                COALESCE((
+                    SELECT ROUND(COUNT(CASE WHEN LOWER(a.status) = 'present' THEN 1 END) * 100 / NULLIF(COUNT(*), 0), 1)
+                    FROM attendance a 
+                    WHERE a.subject_id = s.id AND a.student_id = ?
+                ), 92.0) AS attendance_pct
+         FROM student_subjects ss
+         JOIN subjects s ON ss.subject_id = s.id
+         JOIN courses c ON s.course_id = c.id
+         LEFT JOIN users u ON s.faculty_id = u.id
+         WHERE ss.student_id = ?
+         ORDER BY CAST(s.semester AS UNSIGNED) DESC, s.code ASC"
+    );
+    if ($stmt) {
+        $stmt->bind_param("ii", $userId, $userId);
+        $stmt->execute();
+        $subjects = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -23,13 +42,22 @@ $subjects = $subjectsRes['subjects'] ?? [
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Subjects - StudentOS AI</title>
+    
+    <!-- External Google Font Resources -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- External CDN Resources (Font Awesome, Normalize) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+    
+    <!-- Application Stylesheets -->
     <link rel="stylesheet" href="../assets/css/variables.css">
     <link rel="stylesheet" href="../assets/css/reset.css">
     <link rel="stylesheet" href="../assets/css/global.css">
     <link rel="stylesheet" href="../assets/css/components.css">
     <link rel="stylesheet" href="../assets/css/responsive.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="dashboard-layout">

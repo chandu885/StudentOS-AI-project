@@ -10,27 +10,53 @@ requireRole('student');
 $userId = $_SESSION['user']['id'];
 $successMsg = '';
 
+$db = getDbConnection();
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $topic = sanitize($_POST['topic'] ?? 'Deep Study');
     $duration = (int)($_POST['duration'] ?? 25);
     $subjectId = !empty($_POST['subject_id']) ? (int)$_POST['subject_id'] : null;
     $notes = sanitize($_POST['notes'] ?? '');
+    $sessionDate = date('Y-m-d');
 
-    $res = apiCall('/tasks.php?action=session', 'POST', [
-        'subject_id' => $subjectId,
-        'topic' => $topic,
-        'duration' => $duration,
-        'notes' => $notes
-    ]);
-    $successMsg = 'Study session logged successfully!';
+    if (!empty($topic) && $db) {
+        $stmt = $db->prepare("INSERT INTO `study_sessions` (user_id, subject_id, topic, duration_minutes, notes, session_date, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())");
+        if ($stmt) {
+            $stmt->bind_param("iisis", $userId, $subjectId, $topic, $duration, $notes, $sessionDate);
+            if ($stmt->execute()) {
+                $successMsg = 'Study session logged successfully!';
+            }
+        }
+    }
 }
 
-$tasksRes = apiCall('/tasks.php', 'GET');
-$sessions = $tasksRes['sessions'] ?? [
-    ['topic' => 'Database Normalization (BCNF & 3NF)', 'duration_minutes' => 45, 'created_at' => date('Y-m-d H:i:s', strtotime('-1 day')), 'notes' => 'Solved 5 synthesis problems.'],
-    ['topic' => 'Red-Black Tree Rotations', 'duration_minutes' => 60, 'created_at' => date('Y-m-d H:i:s', strtotime('-2 days')), 'notes' => 'Implemented left and right rotations.'],
-    ['topic' => 'Deadlock Detection Algorithms', 'duration_minutes' => 30, 'created_at' => date('Y-m-d H:i:s', strtotime('-3 days')), 'notes' => 'Reviewed Banker algorithm.']
-];
+// Fetch sessions directly from database
+$sessions = [];
+if ($db) {
+    $stmt = $db->prepare("SELECT ss.*, s.name as subject_name FROM `study_sessions` ss LEFT JOIN `subjects` s ON ss.subject_id = s.id WHERE ss.user_id = ? ORDER BY ss.session_date DESC, ss.created_at DESC");
+    if ($stmt) {
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        while ($row = $res->fetch_assoc()) {
+            $sessions[] = $row;
+        }
+    }
+}
+
+// Fetch enrolled subjects for dropdown
+$subjects = [];
+if ($db) {
+    $subStmt = $db->prepare("SELECT s.id, s.name FROM `student_subjects` ss JOIN `subjects` s ON ss.subject_id = s.id WHERE ss.student_id = ? ORDER BY s.name ASC");
+    if ($subStmt) {
+        $subStmt->bind_param("i", $userId);
+        $subStmt->execute();
+        $subRes = $subStmt->get_result();
+        while ($sr = $subRes->fetch_assoc()) {
+            $subjects[] = $sr;
+        }
+    }
+}
 
 $totalMinutes = 0;
 foreach ($sessions as $s) $totalMinutes += ($s['duration_minutes'] ?? 0);
@@ -41,13 +67,16 @@ foreach ($sessions as $s) $totalMinutes += ($s['duration_minutes'] ?? 0);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Focus & Study Sessions - StudentOS AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
     <link rel="stylesheet" href="../assets/css/variables.css">
     <link rel="stylesheet" href="../assets/css/reset.css">
     <link rel="stylesheet" href="../assets/css/global.css">
     <link rel="stylesheet" href="../assets/css/components.css">
     <link rel="stylesheet" href="../assets/css/responsive.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="dashboard-layout">
@@ -99,6 +128,17 @@ foreach ($sessions as $s) $totalMinutes += ($s['duration_minutes'] ?? 0);
                                     <label for="topic">Study Topic</label>
                                     <input type="text" name="topic" id="topic" class="form-control" placeholder="e.g. Graph Algorithms & Dijkstra" required>
                                 </div>
+                                <?php if (!empty($subjects)): ?>
+                                <div class="form-group">
+                                    <label for="sessionSubject">Subject</label>
+                                    <select name="subject_id" id="sessionSubject" class="form-control">
+                                        <option value="">-- General Study --</option>
+                                        <?php foreach ($subjects as $s): ?>
+                                            <option value="<?php echo $s['id']; ?>"><?php echo htmlspecialchars($s['name']); ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <?php endif; ?>
                                 <div class="form-group">
                                     <label for="duration">Duration (minutes)</label>
                                     <input type="number" name="duration" id="duration" class="form-control" value="25" min="5" max="360" required>
@@ -122,28 +162,41 @@ foreach ($sessions as $s) $totalMinutes += ($s['duration_minutes'] ?? 0);
                         <span class="badge badge-primary">Total: <?php echo round($totalMinutes / 60, 1); ?> hrs</span>
                     </div>
                     <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Topic</th>
-                                        <th>Duration</th>
-                                        <th>Notes</th>
-                                        <th>Date</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($sessions as $ses): ?>
+                        <?php if (empty($sessions)): ?>
+                            <div style="text-align: center; padding: 36px; color: var(--text-muted);">
+                                <i class="fas fa-stopwatch" style="font-size: 36px; margin-bottom: 12px; display: block;"></i>
+                                <strong style="color: var(--text-primary);">No Study Sessions Logged Yet</strong>
+                                <p style="font-size: 13px; margin-top: 4px;">Use the Pomodoro timer or manually record your study sprints above.</p>
+                            </div>
+                        <?php else: ?>
+                            <div class="table-responsive">
+                                <table class="data-table">
+                                    <thead>
                                         <tr>
-                                            <td><strong><?php echo htmlspecialchars($ses['topic']); ?></strong></td>
-                                            <td><span class="badge badge-info"><?php echo htmlspecialchars($ses['duration_minutes']); ?> mins</span></td>
-                                            <td style="color: var(--text-muted); font-size: 13px;"><?php echo htmlspecialchars($ses['notes'] ?? '—'); ?></td>
-                                            <td><?php echo date('M d, Y h:i A', strtotime($ses['created_at'])); ?></td>
+                                            <th>Topic</th>
+                                            <th>Duration</th>
+                                            <th>Notes</th>
+                                            <th>Date</th>
                                         </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($sessions as $ses): ?>
+                                            <tr>
+                                                <td>
+                                                    <strong><?php echo htmlspecialchars($ses['topic']); ?></strong>
+                                                    <?php if (!empty($ses['subject_name'])): ?>
+                                                        <div style="font-size: 11px; color: var(--text-muted);"><?php echo htmlspecialchars($ses['subject_name']); ?></div>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td><span class="badge badge-info"><?php echo htmlspecialchars($ses['duration_minutes']); ?> mins</span></td>
+                                                <td style="color: var(--text-muted); font-size: 13px;"><?php echo htmlspecialchars($ses['notes'] ?? '—'); ?></td>
+                                                <td style="font-size: 12px; color: var(--text-muted);"><?php echo date('M d, Y', strtotime($ses['session_date'] ?? $ses['created_at'])); ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>

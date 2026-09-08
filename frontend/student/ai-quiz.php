@@ -8,12 +8,13 @@ require_once __DIR__ . '/../includes/helpers.php';
 requireRole('student');
 
 $userId = $_SESSION['user']['id'];
+$db = getDbConnection();
 $initialSubject = sanitize($_GET['subject'] ?? 'Database Management Systems');
 $quizQuestions = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $topic = sanitize($_POST['topic'] ?? 'General Engineering');
-    $count = (int)($_POST['count'] ?? 4);
+    $count = (int)($_POST['count'] ?? 5);
     $difficulty = sanitize($_POST['difficulty'] ?? 'medium');
 
     $res = apiCall('/ai.php?path=quiz', 'POST', [
@@ -25,30 +26,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!empty($res['questions'])) {
         $quizQuestions = $res['questions'];
-    } else {
-        $quizQuestions = [
-            [
-                'id' => 1,
-                'question' => 'Which normal form is based on the concept of full functional dependency?',
-                'options' => ['First Normal Form (1NF)', 'Second Normal Form (2NF)', 'Third Normal Form (3NF)', 'Boyce-Codd Normal Form (BCNF)'],
-                'correct_index' => 1,
-                'explanation' => '2NF requires a relation to be in 1NF and all non-key attributes to be fully functionally dependent on the primary key.'
-            ],
-            [
-                'id' => 2,
-                'question' => 'A relation is in BCNF if for every functional dependency X -> Y:',
-                'options' => ['X is a superkey', 'Y is a prime attribute', 'X is a foreign key', 'Both X and Y are candidate keys'],
-                'correct_index' => 0,
-                'explanation' => 'BCNF is strictly stricter than 3NF: the determinant X must be a superkey in every non-trivial functional dependency.'
-            ],
-            [
-                'id' => 3,
-                'question' => 'Which of the following problems can occur in an un-normalized relational database?',
-                'options' => ['Insertion anomaly', 'Deletion anomaly', 'Update anomaly', 'All of the above'],
-                'correct_index' => 3,
-                'explanation' => 'Unnormalized tables can suffer from insertion, deletion, and update anomalies due to redundant data.'
-            ]
-        ];
+    } elseif ($db) {
+        // Query database ai_quiz_questions
+        $qStmt = $db->query("SELECT q.* FROM `ai_quiz_questions` q JOIN `ai_quizzes` z ON q.quiz_id = z.id ORDER BY q.id ASC LIMIT $count");
+        if ($qStmt && $qStmt->num_rows > 0) {
+            $quizQuestions = [];
+            while ($row = $qStmt->fetch_assoc()) {
+                $options = json_decode($row['options_json'], true) ?: [];
+                $correctIdx = array_search($row['correct_answer'], $options);
+                if ($correctIdx === false) $correctIdx = 0;
+                $quizQuestions[] = [
+                    'id' => $row['id'],
+                    'question' => $row['question_text'],
+                    'options' => $options,
+                    'correct_index' => $correctIdx,
+                    'explanation' => $row['explanation']
+                ];
+            }
+        }
     }
 }
 ?>
@@ -58,13 +53,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Quiz Generator - StudentOS AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
     <link rel="stylesheet" href="../assets/css/variables.css">
     <link rel="stylesheet" href="../assets/css/reset.css">
     <link rel="stylesheet" href="../assets/css/global.css">
     <link rel="stylesheet" href="../assets/css/components.css">
     <link rel="stylesheet" href="../assets/css/responsive.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="dashboard-layout">

@@ -7,17 +7,29 @@ require_once __DIR__ . '/../includes/helpers.php';
 
 requireRole('student');
 
-$userId = $_SESSION['user']['id'];
-$schedulesRes = apiCall('/academic.php?path=schedules', 'GET');
-$schedules = $schedulesRes['schedules'] ?? [
-    ['day' => 'Monday', 'start_time' => '09:00:00', 'end_time' => '10:30:00', 'subject_name' => 'Database Management Systems', 'room' => 'Lab 2', 'faculty_name' => 'Dr. Robert Smith'],
-    ['day' => 'Monday', 'start_time' => '11:00:00', 'end_time' => '12:30:00', 'subject_name' => 'Operating Systems', 'room' => 'Room 301', 'faculty_name' => 'Dr. Alan Walker'],
-    ['day' => 'Tuesday', 'start_time' => '09:00:00', 'end_time' => '10:30:00', 'subject_name' => 'Data Structures & Algorithms', 'room' => 'Room 204', 'faculty_name' => 'Prof. Sarah Jenkins'],
-    ['day' => 'Tuesday', 'start_time' => '14:00:00', 'end_time' => '16:00:00', 'subject_name' => 'Computer Networks Lab', 'room' => 'Network Lab', 'faculty_name' => 'Prof. Emily Chen'],
-    ['day' => 'Wednesday', 'start_time' => '10:00:00', 'end_time' => '11:30:00', 'subject_name' => 'Software Engineering', 'room' => 'Room 402', 'faculty_name' => 'Dr. Michael Brown'],
-    ['day' => 'Thursday', 'start_time' => '09:00:00', 'end_time' => '10:30:00', 'subject_name' => 'Database Management Systems', 'room' => 'Room 301', 'faculty_name' => 'Dr. Robert Smith'],
-    ['day' => 'Friday', 'start_time' => '11:00:00', 'end_time' => '12:30:00', 'subject_name' => 'Data Structures & Algorithms', 'room' => 'Room 204', 'faculty_name' => 'Prof. Sarah Jenkins']
-];
+$userId = (int)($_SESSION['user']['id'] ?? 0);
+$db = getDbConnection();
+$schedules = [];
+
+if ($db && $userId > 0) {
+    $stmt = $db->prepare(
+        "SELECT cs.day_of_week AS day, cs.start_time, cs.end_time, cs.room_number AS room,
+                s.name AS subject_name, s.code AS subject_code,
+                CONCAT(u.first_name, ' ', u.last_name) AS faculty_name
+         FROM class_schedules cs
+         JOIN subjects s ON cs.subject_id = s.id
+         JOIN student_subjects ss ON ss.subject_id = s.id
+         LEFT JOIN users u ON cs.faculty_id = u.id
+         WHERE ss.student_id = ?
+         ORDER BY FIELD(cs.day_of_week, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'), cs.start_time ASC"
+    );
+    if ($stmt) {
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $schedules = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+    }
+}
 
 $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 ?>
@@ -27,13 +39,22 @@ $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Class Schedule - StudentOS AI</title>
+    
+    <!-- External Google Font Resources -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- External CDN Resources (Font Awesome, Normalize) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+    
+    <!-- Application Stylesheets -->
     <link rel="stylesheet" href="../assets/css/variables.css">
     <link rel="stylesheet" href="../assets/css/reset.css">
     <link rel="stylesheet" href="../assets/css/global.css">
     <link rel="stylesheet" href="../assets/css/components.css">
     <link rel="stylesheet" href="../assets/css/responsive.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="dashboard-layout">

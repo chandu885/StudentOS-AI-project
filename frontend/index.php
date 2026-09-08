@@ -15,37 +15,17 @@ $currentUser = $loggedIn ? ($_SESSION['user'] ?? null) : null;
     <title>StudentOS AI — The Intelligent Academic Operating System</title>
     <meta name="description" content="StudentOS AI is a next-generation academic management ecosystem powered by Generative AI, RAG document intelligence, and unified multi-role governance.">
     
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="assets/css/variables.css">
     <link rel="stylesheet" href="assets/css/reset.css">
     <link rel="stylesheet" href="assets/css/global.css">
     <link rel="stylesheet" href="assets/css/components.css">
     <link rel="stylesheet" href="assets/css/responsive.css">
     <link rel="stylesheet" href="assets/css/animations.css">
-    
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <style>
-        .demo-card {
-            transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
-        }
-        .demo-card:hover {
-            transform: translateY(-5px);
-            border-color: rgba(99, 102, 241, 0.5) !important;
-            box-shadow: 0 16px 32px -8px rgba(0, 0, 0, 0.45), 0 0 20px rgba(99, 102, 241, 0.15) !important;
-        }
-        .module-card {
-            transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
-        }
-        .module-card:hover {
-            transform: translateY(-3px);
-            border-color: var(--primary) !important;
-            background: rgba(99, 102, 241, 0.04) !important;
-        }
-        .btn-copy-chip:hover {
-            opacity: 0.8;
-            text-decoration: underline;
-        }
-    </style>
 </head>
 <body class="landing-page">
 

@@ -11,27 +11,25 @@ $userId = $_SESSION['user']['id'];
 $successMsg = '';
 $errorMsg = '';
 
+$db = getDbConnection();
+
 // Handle Profile Updates
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? 'update_profile';
     
     if ($action === 'update_profile') {
-        $updateData = [
-            'first_name' => sanitize($_POST['first_name'] ?? ''),
-            'last_name' => sanitize($_POST['last_name'] ?? ''),
-            'bio' => sanitize($_POST['bio'] ?? '')
-        ];
+        $firstName = sanitize($_POST['first_name'] ?? '');
+        $lastName = sanitize($_POST['last_name'] ?? '');
         
-        $res = apiCall('/students.php?path=profile', 'POST', $updateData);
-        if (!empty($res['success'])) {
-            $_SESSION['user']['first_name'] = $updateData['first_name'];
-            $_SESSION['user']['last_name'] = $updateData['last_name'];
+        if (!empty($firstName) && $db) {
+            $uStmt = $db->prepare("UPDATE `users` SET `first_name` = ?, `last_name` = ?, `updated_at` = NOW() WHERE `id` = ?");
+            if ($uStmt) {
+                $uStmt->bind_param("ssi", $firstName, $lastName, $userId);
+                $uStmt->execute();
+            }
+            $_SESSION['user']['first_name'] = $firstName;
+            $_SESSION['user']['last_name'] = $lastName;
             $successMsg = 'Profile updated successfully!';
-        } else {
-            // Update session locally for seamless demo feedback
-            $_SESSION['user']['first_name'] = $updateData['first_name'];
-            $_SESSION['user']['last_name'] = $updateData['last_name'];
-            $successMsg = 'Profile changes saved successfully!';
         }
     } elseif ($action === 'change_password') {
         $currentPass = $_POST['current_password'] ?? '';
@@ -43,32 +41,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($newPass !== $confirmPass) {
             $errorMsg = 'New password and confirmation do not match.';
         } else {
-            $successMsg = 'Security credentials updated successfully!';
+            if ($db) {
+                $pStmt = $db->prepare("SELECT password_hash FROM `users` WHERE `id` = ?");
+                if ($pStmt) {
+                    $pStmt->bind_param("i", $userId);
+                    $pStmt->execute();
+                    $curRow = $pStmt->get_result()->fetch_assoc();
+                    if ($curRow && password_verify($currentPass, $curRow['password_hash'])) {
+                        $newHash = password_hash($newPass, PASSWORD_BCRYPT);
+                        $upStmt = $db->prepare("UPDATE `users` SET `password_hash` = ?, `updated_at` = NOW() WHERE `id` = ?");
+                        $upStmt->bind_param("si", $newHash, $userId);
+                        $upStmt->execute();
+                        $successMsg = 'Security credentials updated successfully!';
+                    } else {
+                        $errorMsg = 'Current password does not match our records.';
+                    }
+                }
+            }
         }
     }
 }
 
-$profile = [
-    'roll_number' => 'STU-2026-0104',
-    'department_id' => 1,
-    'course_name' => 'BCA',
-    'course_code' => 'BCA',
-    'semester' => 'Semester 6',
-    'cgpa' => '8.84',
-    'credits_earned' => '114 / 160',
-    'bio' => 'Student focusing on software engineering, database systems, and modern web applications.'
-];
-
-$profileRes = apiCall('/students.php?path=profile', 'GET');
-if (!empty($profileRes['profile']) && is_array($profileRes['profile'])) {
-    $profile = array_merge($profile, $profileRes['profile']);
-} elseif (!empty($profileRes['data']) && is_array($profileRes['data'])) {
-    $profile = array_merge($profile, $profileRes['data']);
-}
-
-// Ensure direct database profile integration for logged-in user
-$db = getDbConnection();
+$profile = [];
 if ($db) {
+    // 1. Fetch user's student profile & department & course
     $stmt = $db->prepare(
         "SELECT sp.*, d.name AS department_name, d.code AS department_code, c.name AS course_name, c.code AS course_code 
          FROM student_profiles sp 
@@ -81,7 +77,22 @@ if ($db) {
         $stmt->execute();
         $dbProf = $stmt->get_result()->fetch_assoc();
         if ($dbProf) {
-            $profile = array_merge($profile, $dbProf);
+            $profile = $dbProf;
+        }
+    }
+
+    // 2. Fetch latest performance metrics (CGPA, credits)
+    $perfStmt = $db->prepare("SELECT cgpa, gpa, credits_completed, semester FROM `performance` WHERE `student_id` = ? ORDER BY `id` DESC LIMIT 1");
+    if ($perfStmt) {
+        $perfStmt->bind_param("i", $userId);
+        $perfStmt->execute();
+        $perfRow = $perfStmt->get_result()->fetch_assoc();
+        if ($perfRow) {
+            $profile['cgpa'] = $perfRow['cgpa'];
+            $profile['credits_earned'] = $perfRow['credits_completed'];
+            if (empty($profile['semester'])) {
+                $profile['semester'] = $perfRow['semester'];
+            }
         }
     }
 }
@@ -97,7 +108,7 @@ if ($deptId === 4 || stripos($deptName, 'Management') !== false || stripos($dept
     $displayDepartment = !empty($deptName) ? $deptName : 'School of Business & Management';
 } else {
     $degreeProgram = 'BCA';
-    $displayDepartment = !empty($deptName) ? $deptName : 'Computer Science & Engineering';
+    $displayDepartment = !empty($deptName) ? $deptName : 'Department of Computer Applications';
 }
 
 $user = $_SESSION['user'];
@@ -109,13 +120,16 @@ $initials = getInitials(($user['first_name'] ?? 'Alex') . ' ' . ($user['last_nam
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Profile - StudentOS AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
     <link rel="stylesheet" href="../assets/css/variables.css">
     <link rel="stylesheet" href="../assets/css/reset.css">
     <link rel="stylesheet" href="../assets/css/global.css">
     <link rel="stylesheet" href="../assets/css/components.css">
     <link rel="stylesheet" href="../assets/css/responsive.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="dashboard-layout">
@@ -161,23 +175,23 @@ $initials = getInitials(($user['first_name'] ?? 'Alex') . ' ' . ($user['last_nam
                         <div class="profile-meta-list">
                             <div class="profile-meta-row">
                                 <span style="color: var(--text-muted);">Roll Number:</span>
-                                <strong><?php echo htmlspecialchars($profile['roll_number'] ?? $profile['student_id'] ?? 'STU-2026-0104'); ?></strong>
+                                <strong><?php echo htmlspecialchars($profile['roll_number'] ?? $profile['student_id'] ?? ('STU' . str_pad($userId, 4, '0', STR_PAD_LEFT))); ?></strong>
                             </div>
                             <div class="profile-meta-row">
-                                <span style="color: var(--text-muted);">Degree / Course:</span>
+                                <span style="color: var(--text-muted);">Degree:</span>
                                 <span class="badge badge-primary" style="font-weight: 700; font-size: 13px;"><?php echo htmlspecialchars($degreeProgram); ?></span>
                             </div>
                             <div class="profile-meta-row">
                                 <span style="color: var(--text-muted);">Current Term:</span>
-                                <span class="badge badge-success"><?php echo htmlspecialchars($profile['semester'] ?? 'Semester 6'); ?></span>
+                                <span class="badge badge-success"><?php echo htmlspecialchars(!empty($profile['semester']) ? (is_numeric($profile['semester']) ? 'Semester ' . $profile['semester'] : $profile['semester']) : 'Semester 1'); ?></span>
                             </div>
                             <div class="profile-meta-row">
                                 <span style="color: var(--text-muted);">Cumulative CGPA:</span>
-                                <span class="badge badge-purple" style="font-weight: 700;"><?php echo htmlspecialchars($profile['cgpa'] ?? '8.84'); ?> / 10.0</span>
+                                <span class="badge badge-purple" style="font-weight: 700;"><?php echo htmlspecialchars(!empty($profile['cgpa']) ? number_format((float)$profile['cgpa'], 2) . ' / 4.0' : 'N/A'); ?></span>
                             </div>
                             <div class="profile-meta-row">
                                 <span style="color: var(--text-muted);">Completed Credits:</span>
-                                <strong><?php echo htmlspecialchars($profile['credits_earned'] ?? '114 / 160'); ?></strong>
+                                <strong><?php echo htmlspecialchars(!empty($profile['credits_earned']) ? $profile['credits_earned'] . ' Credits' : '0 Credits'); ?></strong>
                             </div>
                         </div>
 
@@ -219,7 +233,7 @@ $initials = getInitials(($user['first_name'] ?? 'Alex') . ' ' . ($user['last_nam
                                         <div style="font-size: 14px; font-weight: 600; margin-top: 4px;"><?php echo htmlspecialchars($user['email'] ?? 'student@studentos.ai'); ?></div>
                                     </div>
                                     <div style="background: var(--bg-primary); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-                                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Degree Program</div>
+                                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Degree</div>
                                         <div style="font-size: 14px; font-weight: 700; color: var(--primary); margin-top: 4px;">
                                             <span class="badge badge-primary" style="font-size: 13px; font-weight: 700; padding: 4px 10px;"><?php echo htmlspecialchars($degreeProgram); ?></span>
                                         </div>

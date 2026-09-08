@@ -26,14 +26,20 @@ if (isLoggedIn()) {
 $error = '';
 $email = sanitize($_GET['email'] ?? '');
 if (empty($email) && isset($_GET['role'])) {
-    $roleMap = [
-        'student' => 'student@gmail.com',
-        'faculty' => 'faculty@gmail.com',
-        'admin' => 'admin@gmail.com',
-        'superadmin' => 'superadmin@gmail.com',
-        'super-admin' => 'superadmin@gmail.com'
-    ];
-    $email = $roleMap[strtolower($_GET['role'])] ?? '';
+    $roleName = strtolower(trim($_GET['role']));
+    $db = getDbConnection();
+    if ($db) {
+        $stmt = $db->prepare("SELECT u.email FROM users u JOIN roles r ON u.role_id = r.id WHERE LOWER(r.name) = ? OR LOWER(r.slug) = ? ORDER BY u.id ASC LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param("ss", $roleName, $roleName);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($row = $res->fetch_assoc()) {
+                $email = $row['email'];
+            }
+            $stmt->close();
+        }
+    }
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -89,12 +95,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student & Universal Login - StudentOS AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="assets/css/variables.css">
     <link rel="stylesheet" href="assets/css/reset.css">
     <link rel="stylesheet" href="assets/css/global.css">
     <link rel="stylesheet" href="assets/css/components.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body class="auth-page">
     <div class="auth-container">

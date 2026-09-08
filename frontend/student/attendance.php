@@ -7,25 +7,39 @@ require_once __DIR__ . '/../includes/helpers.php';
 
 requireRole('student');
 
-$userId = $_SESSION['user']['id'];
-$attRes = apiCall('/attendance.php', 'GET');
-$attendanceRecords = $attRes['subjects'] ?? $attRes['summary'] ?? [
-    ['subject_name' => 'Database Management Systems', 'total_classes' => 28, 'present_count' => 25, 'attended' => 25, 'percentage' => 89.2],
-    ['subject_name' => 'Data Structures & Algorithms', 'total_classes' => 30, 'present_count' => 28, 'attended' => 28, 'percentage' => 93.3],
-    ['subject_name' => 'Operating Systems', 'total_classes' => 26, 'present_count' => 19, 'attended' => 19, 'percentage' => 73.1],
-    ['subject_name' => 'Computer Networks', 'total_classes' => 24, 'present_count' => 20, 'attended' => 20, 'percentage' => 83.3],
-    ['subject_name' => 'Software Engineering', 'total_classes' => 22, 'present_count' => 21, 'attended' => 21, 'percentage' => 95.5]
-];
-
-$totalHeld = $attRes['total_classes'] ?? 0;
+$userId = (int)($_SESSION['user']['id'] ?? 0);
+$db = getDbConnection();
+$attendanceRecords = [];
+$totalHeld = 0;
 $totalAttended = 0;
-foreach ($attendanceRecords as $rec) {
-    if (empty($attRes['total_classes'])) {
-        $totalHeld += ($rec['total_classes'] ?? 0);
+
+if ($db && $userId > 0) {
+    $stmt = $db->prepare(
+        "SELECT s.name AS subject_name, s.code AS subject_code,
+                COUNT(*) AS total_classes,
+                COUNT(CASE WHEN LOWER(a.status) = 'present' THEN 1 END) AS present_count,
+                COUNT(CASE WHEN LOWER(a.status) = 'absent' THEN 1 END) AS absent_count,
+                COUNT(CASE WHEN LOWER(a.status) = 'late' THEN 1 END) AS late_count,
+                ROUND(COUNT(CASE WHEN LOWER(a.status) = 'present' THEN 1 END) * 100 / NULLIF(COUNT(*), 0), 1) AS percentage
+         FROM attendance a
+         JOIN subjects s ON a.subject_id = s.id
+         WHERE a.student_id = ?
+         GROUP BY a.subject_id
+         ORDER BY s.code ASC"
+    );
+    if ($stmt) {
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $attendanceRecords = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
     }
-    $totalAttended += ($rec['present_count'] ?? $rec['attended'] ?? 0);
 }
-$overallPct = isset($attRes['overall_percentage']) ? (float)$attRes['overall_percentage'] : ($totalHeld > 0 ? round(($totalAttended / $totalHeld) * 100, 1) : 0);
+
+foreach ($attendanceRecords as $rec) {
+    $totalHeld += (int)($rec['total_classes'] ?? 0);
+    $totalAttended += (int)($rec['present_count'] ?? 0);
+}
+$overallPct = $totalHeld > 0 ? round(($totalAttended / $totalHeld) * 100, 1) : 0;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -33,13 +47,22 @@ $overallPct = isset($attRes['overall_percentage']) ? (float)$attRes['overall_per
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Attendance Overview - StudentOS AI</title>
+    
+    <!-- External Google Font Resources -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- External CDN Resources (Font Awesome, Normalize) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+    
+    <!-- Application Stylesheets -->
     <link rel="stylesheet" href="../assets/css/variables.css">
     <link rel="stylesheet" href="../assets/css/reset.css">
     <link rel="stylesheet" href="../assets/css/global.css">
     <link rel="stylesheet" href="../assets/css/components.css">
     <link rel="stylesheet" href="../assets/css/responsive.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="dashboard-layout">

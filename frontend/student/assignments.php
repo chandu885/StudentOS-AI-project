@@ -43,13 +43,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$asgRes = apiCall('/assignments.php', 'GET');
-$assignments = $asgRes['assignments'] ?? [
-    ['id' => 1, 'title' => 'ER Diagram & Relational Schema Design', 'subject_name' => 'Database Management Systems', 'deadline' => date('Y-m-d H:i:s', strtotime('+3 days')), 'status' => 'pending', 'max_marks' => 20, 'obtained_marks' => null],
-    ['id' => 2, 'title' => 'Red-Black Tree Implementation in C++', 'subject_name' => 'Data Structures & Algorithms', 'deadline' => date('Y-m-d H:i:s', strtotime('+6 days')), 'status' => 'pending', 'max_marks' => 30, 'obtained_marks' => null],
-    ['id' => 3, 'title' => 'CPU Scheduling Simulation', 'subject_name' => 'Operating Systems', 'deadline' => date('Y-m-d H:i:s', strtotime('-2 days')), 'status' => 'submitted', 'max_marks' => 25, 'obtained_marks' => 23],
-    ['id' => 4, 'title' => 'Socket Programming Client/Server', 'subject_name' => 'Computer Networks', 'deadline' => date('Y-m-d H:i:s', strtotime('-10 days')), 'status' => 'graded', 'max_marks' => 20, 'obtained_marks' => 19]
-];
+$db = getDbConnection();
+$assignments = [];
+
+if ($db && $userId > 0) {
+    $stmt = $db->prepare(
+        "SELECT a.*, s.name AS subject_name, s.code AS subject_code,
+                sub.id AS submission_id, sub.status AS submission_status, sub.marks_obtained AS sub_marks, sub.feedback, sub.submitted_at,
+                CASE 
+                    WHEN sub.id IS NOT NULL THEN COALESCE(sub.status, 'submitted')
+                    WHEN a.deadline < NOW() THEN 'overdue'
+                    ELSE 'pending'
+                END AS computed_status
+         FROM assignments a
+         JOIN subjects s ON a.subject_id = s.id
+         JOIN student_subjects ss ON ss.subject_id = s.id
+         LEFT JOIN assignment_submissions sub ON sub.assignment_id = a.id AND sub.student_id = ?
+         WHERE ss.student_id = ?
+         ORDER BY a.deadline DESC"
+    );
+    if ($stmt) {
+        $stmt->bind_param("ii", $userId, $userId);
+        $stmt->execute();
+        $assignments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -57,13 +76,22 @@ $assignments = $asgRes['assignments'] ?? [
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Assignments - StudentOS AI</title>
+    
+    <!-- External Google Font Resources -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- External CDN Resources (Font Awesome, Normalize) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+    
+    <!-- Application Stylesheets -->
     <link rel="stylesheet" href="../assets/css/variables.css">
     <link rel="stylesheet" href="../assets/css/reset.css">
     <link rel="stylesheet" href="../assets/css/global.css">
     <link rel="stylesheet" href="../assets/css/components.css">
     <link rel="stylesheet" href="../assets/css/responsive.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="dashboard-layout">
