@@ -159,14 +159,6 @@ $dashboardTasks = array_slice($_SESSION['super_admin_tasks'], 0, 4);
                         <h1><i class="fas fa-shield-halved" style="color: #EF4444;"></i> Super Admin Mission Control</h1>
                         <p class="welcome-subtitle">Root Governance • System Health, Operational Tasks & AI Telemetry</p>
                     </div>
-                    <div class="quick-actions">
-                        <a href="tasks.php" class="btn btn-outline" style="border-color: #EF4444; color: #EF4444;">
-                            <i class="fas fa-tasks"></i> Manage All Tasks
-                        </a>
-                        <a href="system-settings.php" class="btn btn-primary">
-                            <i class="fas fa-cogs"></i> System Settings
-                        </a>
-                    </div>
                 </div>
 
                 <?php if ($successMsg): ?>

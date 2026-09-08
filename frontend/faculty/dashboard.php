@@ -53,10 +53,6 @@ $pendingGrading = [
                         <h1>Welcome, Professor <?php echo htmlspecialchars($_SESSION['user']['first_name']); ?>! 👨‍🏫</h1>
                         <p class="welcome-subtitle">Academic Overview • Department of Computer Science & Engineering</p>
                     </div>
-                    <div class="quick-actions">
-                        <a href="attendance.php" class="btn btn-primary"><i class="fas fa-clipboard-check"></i> Mark Attendance</a>
-                        <a href="assignments.php" class="btn btn-outline"><i class="fas fa-plus"></i> New Assignment</a>
-                    </div>
                 </div>
 
                 <div class="stats-grid">

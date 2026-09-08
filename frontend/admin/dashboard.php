@@ -45,10 +45,6 @@ $recentStudents = [
                         <h1>Academic Administration</h1>
                         <p class="welcome-subtitle">Institution Overview • Campus Operations & Department Management</p>
                     </div>
-                    <div class="quick-actions">
-                        <a href="students.php" class="btn btn-primary"><i class="fas fa-user-plus"></i> Manage Students</a>
-                        <a href="reports.php" class="btn btn-outline"><i class="fas fa-file-chart-pie"></i> Reports</a>
-                    </div>
                 </div>
 
                 <div class="stats-grid">

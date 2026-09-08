@@ -29,20 +29,13 @@ if (($user['role_id'] ?? 4) == 1) {
 ?>
 <header class="top-navbar">
     <div class="navbar-left">
-        <button class="nav-action-btn sidebar-toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar Menu" aria-label="Toggle Sidebar Menu">
+        <button class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle Sidebar" aria-label="Toggle Sidebar">
             <i class="fas fa-bars"></i>
         </button>
         
-        <a href="<?php echo htmlspecialchars(url(getDashboardUrl())); ?>" class="navbar-brand-header" title="BSTUDENTOS Dashboard">
-            <div class="navbar-brand-icon">
-                <i class="fas fa-graduation-cap"></i>
-            </div>
-            <span class="navbar-brand-title">BSTUDENTOS</span>
-        </a>
-        
         <div class="nav-search-box">
             <i class="fas fa-search search-icon"></i>
-            <input type="text" placeholder="Search anything... (Ctrl+K)" id="globalSearchInput" onkeydown="if(event.key==='Enter') window.location.href='<?php echo htmlspecialchars(url($portalPrefix . '/search.php')); ?>?q=' + encodeURIComponent(this.value)">
+            <input type="text" placeholder="Search anything... " id="globalSearchInput" onkeydown="if(event.key==='Enter') window.location.href='<?php echo htmlspecialchars(url($portalPrefix . '/search.php')); ?>?q=' + encodeURIComponent(this.value)">
             <span class="shortcut-badge">⌘K</span>
         </div>
     </div>
