@@ -17,7 +17,6 @@ if (empty($studentName)) {
 $db = getDbConnection();
 $rollNumber = 'STU2026001';
 $degreeProgram = 'BCA';
-$departmentName = 'Department of Computer Applications';
 $currentSemester = 'Semester 5';
 
 if ($db && $userId) {
@@ -540,10 +539,6 @@ if ($degreeProgram === 'BBA') {
                         <div class="print-info-item">
                             <span class="print-info-label">Degree Program</span>
                             <span class="print-info-value"><?php echo htmlspecialchars($degreeProgram); ?></span>
-                        </div>
-                        <div class="print-info-item">
-                            <span class="print-info-label">Department</span>
-                            <span class="print-info-value"><?php echo htmlspecialchars($departmentName); ?></span>
                         </div>
                     </div>
                 </div>

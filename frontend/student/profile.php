@@ -50,7 +50,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $profile = [
     'roll_number' => 'STU-2026-0104',
-    'department_name' => 'Computer Science & Engineering',
     'department_id' => 1,
     'course_name' => 'BCA',
     'course_code' => 'BCA',
@@ -169,10 +168,6 @@ $initials = getInitials(($user['first_name'] ?? 'Alex') . ' ' . ($user['last_nam
                                 <span class="badge badge-primary" style="font-weight: 700; font-size: 13px;"><?php echo htmlspecialchars($degreeProgram); ?></span>
                             </div>
                             <div class="profile-meta-row">
-                                <span style="color: var(--text-muted);">Department:</span>
-                                <strong><?php echo htmlspecialchars($displayDepartment); ?></strong>
-                            </div>
-                            <div class="profile-meta-row">
                                 <span style="color: var(--text-muted);">Current Term:</span>
                                 <span class="badge badge-success"><?php echo htmlspecialchars($profile['semester'] ?? 'Semester 6'); ?></span>
                             </div>
@@ -222,10 +217,6 @@ $initials = getInitials(($user['first_name'] ?? 'Alex') . ' ' . ($user['last_nam
                                     <div style="background: var(--bg-primary); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
                                         <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Institutional Email</div>
                                         <div style="font-size: 14px; font-weight: 600; margin-top: 4px;"><?php echo htmlspecialchars($user['email'] ?? 'student@studentos.ai'); ?></div>
-                                    </div>
-                                    <div style="background: var(--bg-primary); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-                                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Department</div>
-                                        <div style="font-size: 14px; font-weight: 600; margin-top: 4px;"><?php echo htmlspecialchars($displayDepartment); ?></div>
                                     </div>
                                     <div style="background: var(--bg-primary); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
                                         <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Degree Program</div>
