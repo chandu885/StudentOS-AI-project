@@ -126,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <span class="input-icon"><i class="fas fa-envelope"></i></span>
                         <input type="email" id="email" name="email" class="form-control"
                                placeholder="superadmin@gmail.com" 
-                               value="<?php echo htmlspecialchars($email ?: 'superadmin@gmail.com'); ?>" 
+                               value="<?php echo htmlspecialchars($email ?: ''); ?>" 
                                required autofocus>
                     </div>
                 </div>
