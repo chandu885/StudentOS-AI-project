@@ -46,6 +46,7 @@ DROP TABLE IF EXISTS `assignments`;
 DROP TABLE IF EXISTS `class_schedules`;
 DROP TABLE IF EXISTS `student_subjects`;
 DROP TABLE IF EXISTS `subjects`;
+DROP TABLE IF EXISTS `semesters`;
 DROP TABLE IF EXISTS `courses`;
 DROP TABLE IF EXISTS `departments`;
 DROP TABLE IF EXISTS `admin_profiles`;
@@ -187,6 +188,25 @@ CREATE TABLE `courses` (
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     KEY `idx_courses_dept` (`department_id`),
     CONSTRAINT `fk_courses_dept` FOREIGN KEY (`department_id`) REFERENCES `departments` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `semesters` (
+    `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `course_id` INT UNSIGNED NOT NULL,
+    `semester_number` INT NOT NULL,
+    `name` VARCHAR(100) NOT NULL,
+    `academic_year` VARCHAR(30) NOT NULL DEFAULT '2026-2027',
+    `start_date` DATE NULL,
+    `end_date` DATE NULL,
+    `status` ENUM('active', 'upcoming', 'completed') NOT NULL DEFAULT 'active',
+    `description` TEXT NULL,
+    `created_by` INT UNSIGNED NULL,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY `idx_semesters_course` (`course_id`),
+    KEY `idx_semesters_academic_year` (`academic_year`),
+    UNIQUE KEY `unique_course_sem_year` (`course_id`, `semester_number`, `academic_year`),
+    CONSTRAINT `fk_semesters_course` FOREIGN KEY (`course_id`) REFERENCES `courses` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ----------------------------------------------------------

@@ -1,5 +1,5 @@
 <?php
-// frontend/admin/subjects.php
+// frontend/super-admin/subjects.php
 session_start();
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/auth.php';
@@ -7,10 +7,9 @@ require_once __DIR__ . '/../includes/helpers.php';
 require_once __DIR__ . '/../../backend/models/Academic.php';
 require_once __DIR__ . '/../../backend/models/SystemModel.php';
 
-requireRole('admin');
+requireRole('super-admin');
 
-$userId = (int)($_SESSION['user']['id'] ?? 0);
-$userRole = (int)($_SESSION['user']['role_id'] ?? 2);
+$userId = (int)($_SESSION['user']['id'] ?? 1);
 $academic = new Academic();
 $sysModel = new SystemModel();
 $conn = getDbConnection();
@@ -18,13 +17,13 @@ $conn = getDbConnection();
 $successMsg = '';
 $errorMsg = '';
 
-// Generate CSRF token if needed
+// CSRF token
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 $csrfToken = $_SESSION['csrf_token'];
 
-// Handle POST actions
+// Handle POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $submittedCsrf = $_POST['csrf_token'] ?? '';
     if (!empty($_POST['csrf_token']) && !empty($_SESSION['csrf_token']) && !hash_equals($_SESSION['csrf_token'], $submittedCsrf)) {
@@ -32,7 +31,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $action = $_POST['action'] ?? 'create_subject';
 
-        // CREATE SUBJECT
         if ($action === 'create_subject') {
             $data = [
                 'course_id'     => (int)($_POST['course_id'] ?? 0),
@@ -50,13 +48,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $res = $academic->createSubject($data, $userId);
             if ($res['success']) {
                 $successMsg = $res['message'];
-                $sysModel->logAudit($userId, 'CREATE_SUBJECT', 'subjects', $res['subject_id'], "Subject '{$data['name']}' [{$data['code']}] created.");
+                $sysModel->logAudit($userId, 'SUPER_ADMIN_CREATE_SUBJECT', 'subjects', $res['subject_id'], "Super Admin created subject '{$data['name']}' [{$data['code']}].");
             } else {
                 $errorMsg = $res['error'];
             }
-        }
-        // EDIT SUBJECT
-        elseif ($action === 'edit_subject') {
+        } elseif ($action === 'edit_subject') {
             $subId = (int)($_POST['subject_id'] ?? 0);
             $data = [
                 'course_id'     => (int)($_POST['course_id'] ?? 0),
@@ -74,13 +70,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $res = $academic->updateSubject($subId, $data);
             if ($res['success']) {
                 $successMsg = $res['message'];
-                $sysModel->logAudit($userId, 'UPDATE_SUBJECT', 'subjects', $subId, "Updated subject '{$data['name']}' [{$data['code']}].");
+                $sysModel->logAudit($userId, 'SUPER_ADMIN_UPDATE_SUBJECT', 'subjects', $subId, "Super Admin updated subject '{$data['name']}' [{$data['code']}].");
             } else {
                 $errorMsg = $res['error'];
             }
-        }
-        // DELETE SUBJECT
-        elseif ($action === 'delete_subject') {
+        } elseif ($action === 'delete_subject') {
             $subId = (int)($_POST['subject_id'] ?? 0);
             $sub = $academic->getSubjectById($subId);
 
@@ -88,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($res['success']) {
                 $successMsg = $res['message'];
                 $subName = $sub['name'] ?? "Subject #{$subId}";
-                $sysModel->logAudit($userId, 'DELETE_SUBJECT', 'subjects', $subId, "Deleted/deactivated subject '{$subName}'.");
+                $sysModel->logAudit($userId, 'SUPER_ADMIN_DELETE_SUBJECT', 'subjects', $subId, "Super Admin deleted/deactivated subject '{$subName}'.");
             } else {
                 $errorMsg = $res['error'];
             }
@@ -102,12 +96,11 @@ $filterSem = !empty($_GET['semester']) ? trim($_GET['semester']) : null;
 $filterDept = !empty($_GET['department_id']) ? (int)$_GET['department_id'] : null;
 $searchQuery = !empty($_GET['q']) ? trim($_GET['q']) : null;
 
-// Fetch data
 $subjects = $academic->getSubjects($filterCourse, $filterSem, $filterDept, $searchQuery);
 $departments = $academic->getDepartments();
 $courses = $academic->getCourses();
 
-// Fetch faculty members for assignment dropdown
+// Faculty members
 $facultyList = [];
 if ($conn) {
     $facRes = $conn->query("SELECT id, first_name, last_name, email FROM users WHERE role_id = 3 AND deleted_at IS NULL ORDER BY first_name ASC");
@@ -116,7 +109,7 @@ if ($conn) {
     }
 }
 
-// Calculate summary stats
+// Stats
 $totalSubjectsCount = count($subjects);
 $activeSubjectsCount = 0;
 $totalCreditsSum = 0;
@@ -138,7 +131,7 @@ $assignedFacultyCount = count($facultyAssignedSet);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Subject & Course Curriculum - StudentOS AI</title>
+    <title>Subject & Curriculum Management - Super Admin - StudentOS AI</title>
     <link rel="stylesheet" href="../assets/css/variables.css">
     <link rel="stylesheet" href="../assets/css/reset.css">
     <link rel="stylesheet" href="../assets/css/global.css">
@@ -213,15 +206,15 @@ $assignedFacultyCount = count($facultyAssignedSet);
             <div class="dashboard-content">
                 <div class="page-header">
                     <div>
-                        <h1>Subject & Course Catalog</h1>
-                        <p class="page-subtitle">Configure academic subjects, assign instructors, manage credit schemes, and align semesters</p>
+                        <h1>Institutional Subject Catalog</h1>
+                        <p class="page-subtitle">Super Admin control of academic subjects, department curricula, faculty allocations, and credit schemas</p>
                     </div>
                     <div class="header-actions" style="display: flex; gap: 10px; flex-wrap: wrap;">
                         <a href="semesters.php" class="btn btn-secondary">
                             <i class="fas fa-calendar-alt"></i> Manage Semesters
                         </a>
                         <button type="button" class="btn btn-primary" onclick="openCreateSubjectModal()">
-                            <i class="fas fa-plus-circle"></i> Add Subject
+                            <i class="fas fa-plus-circle"></i> Create Subject
                         </button>
                     </div>
                 </div>
@@ -282,7 +275,7 @@ $assignedFacultyCount = count($facultyAssignedSet);
 
                 <div class="card">
                     <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
-                        <h3><i class="fas fa-book"></i> Active Course Curriculum</h3>
+                        <h3><i class="fas fa-book"></i> Active Master Subject Catalog</h3>
                         
                         <!-- Filter Bar -->
                         <form method="GET" action="subjects.php" style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 0;">
@@ -335,10 +328,10 @@ $assignedFacultyCount = count($facultyAssignedSet);
                                         <tr>
                                             <td colspan="9" style="text-align: center; padding: 40px 20px; color: var(--text-muted);">
                                                 <i class="fas fa-book-open" style="font-size: 36px; margin-bottom: 12px; display: block; opacity: 0.4;"></i>
-                                                No subjects found matching the selected criteria.
+                                                No subjects found in the catalog.
                                                 <div style="margin-top: 10px;">
                                                     <button type="button" class="btn btn-sm btn-primary" onclick="openCreateSubjectModal()">
-                                                        <i class="fas fa-plus"></i> Add New Subject
+                                                        <i class="fas fa-plus"></i> Create Subject
                                                     </button>
                                                 </div>
                                             </td>
@@ -453,7 +446,7 @@ $assignedFacultyCount = count($facultyAssignedSet);
                             <select name="course_id" id="create_sub_course" class="form-control" required onchange="syncDepartment('create')">
                                 <option value="">Select Course...</option>
                                 <?php foreach ($courses as $c): ?>
-                                    <option value="<?php echo (int)$c['id']; ?>" data-dept="<?php echo (int)$c['department_id']; ?>" data-sems="<?php echo (int)$c['total_semesters']; ?>">
+                                    <option value="<?php echo (int)$c['id']; ?>" data-dept="<?php echo (int)$c['department_id']; ?>">
                                         <?php echo htmlspecialchars($c['name'] . ' (' . $c['code'] . ')'); ?>
                                     </option>
                                 <?php endforeach; ?>
@@ -652,7 +645,7 @@ $assignedFacultyCount = count($facultyAssignedSet);
                 <div class="modal-body">
                     <p>Are you sure you want to delete subject <strong id="del_sub_name"></strong>?</p>
                     <p style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">
-                        If students have already completed or enrolled in this subject, it will be marked inactive to safeguard academic transcripts.
+                        If students have already enrolled in this subject, it will be marked inactive to safeguard academic transcripts.
                     </p>
                 </div>
                 <div class="modal-footer">
@@ -712,7 +705,6 @@ $assignedFacultyCount = count($facultyAssignedSet);
             document.getElementById('edit_sub_course').value = sub.course_id;
             document.getElementById('edit_sub_dept').value = sub.department_id;
             
-            // Clean numeric semester
             let cleanSem = (sub.semester || '1').replace(/[^0-9]/g, '');
             document.getElementById('edit_sub_sem').value = cleanSem || '1';
             

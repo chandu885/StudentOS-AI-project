@@ -12,6 +12,10 @@
     RewriteCond %{REQUEST_URI} (.+)/$
     RewriteRule ^ %1 [L,R=301]
     
+    # Alias superadmin to super-admin
+    RewriteRule ^superadmin/(.*)$ super-admin/$1 [L,QSA]
+    RewriteRule ^superadmin$ super-admin/dashboard.php [L,R=301]
+
     # Handle Front Controller
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f

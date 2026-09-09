@@ -18,6 +18,7 @@ require_once __DIR__ . '/../utils/Validator.php';
 require_once __DIR__ . '/../utils/Logger.php';
 require_once __DIR__ . '/../middleware/AuthMiddleware.php';
 require_once __DIR__ . '/../models/User.php';
+require_once __DIR__ . '/../models/Role.php';
 require_once __DIR__ . '/../models/Student.php';
 require_once __DIR__ . '/../models/Faculty.php';
 require_once __DIR__ . '/../models/Admin.php';
@@ -166,10 +167,65 @@ try {
             } elseif ($action === 'courses' || $id === 'courses') {
                 $deptId = $_GET['department_id'] ?? null;
                 jsonOut(['success' => true, 'courses' => $academic->getCourses($deptId)]);
+            } elseif ($action === 'semesters' || $id === 'semesters') {
+                $courseId = $_GET['course_id'] ?? null;
+                $status = $_GET['status'] ?? null;
+                $academicYear = $_GET['academic_year'] ?? null;
+                $search = $_GET['search'] ?? ($_GET['q'] ?? null);
+                jsonOut(['success' => true, 'semesters' => $academic->getSemesters($courseId, $status, $academicYear, $search)]);
+            } elseif ($action === 'create-semester') {
+                $user = requireAuth();
+                if ((int)$user['role_id'] !== 1 && (int)$user['role_id'] !== 2) {
+                    jsonOut(['error' => 'Unauthorized. Admin or Superadmin role required.'], 403);
+                }
+                $res = $academic->createSemester($input, $user['id']);
+                jsonOut($res, $res['success'] ? 201 : 400);
+            } elseif ($action === 'update-semester') {
+                $user = requireAuth();
+                if ((int)$user['role_id'] !== 1 && (int)$user['role_id'] !== 2) {
+                    jsonOut(['error' => 'Unauthorized. Admin or Superadmin role required.'], 403);
+                }
+                $semId = (int)($input['id'] ?? ($id ?? 0));
+                $res = $academic->updateSemester($semId, $input);
+                jsonOut($res, $res['success'] ? 200 : 400);
+            } elseif ($action === 'delete-semester' || ($method === 'DELETE' && $action === 'semester')) {
+                $user = requireAuth();
+                if ((int)$user['role_id'] !== 1 && (int)$user['role_id'] !== 2) {
+                    jsonOut(['error' => 'Unauthorized. Admin or Superadmin role required.'], 403);
+                }
+                $semId = (int)($input['id'] ?? ($id ?? 0));
+                $res = $academic->deleteSemester($semId);
+                jsonOut($res, $res['success'] ? 200 : 400);
             } elseif ($action === 'subjects' || $id === 'subjects') {
                 $courseId = $_GET['course_id'] ?? null;
                 $semester = $_GET['semester'] ?? null;
-                jsonOut(['success' => true, 'subjects' => $academic->getSubjects($courseId, $semester)]);
+                $deptId = $_GET['department_id'] ?? null;
+                $search = $_GET['search'] ?? ($_GET['q'] ?? null);
+                $status = $_GET['status'] ?? null;
+                jsonOut(['success' => true, 'subjects' => $academic->getSubjects($courseId, $semester, $deptId, $search, $status)]);
+            } elseif ($action === 'create-subject') {
+                $user = requireAuth();
+                if ((int)$user['role_id'] !== 1 && (int)$user['role_id'] !== 2) {
+                    jsonOut(['error' => 'Unauthorized. Admin or Superadmin role required.'], 403);
+                }
+                $res = $academic->createSubject($input, $user['id']);
+                jsonOut($res, $res['success'] ? 201 : 400);
+            } elseif ($action === 'update-subject') {
+                $user = requireAuth();
+                if ((int)$user['role_id'] !== 1 && (int)$user['role_id'] !== 2) {
+                    jsonOut(['error' => 'Unauthorized. Admin or Superadmin role required.'], 403);
+                }
+                $subId = (int)($input['id'] ?? ($id ?? 0));
+                $res = $academic->updateSubject($subId, $input);
+                jsonOut($res, $res['success'] ? 200 : 400);
+            } elseif ($action === 'delete-subject' || ($method === 'DELETE' && $action === 'subject')) {
+                $user = requireAuth();
+                if ((int)$user['role_id'] !== 1 && (int)$user['role_id'] !== 2) {
+                    jsonOut(['error' => 'Unauthorized. Admin or Superadmin role required.'], 403);
+                }
+                $subId = (int)($input['id'] ?? ($id ?? 0));
+                $res = $academic->deleteSubject($subId);
+                jsonOut($res, $res['success'] ? 200 : 400);
             } elseif ($action === 'schedules' || $id === 'schedules') {
                 $courseId = $_GET['course_id'] ?? null;
                 $semester = $_GET['semester'] ?? null;
@@ -177,6 +233,42 @@ try {
                 jsonOut(['success' => true, 'schedules' => $academic->getSchedules($courseId, $semester, $section)]);
             } else {
                 jsonOut(['departments' => $academic->getDepartments()]);
+            }
+            break;
+
+        // ---------------- ROLES ----------------
+        case 'roles':
+            $user = requireAuth();
+            if ((int)$user['role_id'] !== 1) {
+                jsonOut(['error' => 'Unauthorized. Super Admin role required.'], 403);
+            }
+            $roleModel = new Role();
+            if ($action === 'permissions') {
+                jsonOut(['success' => true, 'data' => $roleModel->getAllPermissions()]);
+            } elseif ($action === 'create' && $method === 'POST') {
+                $res = $roleModel->createRole(
+                    $input['name'] ?? '',
+                    $input['display_name'] ?? '',
+                    $input['description'] ?? null,
+                    $input['permissions'] ?? []
+                );
+                jsonOut($res, $res['success'] ? 201 : 400);
+            } elseif (($action === 'update' && $method === 'POST') || $method === 'PUT') {
+                $roleId = (int)($input['id'] ?? ($id ?? 0));
+                $res = $roleModel->updateRole(
+                    $roleId,
+                    $input['display_name'] ?? '',
+                    $input['description'] ?? null,
+                    isset($input['permissions']) ? (array)$input['permissions'] : null,
+                    $input['name'] ?? null
+                );
+                jsonOut($res, $res['success'] ? 200 : 400);
+            } elseif (($action === 'delete' && $method === 'POST') || $method === 'DELETE') {
+                $roleId = (int)($input['id'] ?? ($id ?? 0));
+                $res = $roleModel->deleteRole($roleId);
+                jsonOut($res, $res['success'] ? 200 : 400);
+            } else {
+                jsonOut(['success' => true, 'roles' => $roleModel->getAllWithCounts()]);
             }
             break;
 

@@ -11,7 +11,7 @@ ini_set('error_log', __DIR__ . '/../../logs/php_errors.log');
 date_default_timezone_set('Asia/Kolkata');
 
 // Session configuration
-if (!headers_sent()) {
+if (!headers_sent() && session_status() === PHP_SESSION_NONE) {
     ini_set('session.cookie_httponly', 1);
     ini_set('session.use_only_cookies', 1);
     ini_set('session.cookie_secure', 0); // Set to 1 for HTTPS

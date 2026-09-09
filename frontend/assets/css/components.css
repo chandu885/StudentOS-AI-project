@@ -783,8 +783,9 @@ select.form-control option {
 }
 
 .modal-backdrop.show {
-    display: flex;
-    opacity: 1;
+    display: flex !important;
+    opacity: 1 !important;
+    pointer-events: auto;
 }
 
 .modal-card {

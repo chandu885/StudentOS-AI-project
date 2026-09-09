@@ -3,17 +3,15 @@
 
 // Session management
 function startSecureSession() {
-    // Set secure session settings
-    ini_set('session.cookie_httponly', 1);
-    ini_set('session.use_only_cookies', 1);
-    ini_set('session.cookie_secure', isset($_SERVER['HTTPS']));
-    ini_set('session.cookie_samesite', 'Strict');
-    
-    // Set session name
-    session_name('STUDENTOS_SESSION');
-    
     // Start session if not started
     if (session_status() === PHP_SESSION_NONE) {
+        if (!headers_sent()) {
+            ini_set('session.cookie_httponly', 1);
+            ini_set('session.use_only_cookies', 1);
+            ini_set('session.cookie_secure', isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on');
+            ini_set('session.cookie_samesite', 'Strict');
+            session_name('STUDENTOS_SESSION');
+        }
         session_start();
     }
     
