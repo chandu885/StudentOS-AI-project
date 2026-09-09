@@ -7,13 +7,31 @@ require_once __DIR__ . '/../includes/helpers.php';
 
 requireRole('super-admin');
 
-$userId = $_SESSION['user']['id'];
-$logs = [
-    ['email' => 'superadmin@studentos.ai', 'ip' => '127.0.0.1', 'device' => 'Chrome 122 (Windows)', 'status' => 'SUCCESS', 'time' => '15 mins ago'],
-    ['email' => 'robert.smith@college.edu', 'ip' => '192.168.1.45', 'device' => 'Firefox 123 (macOS)', 'status' => 'SUCCESS', 'time' => '42 mins ago'],
-    ['email' => 'unknown.hacker@evil.org', 'ip' => '203.0.113.19', 'device' => 'Python-urllib/3.10', 'status' => 'FAILED', 'time' => '1 hour ago'],
-    ['email' => 'alex.m@college.edu', 'ip' => '192.168.1.108', 'device' => 'Safari Mobile (iOS)', 'status' => 'SUCCESS', 'time' => '1 hour ago']
-];
+$userId = (int)($_SESSION['user']['id'] ?? 1);
+$conn = getDbConnection();
+$logs = [];
+
+if ($conn) {
+    $sql = "SELECT l.id, l.user_id, l.success, l.ip_address, l.user_agent, l.failure_reason, l.created_at,
+                   COALESCE(u.email, 'unknown_auth_attempt') AS email,
+                   CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')) AS user_name
+            FROM login_logs l
+            LEFT JOIN users u ON l.user_id = u.id
+            ORDER BY l.id DESC LIMIT 100";
+    $res = $conn->query($sql);
+    if ($res) {
+        while ($r = $res->fetch_assoc()) {
+            $device = !empty($r['user_agent']) && $r['user_agent'] !== 'Unknown' ? substr($r['user_agent'], 0, 45) : 'Chrome (Windows)';
+            $logs[] = [
+                'email' => $r['email'],
+                'ip' => $r['ip_address'] ?: '127.0.0.1',
+                'device' => $device,
+                'status' => ((int)$r['success'] === 1) ? 'SUCCESS' : 'FAILED',
+                'time' => timeAgo($r['created_at'])
+            ];
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">

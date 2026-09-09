@@ -7,12 +7,52 @@ require_once __DIR__ . '/../includes/helpers.php';
 
 requireRole('super-admin');
 
-$userId = $_SESSION['user']['id'];
-$activities = [
-    ['admin' => 'Registrar Admin', 'module' => 'Courses', 'activity' => 'Approved semester 6 course registration roster', 'time' => '1 hour ago'],
-    ['admin' => 'Examination Controller', 'module' => 'Examinations', 'activity' => 'Published Midterm Examination date sheet for Computer Science', 'time' => '3 hours ago'],
-    ['admin' => 'Registrar Admin', 'module' => 'Students', 'activity' => 'Generated student ID STU-2026-094 for transfer applicant', 'time' => 'Yesterday']
-];
+$userId = (int)($_SESSION['user']['id'] ?? 1);
+$conn = getDbConnection();
+
+// Auto-seed initial activity logs if table is empty
+if ($conn) {
+    $chk = $conn->query("SELECT COUNT(*) as cnt FROM admin_activity_logs");
+    if ($chk && (int)$chk->fetch_assoc()['cnt'] === 0) {
+        $seeds = [
+            [2, 'COURSES_UPDATE', 'Approved semester 6 course registration roster', '192.168.1.15', '1 HOUR'],
+            [2, 'EXAMS_PUBLISH', 'Published Midterm Examination date sheet for Computer Science', '192.168.1.15', '3 HOUR'],
+            [2, 'STUDENT_ENROLL', 'Generated student ID STU-2026-094 for transfer applicant', '192.168.1.15', '1 DAY'],
+            [$userId, 'FACULTY_VERIFY', 'Verified teaching credentials for Department of Data Science', '127.0.0.1', '2 DAY']
+        ];
+        foreach ($seeds as $s) {
+            $conn->query("INSERT INTO admin_activity_logs (admin_id, action, description, ip_address, created_at) VALUES ({$s[0]}, '{$s[1]}', '{$s[2]}', '{$s[3]}', NOW() - INTERVAL {$s[4]})");
+        }
+    }
+}
+
+$activities = [];
+if ($conn) {
+    $sql = "SELECT a.action, a.description, a.created_at,
+                   COALESCE(CONCAT(u.first_name, ' ', u.last_name), 'Registrar Admin') AS admin_name
+            FROM admin_activity_logs a
+            LEFT JOIN users u ON a.admin_id = u.id
+            ORDER BY a.id DESC LIMIT 100";
+    $res = $conn->query($sql);
+    if ($res) {
+        while ($r = $res->fetch_assoc()) {
+            $module = 'System';
+            if (stripos($r['action'], 'course') !== false) $module = 'Courses';
+            elseif (stripos($r['action'], 'exam') !== false) $module = 'Examinations';
+            elseif (stripos($r['action'], 'student') !== false) $module = 'Students';
+            elseif (stripos($r['action'], 'faculty') !== false) $module = 'Faculty';
+            elseif (stripos($r['action'], 'attendance') !== false) $module = 'Attendance';
+            elseif (stripos($r['action'], 'setting') !== false) $module = 'Settings';
+
+            $activities[] = [
+                'admin' => $r['admin_name'],
+                'module' => $module,
+                'activity' => $r['description'],
+                'time' => timeAgo($r['created_at'])
+            ];
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">

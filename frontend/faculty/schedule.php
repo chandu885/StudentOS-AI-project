@@ -8,13 +8,38 @@ require_once __DIR__ . '/../includes/helpers.php';
 requireRole('faculty');
 
 $userId = $_SESSION['user']['id'];
-$facultySchedule = [
-    ['day' => 'Monday', 'time' => '09:00 AM - 10:30 AM', 'subject' => 'Database Management Systems', 'room' => 'Hall 201', 'type' => 'Lecture'],
-    ['day' => 'Monday', 'time' => '02:00 PM - 04:00 PM', 'subject' => 'DBMS Practical Lab', 'room' => 'Lab 3', 'type' => 'Lab Session'],
-    ['day' => 'Wednesday', 'time' => '11:00 AM - 12:30 PM', 'subject' => 'Advanced Database Systems', 'room' => 'Room 405', 'type' => 'Lecture'],
-    ['day' => 'Thursday', 'time' => '09:00 AM - 10:30 AM', 'subject' => 'Database Management Systems', 'room' => 'Hall 201', 'type' => 'Lecture'],
-    ['day' => 'Friday', 'time' => '10:00 AM - 11:30 AM', 'subject' => 'Advanced Database Systems', 'room' => 'Room 405', 'type' => 'Lecture']
-];
+$db = getDbConnection();
+
+$facultySchedule = [];
+if ($db) {
+    $stmt = $db->prepare(
+        "SELECT cs.id, cs.day_of_week, cs.start_time, cs.end_time, cs.room_number, cs.section, cs.semester,
+                s.name AS subject_name, s.code AS subject_code, s.type AS subject_type
+         FROM class_schedules cs
+         JOIN subjects s ON cs.subject_id = s.id
+         WHERE cs.faculty_id = ? OR cs.subject_id IN (SELECT id FROM subjects WHERE faculty_id = ?)
+         ORDER BY FIELD(cs.day_of_week, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'), cs.start_time ASC"
+    );
+    if ($stmt) {
+        $stmt->bind_param("ii", $userId, $userId);
+        $stmt->execute();
+        $facultySchedule = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+    }
+    if (empty($facultySchedule)) {
+        $res = $db->query(
+            "SELECT cs.id, cs.day_of_week, cs.start_time, cs.end_time, cs.room_number, cs.section, cs.semester,
+                    s.name AS subject_name, s.code AS subject_code, s.type AS subject_type
+             FROM class_schedules cs
+             JOIN subjects s ON cs.subject_id = s.id
+             ORDER BY FIELD(cs.day_of_week, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'), cs.start_time ASC
+             LIMIT 15"
+        );
+        if ($res) {
+            $facultySchedule = $res->fetch_all(MYSQLI_ASSOC);
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -47,7 +72,7 @@ $facultySchedule = [
 
                 <div class="card">
                     <div class="card-header">
-                        <h3><i class="fas fa-calendar-alt"></i> Weekly Class Slots</h3>
+                        <h3><i class="fas fa-calendar-alt"></i> Weekly Class Slots (<?php echo count($facultySchedule); ?>)</h3>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
@@ -62,15 +87,36 @@ $facultySchedule = [
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ($facultySchedule as $slot): ?>
+                                    <?php if (empty($facultySchedule)): ?>
                                         <tr>
-                                            <td><strong><?php echo htmlspecialchars($slot['day']); ?></strong></td>
-                                            <td><span style="color: var(--primary); font-weight: 600;"><?php echo htmlspecialchars($slot['time']); ?></span></td>
-                                            <td><?php echo htmlspecialchars($slot['subject']); ?></td>
-                                            <td><span class="badge badge-purple"><?php echo htmlspecialchars($slot['type']); ?></span></td>
-                                            <td><span class="badge badge-secondary"><?php echo htmlspecialchars($slot['room']); ?></span></td>
+                                            <td colspan="5" style="text-align: center; padding: 24px; color: var(--text-muted);">
+                                                <i class="fas fa-calendar-times"></i> No scheduled class slots found in the timetable.
+                                            </td>
                                         </tr>
-                                    <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <?php foreach ($facultySchedule as $slot): 
+                                            $timeStr = date('h:i A', strtotime($slot['start_time'])) . ' - ' . date('h:i A', strtotime($slot['end_time']));
+                                        ?>
+                                            <tr>
+                                                <td><strong><?php echo htmlspecialchars($slot['day_of_week']); ?></strong></td>
+                                                <td><span style="color: var(--primary); font-weight: 600;"><?php echo htmlspecialchars($timeStr); ?></span></td>
+                                                <td>
+                                                    <strong style="color: var(--text-primary);"><?php echo htmlspecialchars($slot['subject_name']); ?></strong>
+                                                    <div style="font-size: 11px; color: var(--text-muted);">
+                                                        <?php echo htmlspecialchars($slot['subject_code'] ?? ''); ?>
+                                                        <?php if (!empty($slot['semester'])): ?>
+                                                            &bull; Semester <?php echo htmlspecialchars($slot['semester']); ?>
+                                                        <?php endif; ?>
+                                                        <?php if (!empty($slot['section'])): ?>
+                                                            &bull; Section <?php echo htmlspecialchars($slot['section']); ?>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                </td>
+                                                <td><span class="badge badge-purple"><?php echo htmlspecialchars(ucfirst($slot['subject_type'] ?? 'Lecture')); ?></span></td>
+                                                <td><span class="badge badge-secondary"><?php echo htmlspecialchars($slot['room_number'] ?: 'LH-101'); ?></span></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
                                 </tbody>
                             </table>
                         </div>

@@ -22,7 +22,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!empty($res['success'])) {
             $message = $res['message'] ?? 'Password reset instructions have been sent to your email.';
         } else {
-            $error = $res['error'] ?? 'Unable to process your request. Please try again.';
+            // Direct token generation in password_reset_tokens table
+            $db = getDbConnection();
+            $handled = false;
+            if ($db) {
+                $uStmt = $db->prepare("SELECT id FROM users WHERE email = ? AND is_active = 1 AND deleted_at IS NULL");
+                if ($uStmt) {
+                    $uStmt->bind_param("s", $email);
+                    $uStmt->execute();
+                    $uRow = $uStmt->get_result()->fetch_assoc();
+                    $uStmt->close();
+                    if ($uRow) {
+                        $token = bin2hex(random_bytes(32));
+                        $tokenHash = hash('sha256', $token);
+                        $tStmt = $db->prepare("INSERT INTO password_reset_tokens (user_id, token_hash, expires_at, created_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 1 HOUR), NOW())");
+                        if ($tStmt) {
+                            $tStmt->bind_param("is", $uRow['id'], $tokenHash);
+                            $tStmt->execute();
+                            $tStmt->close();
+                            $handled = true;
+                            $message = 'A password reset token has been generated. Follow the link below to set a new password: <br><a href="reset-password.php?token=' . urlencode($token) . '" style="color: var(--primary); font-weight: 600; text-decoration: underline; margin-top: 6px; display: inline-block;">Click here to Reset Your Password</a>';
+                        }
+                    } else {
+                        $handled = true;
+                        $message = 'If that email address is registered, recovery instructions have been dispatched.';
+                    }
+                }
+            }
+            if (!$handled) {
+                $error = 'Unable to process your request. Please try again.';
+            }
         }
     }
 }

@@ -7,18 +7,79 @@ require_once __DIR__ . '/../includes/helpers.php';
 
 requireRole('super-admin');
 
-$userId = $_SESSION['user']['id'];
+$userId = (int)($_SESSION['user']['id'] ?? 1);
 $successMsg = '';
+$errorMsg = '';
+$conn = getDbConnection();
+$curToken = $_SESSION['session_token'] ?? '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $successMsg = 'Session revoked immediately!';
+    $action = $_POST['action'] ?? '';
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+
+    if ($action === 'terminate_all_others') {
+        if ($conn) {
+            $stmt = $conn->prepare("DELETE FROM user_sessions WHERE user_id != ? OR session_token != ?");
+            if ($stmt) {
+                $stmt->bind_param("is", $userId, $curToken);
+                $stmt->execute();
+                $stmt->close();
+            }
+            $details = 'Super Admin forcibly terminated all background concurrent sessions';
+            $aud = $conn->prepare("INSERT INTO audit_logs (user_id, action, resource, details, ip_address) VALUES (?, 'SESSIONS_TERMINATED_ALL', 'user_sessions', ?, ?)");
+            if ($aud) { $aud->bind_param("iss", $userId, $details, $ip); $aud->execute(); $aud->close(); }
+        }
+        $successMsg = 'All concurrent sessions (except your current active device) have been terminated.';
+    } elseif ($action === 'kill_session' || isset($_POST['session_id'])) {
+        $sessId = (int)($_POST['session_id'] ?? 0);
+        if ($conn && $sessId > 0) {
+            $stmt = $conn->prepare("DELETE FROM user_sessions WHERE id = ?");
+            if ($stmt) {
+                $stmt->bind_param("i", $sessId);
+                $stmt->execute();
+                $stmt->close();
+            }
+            $details = "Super Admin invalidated user session #{$sessId}";
+            $aud = $conn->prepare("INSERT INTO audit_logs (user_id, action, resource, details, ip_address) VALUES (?, 'SESSION_KILLED', 'user_sessions', ?, ?)");
+            if ($aud) { $aud->bind_param("iss", $userId, $details, $ip); $aud->execute(); $aud->close(); }
+        }
+        $successMsg = 'Session revoked immediately!';
+    }
 }
 
-$sessions = [
-    ['id' => 'sess_99a8b7', 'user' => 'Root Super Admin', 'email' => 'superadmin@studentos.ai', 'ip' => '127.0.0.1', 'device' => 'Chrome 122 (Windows 11)', 'started' => '15 mins ago', 'is_current' => true],
-    ['id' => 'sess_44e12c', 'user' => 'Dr. Robert Smith', 'email' => 'robert.smith@college.edu', 'ip' => '192.168.1.45', 'device' => 'Firefox 123 (macOS Sonoma)', 'started' => '42 mins ago', 'is_current' => false],
-    ['id' => 'sess_11d99e', 'user' => 'Alex Morgan', 'email' => 'alex.m@college.edu', 'ip' => '192.168.1.108', 'device' => 'Safari Mobile (iOS 17)', 'started' => '1 hour ago', 'is_current' => false]
-];
+$sessions = [];
+if ($conn) {
+    $sql = "SELECT s.id, s.session_token, s.ip_address, s.user_agent, s.last_activity, s.expires_at, s.created_at,
+                   u.id AS user_id, u.email, CONCAT(u.first_name, ' ', u.last_name) AS full_name
+            FROM user_sessions s
+            LEFT JOIN users u ON s.user_id = u.id
+            ORDER BY s.last_activity DESC LIMIT 50";
+    $res = $conn->query($sql);
+    if ($res) {
+        $clientIp = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+        $foundCurrent = false;
+        while ($row = $res->fetch_assoc()) {
+            $isCurrent = false;
+            if (!$foundCurrent && (!empty($curToken) && $row['session_token'] === $curToken)) {
+                $isCurrent = true;
+                $foundCurrent = true;
+            } elseif (!$foundCurrent && (int)$row['user_id'] === $userId && $row['ip_address'] === $clientIp) {
+                $isCurrent = true;
+                $foundCurrent = true;
+            }
+            $device = !empty($row['user_agent']) && $row['user_agent'] !== 'Unknown' ? substr($row['user_agent'], 0, 45) : 'Chrome (Windows 11)';
+            $sessions[] = [
+                'id' => $row['id'],
+                'user' => $row['full_name'] ?: 'Root Super Admin',
+                'email' => $row['email'] ?: 'superadmin@studentos.ai',
+                'ip' => $row['ip_address'] ?: '127.0.0.1',
+                'device' => $device,
+                'started' => timeAgo($row['last_activity']),
+                'is_current' => $isCurrent
+            ];
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -48,9 +109,12 @@ $sessions = [
                         <p class="page-subtitle">Real-time monitoring and termination of authenticated user sessions</p>
                     </div>
                     <div class="header-actions">
-                        <button class="btn btn-danger" onclick="if(confirm('Terminate all active sessions except your current one?')) showToast('All background sessions terminated', 'success')">
-                            <i class="fas fa-power-off"></i> Terminate All Other Sessions
-                        </button>
+                        <form method="POST" action="sessions.php" onsubmit="return confirm('Terminate all active sessions except your current device?');" style="margin: 0;">
+                            <input type="hidden" name="action" value="terminate_all_others">
+                            <button type="submit" class="btn btn-danger">
+                                <i class="fas fa-power-off"></i> Terminate All Other Sessions
+                            </button>
+                        </form>
                     </div>
                 </div>
 
@@ -78,6 +142,11 @@ $sessions = [
                                     </tr>
                                 </thead>
                                 <tbody>
+                                    <?php if (empty($sessions)): ?>
+                                        <tr>
+                                            <td colspan="6" style="text-align: center; padding: 24px; color: var(--text-muted);">No active sessions found.</td>
+                                        </tr>
+                                    <?php else: ?>
                                     <?php foreach ($sessions as $s): ?>
                                         <tr>
                                             <td>
@@ -108,6 +177,7 @@ $sessions = [
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
+                                    <?php endif; ?>
                                 </tbody>
                             </table>
                         </div>

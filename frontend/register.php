@@ -87,14 +87,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     
     if (empty($errors)) {
-        // API call to register
+        // Attempt API call to register
         $response = apiCall('/auth.php?path=register', 'POST', $formData);
         
         if (isset($response['success']) && $response['success']) {
             $success = 'Registration successful! Your account has been registered. You may now sign in.';
             $formData = [];
         } else {
-            $error = $response['error'] ?? 'Registration failed. Please verify your details.';
+            // Direct database registration fallback
+            $registeredDirectly = false;
+            if ($db) {
+                // Check duplicate email
+                $chkEmail = $db->prepare("SELECT id FROM users WHERE email = ?");
+                if ($chkEmail) {
+                    $chkEmail->bind_param("s", $formData['email']);
+                    $chkEmail->execute();
+                    if ($chkEmail->get_result()->num_rows > 0) {
+                        $error = 'Email is already registered.';
+                        $chkEmail->close();
+                    } else {
+                        $chkEmail->close();
+                        // Check duplicate student_id
+                        $chkStu = $db->prepare("SELECT id FROM student_profiles WHERE student_id = ?");
+                        if ($chkStu) {
+                            $chkStu->bind_param("s", $formData['student_id']);
+                            $chkStu->execute();
+                            if ($chkStu->get_result()->num_rows > 0) {
+                                $error = 'Student ID is already registered.';
+                                $chkStu->close();
+                            } else {
+                                $chkStu->close();
+                                // Create user & profile
+                                $passHash = password_hash($formData['password'], PASSWORD_BCRYPT);
+                                $uIns = $db->prepare("INSERT INTO users (role_id, email, password_hash, first_name, last_name, is_active, created_at, updated_at) VALUES (4, ?, ?, ?, ?, 1, NOW(), NOW())");
+                                if ($uIns) {
+                                    $uIns->bind_param("ssss", $formData['email'], $passHash, $formData['first_name'], $formData['last_name']);
+                                    if ($uIns->execute()) {
+                                        $newUserId = $uIns->insert_id;
+                                        $uIns->close();
+
+                                        $spIns = $db->prepare("INSERT INTO student_profiles (user_id, student_id, department_id, course_id, semester, section, roll_number, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())");
+                                        if ($spIns) {
+                                            $roll = !empty($formData['roll_number']) ? $formData['roll_number'] : $formData['student_id'];
+                                            $spIns->bind_param("isiisss", $newUserId, $formData['student_id'], $formData['department_id'], $formData['course_id'], $formData['semester'], $formData['section'], $roll);
+                                            $spIns->execute();
+                                            $spIns->close();
+                                        }
+                                        $registeredDirectly = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if ($registeredDirectly) {
+                $success = 'Registration successful! Your account has been registered. You may now sign in.';
+                $formData = [];
+            } elseif (empty($error)) {
+                $error = $response['error'] ?? 'Registration failed. Please verify your details.';
+            }
         }
     } else {
         $error = implode('<br>', $errors);

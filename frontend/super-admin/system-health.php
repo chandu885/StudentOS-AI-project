@@ -7,12 +7,31 @@ require_once __DIR__ . '/../includes/helpers.php';
 
 requireRole('super-admin');
 
-$userId = $_SESSION['user']['id'];
+$userId = (int)($_SESSION['user']['id'] ?? 1);
 
 $memoryUsage = round(memory_get_usage(true) / 1024 / 1024, 2) . ' MB';
 $memoryPeak = round(memory_get_peak_usage(true) / 1024 / 1024, 2) . ' MB';
 $phpVersion = phpversion();
 $serverOs = php_uname('s') . ' ' . php_uname('r');
+
+$conn = getDbConnection();
+$dbConnected = false;
+$dbTableCount = 0;
+$dbPing = 0;
+if ($conn) {
+    $tStart = microtime(true);
+    $res = $conn->query("SHOW TABLES");
+    $dbPing = max(0.5, round((microtime(true) - $tStart) * 1000, 1));
+    if ($res) {
+        $dbConnected = true;
+        $dbTableCount = $res->num_rows;
+    }
+}
+
+$curlLoaded = extension_loaded('curl');
+$jsonLoaded = function_exists('json_encode');
+$uploadsDir = BASE_PATH . '/storage/uploads';
+$uploadsWritable = is_dir($uploadsDir) && is_writable($uploadsDir);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -84,18 +103,18 @@ $serverOs = php_uname('s') . ' ' . php_uname('r');
                                 <tbody>
                                     <tr>
                                         <td><strong>MySQL Database Cluster</strong></td>
-                                        <td><span class="badge badge-success"><i class="fas fa-check"></i> Connected</span></td>
-                                        <td>studentos_ai database responsive with full schema indexing</td>
+                                        <td><span class="badge badge-<?php echo $dbConnected ? 'success' : 'danger'; ?>"><i class="fas fa-<?php echo $dbConnected ? 'check' : 'times'; ?>"></i> <?php echo $dbConnected ? 'Connected' : 'Disconnected'; ?></span></td>
+                                        <td>studentos_ai database responsive (Ping: <?php echo $dbPing; ?>ms, <?php echo $dbTableCount; ?> tables indexed)</td>
                                     </tr>
                                     <tr>
                                         <td><strong>cURL HTTP Transport Extension</strong></td>
-                                        <td><span class="badge badge-success"><i class="fas fa-check"></i> Enabled</span></td>
+                                        <td><span class="badge badge-<?php echo $curlLoaded ? 'success' : 'warning'; ?>"><i class="fas fa-<?php echo $curlLoaded ? 'check' : 'times'; ?>"></i> <?php echo $curlLoaded ? 'Enabled' : 'Missing'; ?></span></td>
                                         <td>Available for REST API and Google Gemini API communication</td>
                                     </tr>
                                     <tr>
                                         <td><strong>JSON Parser Engine</strong></td>
-                                        <td><span class="badge badge-success"><i class="fas fa-check"></i> Native</span></td>
-                                        <td>PHP 8.x native json_decode and json_encode acceleration active</td>
+                                        <td><span class="badge badge-<?php echo $jsonLoaded ? 'success' : 'danger'; ?>"><i class="fas fa-<?php echo $jsonLoaded ? 'check' : 'times'; ?>"></i> Native</span></td>
+                                        <td>PHP native json_decode and json_encode acceleration active</td>
                                     </tr>
                                     <tr>
                                         <td><strong>Operating System Kernel</strong></td>
@@ -104,7 +123,7 @@ $serverOs = php_uname('s') . ' ' . php_uname('r');
                                     </tr>
                                     <tr>
                                         <td><strong>Storage Upload Directory</strong></td>
-                                        <td><span class="badge badge-success"><i class="fas fa-check"></i> Writable</span></td>
+                                        <td><span class="badge badge-<?php echo $uploadsWritable ? 'success' : 'warning'; ?>"><i class="fas fa-<?php echo $uploadsWritable ? 'check' : 'exclamation'; ?>"></i> <?php echo $uploadsWritable ? 'Writable' : 'Read-Only'; ?></span></td>
                                         <td><code>storage/uploads/</code> permissions verified for coursework & docs</td>
                                     </tr>
                                 </tbody>

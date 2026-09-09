@@ -12,6 +12,7 @@ $user = $_SESSION['user'];
 $successMsg = '';
 $errorMsg = '';
 
+$action = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? 'update_profile';
     $conn = getDbConnection();

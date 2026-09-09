@@ -7,10 +7,11 @@ require_once __DIR__ . '/../includes/helpers.php';
 
 requireRole('student');
 
+$userId = (int)($_SESSION['user']['id'] ?? 0);
 $db = getDbConnection();
 $events = [];
 
-if ($db) {
+if ($db && $userId > 0) {
     // 1. calendar_events for user or college-wide
     $stmt = $db->prepare("SELECT title, start_time, event_type, location FROM `calendar_events` WHERE user_id = ? OR user_id = 0 ORDER BY `start_time` ASC");
     if ($stmt) {
@@ -33,24 +34,85 @@ if ($db) {
                 'location' => $row['location'] ?? ''
             ];
         }
+        $stmt->close();
     }
 
-    // 2. Also fetch upcoming exams for enrolled subjects
-    $exStmt = $db->prepare("SELECT e.title, e.exam_date, s.name as subject_name FROM `exams` e JOIN `subjects` s ON e.subject_id = s.id JOIN `student_subjects` ss ON ss.subject_id = s.id WHERE ss.student_id = ? AND e.exam_date >= CURDATE() ORDER BY e.exam_date ASC LIMIT 5");
+    // 2. Upcoming exams for enrolled subjects
+    $exStmt = $db->prepare(
+        "SELECT e.title, e.exam_date, e.room_number, s.name as subject_name 
+         FROM `exams` e 
+         JOIN `subjects` s ON e.subject_id = s.id 
+         JOIN `student_subjects` ss ON ss.subject_id = s.id 
+         WHERE ss.student_id = ? AND e.exam_date >= CURDATE() 
+         ORDER BY e.exam_date ASC LIMIT 6"
+    );
     if ($exStmt) {
         $exStmt->bind_param("i", $userId);
         $exStmt->execute();
         $exRes = $exStmt->get_result();
         while ($er = $exRes->fetch_assoc()) {
             $events[] = [
-                'title' => $er['subject_name'] . ' - ' . $er['title'],
+                'title' => $er['subject_name'] . ' Exam: ' . $er['title'],
                 'date' => $er['exam_date'],
                 'type' => 'exam',
                 'color' => 'danger',
-                'location' => 'Examination Hall'
+                'location' => !empty($er['room_number']) ? 'Room ' . $er['room_number'] : 'Examination Hall'
             ];
         }
+        $exStmt->close();
     }
+
+    // 3. Assignment deadlines for enrolled subjects
+    $asgStmt = $db->prepare(
+        "SELECT a.title, a.deadline, s.name as subject_name 
+         FROM assignments a 
+         JOIN subjects s ON a.subject_id = s.id 
+         JOIN student_subjects ss ON ss.subject_id = s.id 
+         WHERE ss.student_id = ? AND a.deadline >= NOW() 
+         ORDER BY a.deadline ASC LIMIT 6"
+    );
+    if ($asgStmt) {
+        $asgStmt->bind_param("i", $userId);
+        $asgStmt->execute();
+        $asgRes = $asgStmt->get_result();
+        while ($ar = $asgRes->fetch_assoc()) {
+            $events[] = [
+                'title' => $ar['subject_name'] . ' Due: ' . $ar['title'],
+                'date' => date('Y-m-d', strtotime($ar['deadline'])),
+                'type' => 'deadline',
+                'color' => 'warning',
+                'location' => 'Online Portal Submission'
+            ];
+        }
+        $asgStmt->close();
+    }
+
+    // 4. Campus events & workshops
+    $evStmt = $db->prepare(
+        "SELECT e.title, e.event_date, e.venue, e.organized_by 
+         FROM events e 
+         WHERE e.event_date >= CURDATE() 
+         ORDER BY e.event_date ASC LIMIT 5"
+    );
+    if ($evStmt) {
+        $evStmt->execute();
+        $evRes = $evStmt->get_result();
+        while ($evr = $evRes->fetch_assoc()) {
+            $events[] = [
+                'title' => $evr['title'] . (!empty($evr['organized_by']) ? ' (' . $evr['organized_by'] . ')' : ''),
+                'date' => $evr['event_date'],
+                'type' => 'event',
+                'color' => 'purple',
+                'location' => $evr['venue'] ?? 'Campus Grounds'
+            ];
+        }
+        $evStmt->close();
+    }
+
+    // Sort all events by date ASC
+    usort($events, function($a, $b) {
+        return strcmp($a['date'], $b['date']);
+    });
 }
 ?>
 <!DOCTYPE html>

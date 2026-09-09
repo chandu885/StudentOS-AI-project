@@ -90,30 +90,40 @@ if ($db && $userId > 0) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ($exams as $ex): ?>
+                                    <?php if (empty($exams)): ?>
                                         <tr>
-                                            <td>
-                                                <strong style="color: var(--text-primary);"><?php echo htmlspecialchars($ex['subject_name']); ?></strong>
-                                                <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;"><?php echo htmlspecialchars($ex['title']); ?></div>
-                                            </td>
-                                            <td>
-                                                <span style="font-weight: 500; color: var(--primary);">
-                                                    <?php echo date('M d, Y', strtotime($ex['exam_date'])); ?>
-                                                </span>
-                                                <div style="font-size: 12px; color: var(--text-muted);">
-                                                    <?php echo date('h:i A', strtotime($ex['exam_date'])); ?>
-                                                </div>
-                                            </td>
-                                            <td><?php echo htmlspecialchars($ex['duration_minutes']); ?> mins</td>
-                                            <td><span class="badge badge-secondary"><?php echo htmlspecialchars($ex['room'] ?? 'Hall A'); ?></span></td>
-                                            <td><strong><?php echo htmlspecialchars($ex['total_marks']); ?></strong> pts</td>
-                                            <td>
-                                                <a href="ai-quiz.php?subject=<?php echo urlencode($ex['subject_name']); ?>" class="btn btn-secondary" style="font-size: 12px; padding: 6px 12px;">
-                                                    <i class="fas fa-magic"></i> Practice Quiz
-                                                </a>
+                                            <td colspan="6" style="text-align: center; padding: 36px; color: var(--text-muted);">
+                                                <i class="fas fa-calendar-check" style="font-size: 32px; margin-bottom: 8px; display: block;"></i>
+                                                <strong style="color: var(--text-primary);">No Upcoming Examinations</strong>
+                                                <p style="font-size: 13px; margin-top: 4px;">Midterms and final assessment schedules will be published here.</p>
                                             </td>
                                         </tr>
-                                    <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <?php foreach ($exams as $ex): ?>
+                                            <tr>
+                                                <td>
+                                                    <strong style="color: var(--text-primary);"><?php echo htmlspecialchars($ex['subject_name']); ?></strong>
+                                                    <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;"><?php echo htmlspecialchars($ex['title']); ?></div>
+                                                </td>
+                                                <td>
+                                                    <span style="font-weight: 500; color: var(--primary);">
+                                                        <?php echo date('M d, Y', strtotime($ex['exam_date'])); ?>
+                                                    </span>
+                                                    <div style="font-size: 12px; color: var(--text-muted);">
+                                                        <?php echo !empty($ex['start_time']) ? date('h:i A', strtotime($ex['start_time'])) : '10:00 AM'; ?>
+                                                    </div>
+                                                </td>
+                                                <td><?php echo htmlspecialchars($ex['duration_minutes'] ?? 90); ?> mins</td>
+                                                <td><span class="badge badge-secondary"><?php echo htmlspecialchars($ex['room'] ?? 'Hall A'); ?></span></td>
+                                                <td><strong><?php echo htmlspecialchars($ex['total_marks'] ?? 100); ?></strong> pts</td>
+                                                <td>
+                                                    <a href="ai-quiz.php?subject=<?php echo urlencode($ex['subject_name']); ?>" class="btn btn-secondary" style="font-size: 12px; padding: 6px 12px;">
+                                                        <i class="fas fa-magic"></i> Practice Quiz
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
                                 </tbody>
                             </table>
                         </div>

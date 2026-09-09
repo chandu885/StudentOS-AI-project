@@ -9,36 +9,68 @@ requireRole('faculty');
 
 $userId = $_SESSION['user']['id'];
 $successMsg = '';
+$errorMsg = '';
+$db = getDbConnection();
 
-if (!isset($_SESSION['faculty_tickets'])) {
-    $_SESSION['faculty_tickets'] = [
-        ['id' => 'FAC-701', 'subject' => 'Request to reopen gradebook for CS301 section A due to make-up test', 'category' => 'Gradebook Admin', 'priority' => 'high', 'status' => 'in_progress', 'created_at' => '2026-02-28', 'response' => 'Admin desk approved. 48-hour edit window opened.'],
-        ['id' => 'FAC-682', 'subject' => 'Lab B-204 Projector HDMI & sound connection glitch', 'category' => 'Classroom IT', 'priority' => 'medium', 'status' => 'resolved', 'created_at' => '2026-02-14', 'response' => 'Hardware cable replaced by campus IT.']
-    ];
+// Auto-seed initial tickets for faculty if none exist
+if ($db) {
+    $chk = $db->prepare("SELECT COUNT(*) AS cnt FROM support_tickets WHERE user_id = ?");
+    if ($chk) {
+        $chk->bind_param("i", $userId);
+        $chk->execute();
+        $hasTickets = (int)$chk->get_result()->fetch_assoc()['cnt'];
+        $chk->close();
+
+        if ($hasTickets === 0) {
+            $insSeed = $db->prepare("INSERT INTO support_tickets (user_id, subject, description, priority, status, response, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())");
+            if ($insSeed) {
+                $seeds = [
+                    ['Request to reopen gradebook for CS301 section A due to make-up test', 'Need 48-hour edit window for continuous assessment make-up test submissions.', 'high', 'in_progress', 'Admin desk approved. 48-hour edit window opened.'],
+                    ['Lab B-204 Projector HDMI & sound connection glitch', 'Hardware cable issues during morning lectures and lab sessions.', 'medium', 'resolved', 'Hardware cable replaced by campus IT.']
+                ];
+                foreach ($seeds as $s) {
+                    $insSeed->bind_param("isssss", $userId, $s[0], $s[1], $s[2], $s[3], $s[4]);
+                    $insSeed->execute();
+                }
+                $insSeed->close();
+            }
+        }
+    }
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $subject = sanitize($_POST['subject'] ?? '');
-    $category = sanitize($_POST['category'] ?? 'General');
     $message = sanitize($_POST['message'] ?? '');
-    $priority = sanitize($_POST['priority'] ?? 'medium');
+    $rawPrio = strtolower(sanitize($_POST['priority'] ?? 'medium'));
+    $priority = in_array($rawPrio, ['low', 'medium', 'high']) ? $rawPrio : 'medium';
 
-    if (!empty($subject) && !empty($message)) {
-        $newTicket = [
-            'id' => 'FAC-' . rand(710, 999),
-            'subject' => $subject,
-            'category' => $category,
-            'priority' => $priority,
-            'status' => 'pending',
-            'created_at' => date('Y-m-d'),
-            'response' => 'Ticket assigned to Academic Registrar & Campus Operations.'
-        ];
-        array_unshift($_SESSION['faculty_tickets'], $newTicket);
-        $successMsg = 'Faculty support request #' . $newTicket['id'] . ' logged successfully!';
+    if (!empty($subject) && !empty($message) && $db) {
+        $stmt = $db->prepare("INSERT INTO support_tickets (user_id, subject, description, priority, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'open', NOW(), NOW())");
+        if ($stmt) {
+            $stmt->bind_param("isss", $userId, $subject, $message, $priority);
+            if ($stmt->execute()) {
+                $newId = $stmt->insert_id;
+                $successMsg = "Faculty support request #TKT-{$newId} logged successfully!";
+            } else {
+                $errorMsg = 'Failed to submit request: ' . $stmt->error;
+            }
+            $stmt->close();
+        }
+    } else {
+        $errorMsg = 'Please provide both subject and requirements.';
     }
 }
 
-$tickets = $_SESSION['faculty_tickets'];
+$tickets = [];
+if ($db) {
+    $stmt = $db->prepare("SELECT id, user_id, subject, description, priority, status, response, created_at FROM support_tickets WHERE user_id = ? ORDER BY id DESC");
+    if ($stmt) {
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $tickets = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -70,8 +102,13 @@ $tickets = $_SESSION['faculty_tickets'];
                 </div>
 
                 <?php if ($successMsg): ?>
-                    <div class="alert alert-success" style="display: flex; align-items: center; gap: 10px;">
+                    <div class="alert alert-success" style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
                         <i class="fas fa-check-circle"></i> <?php echo htmlspecialchars($successMsg); ?>
+                    </div>
+                <?php endif; ?>
+                <?php if (!empty($errorMsg)): ?>
+                    <div class="alert alert-danger" style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+                        <i class="fas fa-exclamation-circle"></i> <?php echo htmlspecialchars($errorMsg); ?>
                     </div>
                 <?php endif; ?>
 
@@ -107,24 +144,13 @@ $tickets = $_SESSION['faculty_tickets'];
                                     <label>Subject / Operational Need</label>
                                     <input type="text" name="subject" class="form-control" placeholder="e.g. Need software license for MATLAB on Lab computers" required>
                                 </div>
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
-                                    <div class="form-group">
-                                        <label>Category</label>
-                                        <select name="category" class="form-control">
-                                            <option value="Gradebook Admin">Gradebook Modification</option>
-                                            <option value="Classroom IT">Classroom Hardware & Network</option>
-                                            <option value="Curriculum & Syllabus">Syllabus / Course Catalog</option>
-                                            <option value="Exam Logistics">Exam Hall & Question Bank</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Priority</label>
-                                        <select name="priority" class="form-control">
-                                            <option value="low">Standard</option>
-                                            <option value="medium" selected>Elevated</option>
-                                            <option value="high">Urgent (Classroom blocked)</option>
-                                        </select>
-                                    </div>
+                                <div class="form-group">
+                                    <label>Priority</label>
+                                    <select name="priority" class="form-control">
+                                        <option value="low">Standard Priority</option>
+                                        <option value="medium" selected>Elevated Priority</option>
+                                        <option value="high">Urgent (Classroom blocked)</option>
+                                    </select>
                                 </div>
                                 <div class="form-group">
                                     <label>Details & Requirements</label>
@@ -140,34 +166,51 @@ $tickets = $_SESSION['faculty_tickets'];
                     <!-- Ticket History -->
                     <div class="card">
                         <div class="card-header">
-                            <h3><i class="fas fa-ticket-alt"></i> Faculty Requests History</h3>
+                            <h3><i class="fas fa-ticket-alt"></i> Faculty Requests History (<?php echo count($tickets); ?>)</h3>
                         </div>
                         <div class="card-body">
                             <div style="display: flex; flex-direction: column; gap: 14px;">
-                                <?php foreach ($tickets as $t): 
-                                    $isResolved = ($t['status'] ?? '') === 'resolved';
-                                ?>
-                                    <div style="padding: 14px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-lg);">
-                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                                            <span style="font-size: 11.5px; font-weight: 700; color: var(--primary);"><?php echo htmlspecialchars($t['id']); ?></span>
-                                            <span class="badge badge-<?php echo $isResolved ? 'success' : 'warning'; ?>">
-                                                <?php echo ucfirst(str_replace('_', ' ', $t['status'])); ?>
-                                            </span>
-                                        </div>
-                                        <h4 style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">
-                                            <?php echo htmlspecialchars($t['subject']); ?>
-                                        </h4>
-                                        <?php if (!empty($t['response'])): ?>
-                                            <div style="font-size: 12px; color: var(--text-secondary); background: var(--bg-card); padding: 8px 12px; border-radius: var(--radius-sm); border-left: 3px solid var(--success); margin: 6px 0;">
-                                                <strong>Resolution Note:</strong> <?php echo htmlspecialchars($t['response']); ?>
-                                            </div>
-                                        <?php endif; ?>
-                                        <div style="font-size: 11.5px; color: var(--text-muted); display: flex; justify-content: space-between; margin-top: 6px;">
-                                            <span><?php echo htmlspecialchars($t['category']); ?></span>
-                                            <span><?php echo date('M d, Y', strtotime($t['created_at'])); ?></span>
-                                        </div>
+                                <?php if (empty($tickets)): ?>
+                                    <div style="text-align: center; padding: 24px; color: var(--text-muted);">
+                                        <i class="fas fa-ticket-alt" style="font-size: 28px; margin-bottom: 8px; display: block; opacity: 0.5;"></i>
+                                        No support requests logged yet.
                                     </div>
-                                <?php endforeach; ?>
+                                <?php else: ?>
+                                    <?php foreach ($tickets as $t): 
+                                        $isResolved = in_array(($t['status'] ?? ''), ['resolved', 'closed']);
+                                        $statusClass = $isResolved ? 'success' : (($t['status'] === 'in_progress') ? 'primary' : 'warning');
+                                        $prio = strtolower($t['priority'] ?? 'medium');
+                                        $prioClass = ($prio === 'high') ? 'danger' : (($prio === 'medium') ? 'warning' : 'info');
+                                    ?>
+                                        <div style="padding: 14px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-lg);">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                                <span style="font-size: 11.5px; font-weight: 700; color: var(--primary);">TKT-#<?php echo (int)$t['id']; ?></span>
+                                                <div style="display: flex; gap: 6px; align-items: center;">
+                                                    <span class="badge badge-<?php echo $prioClass; ?>"><?php echo ucfirst($prio); ?></span>
+                                                    <span class="badge badge-<?php echo $statusClass; ?>">
+                                                        <?php echo ucfirst(str_replace('_', ' ', $t['status'])); ?>
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <h4 style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;">
+                                                <?php echo htmlspecialchars($t['subject']); ?>
+                                            </h4>
+                                            <?php if (!empty($t['description'])): ?>
+                                                <p style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 8px; line-height: 1.5;">
+                                                    <?php echo nl2br(htmlspecialchars($t['description'])); ?>
+                                                </p>
+                                            <?php endif; ?>
+                                            <?php if (!empty($t['response'])): ?>
+                                                <div style="font-size: 12px; color: var(--text-secondary); background: var(--bg-card); padding: 8px 12px; border-radius: var(--radius-sm); border-left: 3px solid var(--success); margin: 6px 0;">
+                                                    <strong>Resolution Note:</strong> <?php echo htmlspecialchars($t['response']); ?>
+                                                </div>
+                                            <?php endif; ?>
+                                            <div style="font-size: 11.5px; color: var(--text-muted); display: flex; justify-content: flex-end; margin-top: 6px;">
+                                                <span><i class="fas fa-calendar-alt"></i> <?php echo date('M d, Y', strtotime($t['created_at'])); ?></span>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>

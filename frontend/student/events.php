@@ -7,11 +7,34 @@ require_once __DIR__ . '/../includes/helpers.php';
 
 requireRole('student');
 
+$userId = $_SESSION['user']['id'];
 $db = getDbConnection();
+$successMsg = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_event_id'])) {
+    $evId = (int)$_POST['register_event_id'];
+    if ($evId > 0 && $db) {
+        $regStmt = $db->prepare("INSERT IGNORE INTO event_registrations (event_id, user_id) VALUES (?, ?)");
+        if ($regStmt) {
+            $regStmt->bind_param("ii", $evId, $userId);
+            if ($regStmt->execute()) {
+                $successMsg = 'You have successfully registered for this event!';
+            }
+            $regStmt->close();
+        }
+    }
+}
+
 $events = [];
 if ($db) {
-    $res = $db->query("SELECT * FROM `events` ORDER BY `event_date` ASC");
-    if ($res) {
+    $stmt = $db->prepare("SELECT e.*, 
+                   (SELECT COUNT(*) FROM event_registrations er WHERE er.event_id = e.id AND er.user_id = ?) AS is_registered
+            FROM `events` e 
+            ORDER BY e.`event_date` ASC");
+    if ($stmt) {
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $res = $stmt->get_result();
         while ($row = $res->fetch_assoc()) {
             $timeStr = '';
             if (!empty($row['start_time'])) {
@@ -23,14 +46,16 @@ if ($db) {
                 $timeStr = 'Full Day';
             }
             $events[] = [
+                'id' => (int)$row['id'],
                 'title' => $row['title'],
                 'date' => $row['event_date'],
                 'time' => $timeStr,
                 'venue' => $row['venue'] ?? 'Campus Center',
                 'category' => $row['organized_by'] ?? 'Workshop',
-                'status' => 'open'
+                'is_registered' => (int)$row['is_registered'] > 0
             ];
         }
+        $stmt->close();
     }
 }
 ?>
@@ -66,6 +91,12 @@ if ($db) {
                     </div>
                 </div>
 
+                <?php if ($successMsg): ?>
+                    <div class="alert alert-success" style="background: rgba(34, 197, 94, 0.15); border: 1px solid var(--success); color: var(--success); padding: 12px 16px; border-radius: var(--radius-md); margin-bottom: 20px;">
+                        <i class="fas fa-check-circle"></i> <?php echo htmlspecialchars($successMsg); ?>
+                    </div>
+                <?php endif; ?>
+
                 <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px;">
                     <?php if (empty($events)): ?>
                         <div class="card" style="grid-column: 1 / -1; text-align: center; padding: 48px;">
@@ -74,9 +105,7 @@ if ($db) {
                             <p style="color: var(--text-muted); font-size: 14px;">Check back soon for new campus workshops, competitions, and guest lectures.</p>
                         </div>
                     <?php else: ?>
-                        <?php foreach ($events as $ev): 
-                            $isReg = ($ev['status'] ?? '') === 'registered';
-                        ?>
+                        <?php foreach ($events as $ev): ?>
                             <div class="card" style="margin-bottom: 0;">
                                 <div class="card-header">
                                     <span class="badge badge-purple"><?php echo htmlspecialchars($ev['category']); ?></span>
@@ -88,14 +117,17 @@ if ($db) {
                                         <div><i class="fas fa-clock" style="color: var(--primary); width: 18px;"></i> <?php echo htmlspecialchars($ev['time']); ?></div>
                                         <div><i class="fas fa-map-marker-alt" style="color: var(--danger); width: 18px;"></i> <?php echo htmlspecialchars($ev['venue']); ?></div>
                                     </div>
-                                    <?php if ($isReg): ?>
+                                    <?php if ($ev['is_registered']): ?>
                                         <button class="btn btn-secondary" style="width: 100%; justify-content: center;" disabled>
                                             <i class="fas fa-check-circle" style="color: var(--success);"></i> Registered
                                         </button>
                                     <?php else: ?>
-                                        <button class="btn btn-primary" style="width: 100%; justify-content: center;" onclick="showToast('Registered for event successfully!', 'success'); this.disabled=true; this.textContent='Registered';">
-                                            <i class="fas fa-ticket-alt"></i> Register Now
-                                        </button>
+                                        <form method="POST">
+                                            <input type="hidden" name="register_event_id" value="<?php echo (int)$ev['id']; ?>">
+                                            <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center;">
+                                                <i class="fas fa-ticket-alt"></i> Register Now
+                                            </button>
+                                        </form>
                                     <?php endif; ?>
                                 </div>
                             </div>

@@ -9,14 +9,79 @@ requireRole('faculty');
 
 $userId = $_SESSION['user']['id'];
 $successMsg = '';
+$errorMsg = '';
+$db = getDbConnection();
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $successMsg = 'Notice published successfully to enrolled student dashboards!';
+// Get faculty department
+$deptId = 1;
+if ($db) {
+    $deptStmt = $db->prepare("SELECT department_id FROM faculty_profiles WHERE user_id = ?");
+    if ($deptStmt) {
+        $deptStmt->bind_param("i", $userId);
+        $deptStmt->execute();
+        $deptRes = $deptStmt->get_result()->fetch_assoc();
+        if (!empty($deptRes['department_id'])) {
+            $deptId = (int)$deptRes['department_id'];
+        }
+        $deptStmt->close();
+    }
 }
 
-$notices = [
-    ['title' => 'Lab Session Rescheduled to Thursday', 'subject' => 'DBMS Practical Lab', 'date' => '2026-03-01', 'content' => 'Please note that this Monday lab session is rescheduled to Thursday 2:00 PM in Lab 3 due to university symposium.']
-];
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $title = sanitize($_POST['title'] ?? '');
+    $content = sanitize($_POST['content'] ?? '');
+    $targetRole = sanitize($_POST['target_role'] ?? 'STUDENT');
+    $priority = sanitize($_POST['priority'] ?? 'medium');
+
+    if (!empty($title) && !empty($content) && $db) {
+        $ins = $db->prepare("INSERT INTO notices (title, content, target_role, department_id, priority, posted_by, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())");
+        if ($ins) {
+            $ins->bind_param("sssisi", $title, $content, $targetRole, $deptId, $priority, $userId);
+            if ($ins->execute()) {
+                $successMsg = 'Notice published successfully to student and faculty portals!';
+            } else {
+                $errorMsg = 'Failed to publish notice: ' . $ins->error;
+            }
+            $ins->close();
+        }
+    } else {
+        $errorMsg = 'Please enter both title and announcement content.';
+    }
+}
+
+$notices = [];
+if ($db) {
+    $stmt = $db->prepare(
+        "SELECT n.id, n.title, n.content, n.target_role, n.priority, n.created_at,
+                d.name AS department_name,
+                CONCAT(u.first_name, ' ', u.last_name) AS author_name
+         FROM notices n
+         LEFT JOIN departments d ON n.department_id = d.id
+         LEFT JOIN users u ON n.posted_by = u.id
+         WHERE n.posted_by = ? OR n.target_role IN ('all', 'faculty', 'FACULTY', 'STUDENT')
+         ORDER BY n.created_at DESC"
+    );
+    if ($stmt) {
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $notices = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+    }
+    if (empty($notices)) {
+        $res = $db->query(
+            "SELECT n.id, n.title, n.content, n.target_role, n.priority, n.created_at,
+                    d.name AS department_name,
+                    CONCAT(u.first_name, ' ', u.last_name) AS author_name
+             FROM notices n
+             LEFT JOIN departments d ON n.department_id = d.id
+             LEFT JOIN users u ON n.posted_by = u.id
+             ORDER BY n.created_at DESC LIMIT 20"
+        );
+        if ($res) {
+            $notices = $res->fetch_all(MYSQLI_ASSOC);
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -57,20 +122,48 @@ $notices = [
                         <i class="fas fa-check-circle"></i> <?php echo htmlspecialchars($successMsg); ?>
                     </div>
                 <?php endif; ?>
+                <?php if (!empty($errorMsg)): ?>
+                    <div class="alert alert-danger" style="background: rgba(239, 68, 68, 0.15); border: 1px solid var(--danger); color: var(--danger); padding: 12px 16px; border-radius: var(--radius-md); margin-bottom: 20px;">
+                        <i class="fas fa-exclamation-circle"></i> <?php echo htmlspecialchars($errorMsg); ?>
+                    </div>
+                <?php endif; ?>
 
                 <div style="display: flex; flex-direction: column; gap: 16px;">
-                    <?php foreach ($notices as $not): ?>
-                        <div class="card" style="margin-bottom: 0;">
-                            <div class="card-header">
-                                <span class="badge badge-primary"><?php echo htmlspecialchars($not['subject']); ?></span>
-                                <span style="font-size: 12px; color: var(--text-muted);"><i class="fas fa-calendar"></i> <?php echo date('M d, Y', strtotime($not['date'])); ?></span>
-                            </div>
-                            <div class="card-body">
-                                <h3 style="font-size: 16px; margin-bottom: 8px; color: var(--text-primary);"><?php echo htmlspecialchars($not['title']); ?></h3>
-                                <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin: 0;"><?php echo nl2br(htmlspecialchars($not['content'])); ?></p>
+                    <?php if (empty($notices)): ?>
+                        <div class="card">
+                            <div class="card-body" style="text-align: center; padding: 32px; color: var(--text-muted);">
+                                <i class="fas fa-bullhorn" style="font-size: 32px; margin-bottom: 12px; display: block; opacity: 0.5;"></i>
+                                No active announcements posted yet. Click "Post New Notice" to create one.
                             </div>
                         </div>
-                    <?php endforeach; ?>
+                    <?php else: ?>
+                        <?php foreach ($notices as $not): 
+                            $prio = strtolower($not['priority'] ?? 'medium');
+                            $badgeClass = 'badge-primary';
+                            if ($prio === 'high') $badgeClass = 'badge-danger';
+                            elseif ($prio === 'medium') $badgeClass = 'badge-warning';
+                            elseif ($prio === 'low') $badgeClass = 'badge-secondary';
+                        ?>
+                            <div class="card" style="margin-bottom: 0;">
+                                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div style="display: flex; gap: 8px; align-items: center;">
+                                        <span class="badge <?php echo $badgeClass; ?>"><i class="fas fa-flag"></i> <?php echo ucfirst($prio); ?> Priority</span>
+                                        <span class="badge badge-secondary"><i class="fas fa-users"></i> <?php echo ucfirst(strtolower($not['target_role'])); ?></span>
+                                    </div>
+                                    <span style="font-size: 12px; color: var(--text-muted);"><i class="fas fa-calendar"></i> <?php echo date('M d, Y', strtotime($not['created_at'])); ?></span>
+                                </div>
+                                <div class="card-body">
+                                    <h3 style="font-size: 16px; margin-bottom: 8px; color: var(--text-primary);"><?php echo htmlspecialchars($not['title']); ?></h3>
+                                    <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin: 0;"><?php echo nl2br(htmlspecialchars($not['content'])); ?></p>
+                                    <?php if (!empty($not['author_name'])): ?>
+                                        <div style="margin-top: 10px; font-size: 12px; color: var(--text-muted);">
+                                            <i class="fas fa-user-circle"></i> Posted by <strong><?php echo htmlspecialchars($not['author_name']); ?></strong>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 </div>
             </div>
             <?php include_once __DIR__ . '/../components/footer.php'; ?>
@@ -90,13 +183,23 @@ $notices = [
                         <label for="noticeTitle">Announcement Title</label>
                         <input type="text" name="title" id="noticeTitle" class="form-control" placeholder="e.g. Extra Doubt Clearing Session on Saturday" required>
                     </div>
-                    <div class="form-group">
-                        <label for="noticeSub">Target Course</label>
-                        <select name="subject" id="noticeSub" class="form-control">
-                            <option value="Database Management Systems">Database Management Systems</option>
-                            <option value="Advanced Database Systems">Advanced Database Systems</option>
-                            <option value="All Assigned Classes">All My Assigned Classes</option>
-                        </select>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                        <div class="form-group">
+                            <label for="noticeTarget">Target Audience</label>
+                            <select name="target_role" id="noticeTarget" class="form-control">
+                                <option value="STUDENT">Enrolled Students</option>
+                                <option value="FACULTY">Faculty Colleagues</option>
+                                <option value="all">All Campus</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="noticePrio">Priority</label>
+                            <select name="priority" id="noticePrio" class="form-control">
+                                <option value="medium">Medium Priority</option>
+                                <option value="high">High Priority</option>
+                                <option value="low">Low Priority</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="noticeMsg">Notice Content</label>

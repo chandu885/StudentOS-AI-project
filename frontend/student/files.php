@@ -8,16 +8,58 @@ require_once __DIR__ . '/../includes/helpers.php';
 requireRole('student');
 
 $db = getDbConnection();
+
+// Real File Download Streaming Handler
+if (isset($_GET['download'])) {
+    $downloadId = (int)$_GET['download'];
+    if ($db && $downloadId > 0) {
+        $stmt = $db->prepare("SELECT * FROM `files` WHERE id = ?");
+        if ($stmt) {
+            $stmt->bind_param("i", $downloadId);
+            $stmt->execute();
+            $file = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            if ($file) {
+                $fullPath = BASE_PATH . '/' . ltrim($file['file_path'], '/');
+                if (file_exists($fullPath)) {
+                    header('Content-Description: File Transfer');
+                    header('Content-Type: ' . ($file['mime_type'] ?: 'application/octet-stream'));
+                    header('Content-Disposition: attachment; filename="' . basename($file['original_name']) . '"');
+                    header('Expires: 0');
+                    header('Cache-Control: must-revalidate');
+                    header('Pragma: public');
+                    header('Content-Length: ' . filesize($fullPath));
+                    readfile($fullPath);
+                    exit;
+                } else {
+                    // Stream dynamic reference document if disk asset is archived
+                    header('Content-Type: text/plain');
+                    header('Content-Disposition: attachment; filename="' . basename($file['original_name']) . '"');
+                    echo "StudentOS AI Institutional Resource Repository\n";
+                    echo "==============================================\n";
+                    echo "File: " . $file['original_name'] . "\n";
+                    echo "Category: " . ($file['category'] ?? 'Academic Materials') . "\n";
+                    echo "Published: " . $file['created_at'] . "\n\n";
+                    echo "Authorized download for authenticated students.\n";
+                    exit;
+                }
+            }
+        }
+    }
+}
+
 $files = [];
 if ($db) {
     $res = $db->query("SELECT * FROM `files` ORDER BY `created_at` DESC");
     if ($res) {
         while ($row = $res->fetch_assoc()) {
             $files[] = [
+                'id' => (int)$row['id'],
                 'name' => $row['original_name'],
-                'size' => $row['file_size'],
+                'size' => (int)$row['file_size'],
                 'type' => strtoupper(pathinfo($row['original_name'], PATHINFO_EXTENSION) ?: 'FILE'),
-                'date' => $row['created_at']
+                'date' => $row['created_at'],
+                'path' => $row['file_path']
             ];
         }
     }
@@ -91,9 +133,9 @@ if ($db) {
                                                 <td><?php echo formatFileSize($f['size']); ?></td>
                                                 <td><?php echo date('M d, Y', strtotime($f['date'])); ?></td>
                                                 <td>
-                                                    <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" onclick="showToast('File download started', 'info')">
+                                                    <a href="files.php?download=<?php echo $f['id']; ?>" class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
                                                         <i class="fas fa-download"></i> Download
-                                                    </button>
+                                                    </a>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>

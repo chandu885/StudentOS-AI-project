@@ -8,15 +8,48 @@ require_once __DIR__ . '/../includes/helpers.php';
 requireRole('admin');
 
 $userId = $_SESSION['user']['id'];
-$adminRes = apiCall('/admin.php?path=dashboard', 'GET');
-$adminData = $adminRes['dashboard'] ?? $adminRes ?? [];
+$db = getDbConnection();
 
-$recentStudents = [
-    ['roll' => 'CS-2023-01', 'name' => 'Alex Morgan', 'dept' => 'Computer Science', 'sem' => 'Semester 6', 'status' => 'Active'],
-    ['roll' => 'CS-2023-02', 'name' => 'Brian Clark', 'dept' => 'Computer Science', 'sem' => 'Semester 6', 'status' => 'Active'],
-    ['roll' => 'EC-2023-14', 'name' => 'Diana Prince', 'dept' => 'Electronics', 'sem' => 'Semester 4', 'status' => 'Active'],
-    ['roll' => 'ME-2023-09', 'name' => 'Ethan Hunt', 'dept' => 'Mechanical', 'sem' => 'Semester 6', 'status' => 'Active']
-];
+$totalStudents = 0;
+$totalFaculty = 0;
+$totalDepts = 0;
+$totalCourses = 0;
+$recentStudents = [];
+
+if ($db) {
+    // Total Students
+    $r = $db->query("SELECT COUNT(*) AS cnt FROM users WHERE role_id = 4 AND deleted_at IS NULL");
+    if ($r) $totalStudents = (int)$r->fetch_assoc()['cnt'];
+
+    // Total Faculty
+    $r = $db->query("SELECT COUNT(*) AS cnt FROM users WHERE role_id = 3 AND deleted_at IS NULL");
+    if ($r) $totalFaculty = (int)$r->fetch_assoc()['cnt'];
+
+    // Total Departments
+    $r = $db->query("SELECT COUNT(*) AS cnt FROM departments WHERE status = 'active'");
+    if ($r) $totalDepts = (int)$r->fetch_assoc()['cnt'];
+
+    // Total Courses
+    $r = $db->query("SELECT COUNT(*) AS cnt FROM courses WHERE status = 'active'");
+    if ($r) $totalCourses = (int)$r->fetch_assoc()['cnt'];
+
+    // Recent Students
+    $res = $db->query(
+        "SELECT u.id, CONCAT(u.first_name, ' ', u.last_name) AS name, IF(u.is_active = 1, 'active', 'inactive') AS status, u.created_at,
+                COALESCE(sp.student_id, sp.roll_number, CONCAT('STU-', u.id)) AS roll,
+                COALESCE(d.name, 'General Academics') AS dept,
+                COALESCE(CONCAT('Semester ', sp.semester), 'Semester 1') AS sem
+         FROM users u
+         LEFT JOIN student_profiles sp ON sp.user_id = u.id
+         LEFT JOIN departments d ON sp.department_id = d.id
+         WHERE u.role_id = 4 AND u.deleted_at IS NULL
+         ORDER BY u.id DESC
+         LIMIT 8"
+    );
+    if ($res) {
+        $recentStudents = $res->fetch_all(MYSQLI_ASSOC);
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -51,28 +84,28 @@ $recentStudents = [
                     <div class="stat-card">
                         <div class="stat-icon"><i class="fas fa-user-graduate"></i></div>
                         <div class="stat-content">
-                            <span class="stat-number">1,248</span>
+                            <span class="stat-number"><?php echo number_format($totalStudents); ?></span>
                             <span class="stat-label">Total Enrolled Students</span>
                         </div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-icon" style="color: var(--ai-accent);"><i class="fas fa-chalkboard-teacher"></i></div>
                         <div class="stat-content">
-                            <span class="stat-number">84</span>
+                            <span class="stat-number"><?php echo number_format($totalFaculty); ?></span>
                             <span class="stat-label">Faculty Members</span>
                         </div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-icon" style="color: var(--info);"><i class="fas fa-building"></i></div>
                         <div class="stat-content">
-                            <span class="stat-number">6</span>
+                            <span class="stat-number"><?php echo number_format($totalDepts); ?></span>
                             <span class="stat-label">Departments</span>
                         </div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-icon" style="color: var(--success);"><i class="fas fa-graduation-cap"></i></div>
                         <div class="stat-content">
-                            <span class="stat-number">14</span>
+                            <span class="stat-number"><?php echo number_format($totalCourses); ?></span>
                             <span class="stat-label">Degree Programs</span>
                         </div>
                     </div>
@@ -96,15 +129,26 @@ $recentStudents = [
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ($recentStudents as $stu): ?>
+                                    <?php if (empty($recentStudents)): ?>
                                         <tr>
-                                            <td><span class="badge badge-secondary"><?php echo htmlspecialchars($stu['roll']); ?></span></td>
-                                            <td><strong><?php echo htmlspecialchars($stu['name']); ?></strong></td>
-                                            <td><?php echo htmlspecialchars($stu['dept']); ?></td>
-                                            <td><?php echo htmlspecialchars($stu['sem']); ?></td>
-                                            <td><span class="badge badge-success"><?php echo htmlspecialchars($stu['status']); ?></span></td>
+                                            <td colspan="5" style="text-align: center; padding: 24px; color: var(--text-muted);">
+                                                <i class="fas fa-users"></i> No registered students found.
+                                            </td>
                                         </tr>
-                                    <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <?php foreach ($recentStudents as $stu): 
+                                            $st = strtolower($stu['status'] ?? 'active');
+                                            $stBadge = ($st === 'active') ? 'badge-success' : 'badge-secondary';
+                                        ?>
+                                            <tr>
+                                                <td><span class="badge badge-secondary"><?php echo htmlspecialchars($stu['roll']); ?></span></td>
+                                                <td><strong><?php echo htmlspecialchars($stu['name']); ?></strong></td>
+                                                <td><?php echo htmlspecialchars($stu['dept']); ?></td>
+                                                <td><?php echo htmlspecialchars($stu['sem']); ?></td>
+                                                <td><span class="badge <?php echo $stBadge; ?>"><?php echo ucfirst($st); ?></span></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
                                 </tbody>
                             </table>
                         </div>

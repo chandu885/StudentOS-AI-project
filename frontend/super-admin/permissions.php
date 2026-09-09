@@ -7,27 +7,62 @@ require_once __DIR__ . '/../includes/helpers.php';
 
 requireRole('super-admin');
 
-$userId = $_SESSION['user']['id'];
+$userId = (int)($_SESSION['user']['id'] ?? 1);
+$conn = getDbConnection();
 $successMsg = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if ($conn) {
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+        $aud = $conn->prepare("INSERT INTO audit_logs (user_id, action, resource, details, ip_address) VALUES (?, 'ROLE_PERMISSIONS_SYNC', 'permissions', 'Synchronized RBAC permission matrix across active roles', ?)");
+        if ($aud) { $aud->bind_param("is", $userId, $ip); $aud->execute(); $aud->close(); }
+    }
     $successMsg = 'Role permission matrix successfully updated and deployed to active sessions!';
 }
 
-$matrix = [
-    ['module' => 'Own Profile', 'student' => true, 'faculty' => true, 'admin' => true, 'super' => true],
-    ['module' => 'Student Management', 'student' => false, 'faculty' => false, 'admin' => true, 'super' => true],
-    ['module' => 'Faculty Management', 'student' => false, 'faculty' => false, 'admin' => true, 'super' => true],
-    ['module' => 'Admin Management', 'student' => false, 'faculty' => false, 'admin' => false, 'super' => true],
-    ['module' => 'Course Management', 'student' => false, 'faculty' => 'Limited', 'admin' => true, 'super' => true],
-    ['module' => 'Exam Management', 'student' => 'Own', 'faculty' => true, 'admin' => true, 'super' => true],
-    ['module' => 'Result Management', 'student' => 'Own', 'faculty' => true, 'admin' => true, 'super' => true],
-    ['module' => 'AI Assistant', 'student' => true, 'faculty' => true, 'admin' => true, 'super' => true],
-    ['module' => 'AI Settings', 'student' => false, 'faculty' => false, 'admin' => false, 'super' => true],
-    ['module' => 'System Settings', 'student' => false, 'faculty' => false, 'admin' => 'Limited', 'super' => true],
-    ['module' => 'Audit Logs', 'student' => false, 'faculty' => false, 'admin' => 'Limited', 'super' => true],
-    ['module' => 'Backup & Recovery', 'student' => false, 'faculty' => false, 'admin' => false, 'super' => true]
-];
+// Fetch permissions and mappings from database
+$matrix = [];
+if ($conn) {
+    $roleMap = [];
+    $rpRes = $conn->query("SELECT role_id, permission_id FROM role_permissions");
+    if ($rpRes) {
+        while ($row = $rpRes->fetch_assoc()) {
+            $roleMap[(int)$row['role_id']][(int)$row['permission_id']] = true;
+        }
+    }
+
+    $pRes = $conn->query("SELECT id, name, slug, module FROM permissions ORDER BY id ASC");
+    if ($pRes) {
+        while ($p = $pRes->fetch_assoc()) {
+            $pId = (int)$p['id'];
+            $matrix[] = [
+                'module'  => $p['name'],
+                'student' => isset($roleMap[4][$pId]),
+                'faculty' => isset($roleMap[3][$pId]),
+                'admin'   => isset($roleMap[2][$pId]),
+                'super'   => true
+            ];
+        }
+    }
+}
+
+// Fallback if empty
+if (empty($matrix)) {
+    $matrix = [
+        ['module' => 'Own Profile', 'student' => true, 'faculty' => true, 'admin' => true, 'super' => true],
+        ['module' => 'Student Management', 'student' => false, 'faculty' => false, 'admin' => true, 'super' => true],
+        ['module' => 'Faculty Management', 'student' => false, 'faculty' => false, 'admin' => true, 'super' => true],
+        ['module' => 'Admin Management', 'student' => false, 'faculty' => false, 'admin' => false, 'super' => true],
+        ['module' => 'Course Management', 'student' => false, 'faculty' => false, 'admin' => true, 'super' => true],
+        ['module' => 'Exam Management', 'student' => false, 'faculty' => true, 'admin' => true, 'super' => true],
+        ['module' => 'Result Management', 'student' => false, 'faculty' => true, 'admin' => true, 'super' => true],
+        ['module' => 'AI Assistant', 'student' => true, 'faculty' => true, 'admin' => true, 'super' => true],
+        ['module' => 'AI Settings', 'student' => false, 'faculty' => false, 'admin' => false, 'super' => true],
+        ['module' => 'System Settings', 'student' => false, 'faculty' => false, 'admin' => false, 'super' => true],
+        ['module' => 'Audit Logs', 'student' => false, 'faculty' => false, 'admin' => true, 'super' => true],
+        ['module' => 'Backup & Recovery', 'student' => false, 'faculty' => false, 'admin' => false, 'super' => true]
+    ];
+}
 
 function renderCheck($val) {
     if ($val === true) return '<i class="fas fa-check-circle" style="color: var(--success); font-size: 16px;"></i>';

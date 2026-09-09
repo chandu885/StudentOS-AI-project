@@ -101,52 +101,68 @@ if ($db && $userId > 0) {
                     <div class="stat-card">
                         <div class="stat-icon"><i class="fas fa-chart-pie"></i></div>
                         <div class="stat-content">
-                            <span class="stat-number">86%</span>
+                            <span class="stat-number">
+                                <?php 
+                                $avgAtt = 0;
+                                if (!empty($subjects)) {
+                                    $sum = array_sum(array_column($subjects, 'attendance_pct'));
+                                    $avgAtt = round($sum / count($subjects), 1);
+                                }
+                                echo $avgAtt; ?>%
+                            </span>
                             <span class="stat-label">Avg Attendance</span>
                         </div>
                     </div>
                 </div>
 
                 <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px;">
-                    <?php foreach ($subjects as $subj): 
-                        $pct = $subj['attendance_pct'] ?? 85;
-                        $pctClass = $pct >= 85 ? 'success' : ($pct >= 75 ? 'warning' : 'danger');
-                    ?>
-                        <div class="card" style="margin-bottom: 0;">
-                            <div class="card-header">
-                                <span class="badge badge-primary"><?php echo htmlspecialchars($subj['code'] ?? 'CS'); ?></span>
-                                <span style="font-size: 12px; color: var(--text-muted);"><?php echo htmlspecialchars($subj['credits'] ?? 3); ?> Credits</span>
-                            </div>
-                            <div class="card-body">
-                                <h3 style="font-size: 16px; margin-bottom: 8px; color: var(--text-primary);"><?php echo htmlspecialchars($subj['name']); ?></h3>
-                                <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
-                                    <i class="fas fa-chalkboard-teacher"></i> <?php echo htmlspecialchars($subj['faculty_name'] ?? 'Faculty Assigned'); ?>
-                                </p>
-
-                                <div style="margin-bottom: 16px;">
-                                    <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
-                                        <span style="color: var(--text-muted);">Attendance</span>
-                                        <span style="font-weight: 600; color: var(--<?php echo $pctClass; ?>);"><?php echo $pct; ?>%</span>
-                                    </div>
-                                    <div class="attendance-bar">
-                                        <div class="attendance-fill <?php echo $pctClass; ?>" style="width: <?php echo $pct; ?>%"></div>
-                                    </div>
-                                </div>
-
-                                <div style="display: flex; gap: 8px; border-top: 1px solid var(--border-color); padding-top: 14px;">
-                                    <a href="notes.php?subject_id=<?php echo $subj['id']; ?>" class="btn btn-secondary" style="flex: 1; justify-content: center; font-size: 12px; padding: 6px 12px;">
-                                        <i class="fas fa-sticky-note"></i> Notes
-                                    </a>
-                                    <a href="assignments.php?subject_id=<?php echo $subj['id']; ?>" class="btn btn-secondary" style="flex: 1; justify-content: center; font-size: 12px; padding: 6px 12px;">
-                                        <i class="fas fa-tasks"></i> Tasks
-                                    </a>
-                                    <a href="ai-assistant.php?subject=<?php echo urlencode($subj['name']); ?>" class="btn btn-outline" style="padding: 6px 12px; font-size: 12px;" title="Ask AI about this subject">
-                                        <i class="fas fa-robot"></i>
-                                    </a>
-                                </div>
-                            </div>
+                    <?php if (empty($subjects)): ?>
+                        <div class="card" style="grid-column: 1 / -1; text-align: center; padding: 48px; color: var(--text-muted);">
+                            <i class="fas fa-book-open" style="font-size: 36px; margin-bottom: 12px; display: block;"></i>
+                            <strong style="color: var(--text-primary); font-size: 16px;">No Subjects Enrolled</strong>
+                            <p style="font-size: 13px; margin-top: 6px;">Your academic coordinator will register your courses for the active semester.</p>
                         </div>
-                    <?php endforeach; ?>
+                    <?php else: ?>
+                        <?php foreach ($subjects as $subj): 
+                            $pct = $subj['attendance_pct'] ?? 85;
+                            $pctClass = $pct >= 85 ? 'success' : ($pct >= 75 ? 'warning' : 'danger');
+                        ?>
+                            <div class="card" style="margin-bottom: 0;">
+                                <div class="card-header">
+                                    <span class="badge badge-primary"><?php echo htmlspecialchars($subj['code'] ?? 'CS'); ?></span>
+                                    <span style="font-size: 12px; color: var(--text-muted);"><?php echo htmlspecialchars($subj['credits'] ?? 3); ?> Credits</span>
+                                </div>
+                                <div class="card-body">
+                                    <h3 style="font-size: 16px; margin-bottom: 8px; color: var(--text-primary);"><?php echo htmlspecialchars($subj['name']); ?></h3>
+                                    <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+                                        <i class="fas fa-chalkboard-teacher"></i> <?php echo htmlspecialchars($subj['faculty_name'] ?? 'Faculty Assigned'); ?>
+                                    </p>
+
+                                    <div style="margin-bottom: 16px;">
+                                        <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
+                                            <span style="color: var(--text-muted);">Attendance</span>
+                                            <span style="font-weight: 600; color: var(--<?php echo $pctClass; ?>);"><?php echo $pct; ?>%</span>
+                                        </div>
+                                        <div class="attendance-bar">
+                                            <div class="attendance-fill <?php echo $pctClass; ?>" style="width: <?php echo $pct; ?>%"></div>
+                                        </div>
+                                    </div>
+
+                                    <div style="display: flex; gap: 8px; border-top: 1px solid var(--border-color); padding-top: 14px;">
+                                        <a href="notes.php?subject_id=<?php echo $subj['id']; ?>" class="btn btn-secondary" style="flex: 1; justify-content: center; font-size: 12px; padding: 6px 12px;">
+                                            <i class="fas fa-sticky-note"></i> Notes
+                                        </a>
+                                        <a href="assignments.php?subject_id=<?php echo $subj['id']; ?>" class="btn btn-secondary" style="flex: 1; justify-content: center; font-size: 12px; padding: 6px 12px;">
+                                            <i class="fas fa-tasks"></i> Tasks
+                                        </a>
+                                        <a href="ai-assistant.php?subject=<?php echo urlencode($subj['name']); ?>" class="btn btn-outline" style="padding: 6px 12px; font-size: 12px;" title="Ask AI about this subject">
+                                            <i class="fas fa-robot"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 </div>
             </div>
             <?php include_once __DIR__ . '/../components/footer.php'; ?>

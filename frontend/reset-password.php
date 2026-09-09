@@ -14,6 +14,10 @@ $message = '';
 $error = '';
 $isResetSuccess = false;
 
+if (empty($token) && $_SERVER['REQUEST_METHOD'] === 'GET') {
+    $error = 'Password reset token is missing. Please request a new reset link.';
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = $_POST['password'] ?? '';
     $confirmPassword = $_POST['confirm_password'] ?? '';
@@ -34,7 +38,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $isResetSuccess = true;
             $message = 'Password has been reset successfully! You can now log in.';
         } else {
-            $error = $res['error'] ?? 'Failed to reset password. The link may have expired.';
+            // Direct database fallback
+            $db = getDbConnection();
+            $handled = false;
+            if ($db) {
+                $tokenHash = hash('sha256', $token);
+                $rStmt = $db->prepare("SELECT id, user_id FROM password_reset_tokens WHERE (token_hash = ? OR token_hash = ?) AND expires_at > NOW() ORDER BY id DESC LIMIT 1");
+                if ($rStmt) {
+                    $rStmt->bind_param("ss", $tokenHash, $token);
+                    $rStmt->execute();
+                    $tRow = $rStmt->get_result()->fetch_assoc();
+                    $rStmt->close();
+
+                    if ($tRow) {
+                        $newHash = password_hash($password, PASSWORD_BCRYPT);
+                        $uStmt = $db->prepare("UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?");
+                        if ($uStmt) {
+                            $uStmt->bind_param("si", $newHash, $tRow['user_id']);
+                            $uStmt->execute();
+                            $uStmt->close();
+
+                            // Invalidate tokens
+                            $dStmt = $db->prepare("DELETE FROM password_reset_tokens WHERE user_id = ?");
+                            if ($dStmt) {
+                                $dStmt->bind_param("i", $tRow['user_id']);
+                                $dStmt->execute();
+                                $dStmt->close();
+                            }
+
+                            $isResetSuccess = true;
+                            $message = 'Password has been reset successfully! You can now log in.';
+                            $handled = true;
+                        }
+                    }
+                }
+            }
+
+            if (!$handled) {
+                $error = $res['error'] ?? 'Failed to reset password. The link may have expired or is invalid.';
+            }
         }
     }
 }

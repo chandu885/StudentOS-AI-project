@@ -8,100 +8,90 @@ require_once __DIR__ . '/../includes/helpers.php';
 requireRole('super_admin');
 
 $userId = (int)($_SESSION['user']['id'] ?? 1);
+$conn = getDbConnection();
 $successMsg = '';
 $errorMsg = '';
 
 // Seed initial super admin operations tasks if not already initialized
-if (!isset($_SESSION['super_admin_tasks'])) {
-    $_SESSION['super_admin_tasks'] = [
-        [
-            'id' => 301,
-            'title' => 'Rotate JWT Secret Keys & Invalidate Stale Sessions',
-            'category' => 'Security',
-            'priority' => 'critical',
-            'due_date' => date('Y-m-d', strtotime('+1 day')),
-            'status' => 'pending',
-            'description' => 'Enforce periodic 30-day credential refresh across all active institutional devices.'
-        ],
-        [
-            'id' => 302,
-            'title' => 'Trigger Comprehensive Cold-Storage MySQL Backup',
-            'category' => 'Database',
-            'priority' => 'high',
-            'due_date' => date('Y-m-d', strtotime('+2 days')),
-            'status' => 'pending',
-            'description' => 'Generate encrypted SQL dump of users, grades, and audit_logs tables to off-site storage.'
-        ],
-        [
-            'id' => 303,
-            'title' => 'Audit Failed Login Attempts & Block Suspicious IP Subnets',
-            'category' => 'Security',
-            'priority' => 'high',
-            'due_date' => date('Y-m-d', strtotime('+3 days')),
-            'status' => 'completed',
-            'description' => 'Review login_logs for brute-force patterns exceeding threshold of 5 failed attempts.'
-        ],
-        [
-            'id' => 304,
-            'title' => 'Re-index FAISS Vector Store for Academic Syllabi',
-            'category' => 'AI Engine',
-            'priority' => 'medium',
-            'due_date' => date('Y-m-d', strtotime('+5 days')),
-            'status' => 'pending',
-            'description' => 'Recompute 768-dimensional text embeddings for new syllabus PDFs uploaded by faculty.'
-        ],
-        [
-            'id' => 305,
-            'title' => 'Purge Expired Password Reset Tokens & Temp Uploads',
-            'category' => 'Maintenance',
-            'priority' => 'low',
-            'due_date' => date('Y-m-d', strtotime('+7 days')),
-            'status' => 'completed',
-            'description' => 'Delete temporary artifacts older than 48 hours from storage/uploads/temp directory.'
-        ]
-    ];
+if ($conn) {
+    $chkStmt = $conn->prepare("SELECT COUNT(*) AS cnt FROM tasks WHERE user_id = ? OR category IN ('Security', 'Database', 'AI Engine', 'Maintenance', 'system')");
+    if ($chkStmt) {
+        $chkStmt->bind_param("i", $userId);
+        $chkStmt->execute();
+        $hasTasks = (int)$chkStmt->get_result()->fetch_assoc()['cnt'];
+        $chkStmt->close();
+
+        if ($hasTasks === 0) {
+            $seedStmt = $conn->prepare("INSERT INTO tasks (user_id, title, description, priority, status, category, deadline, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())");
+            if ($seedStmt) {
+                $seeds = [
+                    ['Rotate JWT Secret Keys & Invalidate Stale Sessions', 'Enforce periodic 30-day credential refresh across all active institutional devices.', 'urgent', 'todo', 'Security', date('Y-m-d 23:59:59', strtotime('+1 day'))],
+                    ['Trigger Comprehensive Cold-Storage MySQL Backup', 'Generate encrypted SQL dump of users, grades, and audit_logs tables to off-site storage.', 'high', 'todo', 'Database', date('Y-m-d 23:59:59', strtotime('+2 days'))],
+                    ['Audit Failed Login Attempts & Block Suspicious IP Subnets', 'Review login_logs for brute-force patterns exceeding threshold of 5 failed attempts.', 'high', 'completed', 'Security', date('Y-m-d 23:59:59', strtotime('+3 days'))],
+                    ['Re-index FAISS Vector Store for Academic Syllabi', 'Recompute 768-dimensional text embeddings for new syllabus PDFs uploaded by faculty.', 'medium', 'todo', 'AI Engine', date('Y-m-d 23:59:59', strtotime('+5 days'))],
+                    ['Purge Expired Password Reset Tokens & Temp Uploads', 'Delete temporary artifacts older than 48 hours from storage/uploads/temp directory.', 'low', 'completed', 'Maintenance', date('Y-m-d 23:59:59', strtotime('+7 days'))]
+                ];
+                foreach ($seeds as $s) {
+                    $seedStmt->bind_param("issssss", $userId, $s[0], $s[1], $s[2], $s[3], $s[4], $s[5]);
+                    $seedStmt->execute();
+                }
+                $seedStmt->close();
+            }
+        }
+    }
 }
 
 // Handle Form Submissions & Quick Operational Actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
-    $conn = getDbConnection();
 
     if ($action === 'create_task') {
         $title = sanitize($_POST['title'] ?? '');
         $category = sanitize($_POST['category'] ?? 'Security');
-        $priority = sanitize($_POST['priority'] ?? 'medium');
-        $dueDate = sanitize($_POST['due_date'] ?? date('Y-m-d'));
+        $priorityRaw = strtolower(sanitize($_POST['priority'] ?? 'medium'));
+        $priority = ($priorityRaw === 'critical') ? 'urgent' : (in_array($priorityRaw, ['low', 'medium', 'high', 'urgent']) ? $priorityRaw : 'medium');
+        $dueDateRaw = sanitize($_POST['due_date'] ?? date('Y-m-d'));
+        $deadline = date('Y-m-d 23:59:59', strtotime($dueDateRaw));
         $description = sanitize($_POST['description'] ?? '');
 
-        if (!empty($title)) {
-            array_unshift($_SESSION['super_admin_tasks'], [
-                'id' => time(),
-                'title' => $title,
-                'category' => $category,
-                'priority' => $priority,
-                'due_date' => $dueDate,
-                'status' => 'pending',
-                'description' => $description
-            ]);
-            $successMsg = 'Super Admin system task registered successfully!';
+        if (!empty($title) && $conn) {
+            $stmt = $conn->prepare("INSERT INTO tasks (user_id, title, description, priority, status, category, deadline, created_at, updated_at) VALUES (?, ?, ?, ?, 'todo', ?, ?, NOW(), NOW())");
+            if ($stmt) {
+                $stmt->bind_param("isssss", $userId, $title, $description, $priority, $category, $deadline);
+                if ($stmt->execute()) {
+                    $successMsg = 'Super Admin system task registered successfully!';
+                } else {
+                    $errorMsg = 'Failed to register task: ' . $stmt->error;
+                }
+                $stmt->close();
+            }
         } else {
             $errorMsg = 'Task title cannot be empty.';
         }
     } elseif ($action === 'toggle_status') {
         $taskId = (int)($_POST['task_id'] ?? 0);
-        $newStatus = sanitize($_POST['status'] ?? 'completed');
-        foreach ($_SESSION['super_admin_tasks'] as &$t) {
-            if ($t['id'] === $taskId) {
-                $t['status'] = $newStatus;
-                break;
+        $reqStatus = sanitize($_POST['status'] ?? 'completed');
+        $newStatus = ($reqStatus === 'completed') ? 'completed' : 'todo';
+        if ($conn && $taskId > 0) {
+            $stmt = $conn->prepare("UPDATE tasks SET status = ?, updated_at = NOW() WHERE id = ?");
+            if ($stmt) {
+                $stmt->bind_param("si", $newStatus, $taskId);
+                $stmt->execute();
+                $stmt->close();
+                $successMsg = 'Task execution status updated.';
             }
         }
-        $successMsg = 'Task execution status updated.';
     } elseif ($action === 'delete_task') {
         $taskId = (int)($_POST['task_id'] ?? 0);
-        $_SESSION['super_admin_tasks'] = array_values(array_filter($_SESSION['super_admin_tasks'], fn($t) => $t['id'] !== $taskId));
-        $successMsg = 'Task deleted from schedule.';
+        if ($conn && $taskId > 0) {
+            $stmt = $conn->prepare("DELETE FROM tasks WHERE id = ?");
+            if ($stmt) {
+                $stmt->bind_param("i", $taskId);
+                $stmt->execute();
+                $stmt->close();
+                $successMsg = 'Task deleted from schedule.';
+            }
+        }
     } elseif ($action === 'run_option_routine') {
         $routine = $_POST['routine'] ?? '';
         $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
@@ -110,34 +100,81 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (function_exists('opcache_reset')) { @opcache_reset(); }
             $details = 'Root administrator flushed system opcode & metadata caches';
             if ($conn) {
-                $conn->query("INSERT INTO audit_logs (user_id, action, resource, details, ip_address) VALUES ($userId, 'SYSTEM_CACHE_FLUSH', 'system', '$details', '$ip')");
+                $aud = $conn->prepare("INSERT INTO audit_logs (user_id, action, resource, details, ip_address) VALUES (?, 'SYSTEM_CACHE_FLUSH', 'system', ?, ?)");
+                if ($aud) { $aud->bind_param("iss", $userId, $details, $ip); $aud->execute(); $aud->close(); }
             }
             $successMsg = 'System cache and compiled opcode memory flushed successfully!';
         } elseif ($routine === 'trigger_backup') {
             $backupFile = 'backup_snapshot_' . date('Ymd_His') . '.sql';
-            $details = "Snapshot dump generated: $backupFile (Storage path: storage/backups/)";
+            $backupDir = BASE_PATH . '/storage/backups';
+            if (!is_dir($backupDir)) { @mkdir($backupDir, 0777, true); }
+            $backupPath = $backupDir . '/' . $backupFile;
+
+            $dumpContent = "-- StudentOS AI Backup Snapshot\n-- Generated: " . date('Y-m-d H:i:s') . "\n-- Server: MySQL\n\n";
+            $tablesToBackup = ['system_settings', 'roles', 'permissions', 'departments', 'courses', 'subjects', 'users'];
             if ($conn) {
-                $conn->query("INSERT INTO audit_logs (user_id, action, resource, details, ip_address) VALUES ($userId, 'DATABASE_BACKUP_INITIATED', 'database', '$details', '$ip')");
+                foreach ($tablesToBackup as $tbl) {
+                    $dumpContent .= "-- Table: $tbl\n";
+                    $cRes = $conn->query("SHOW CREATE TABLE `$tbl`");
+                    if ($cRes && $cRow = $cRes->fetch_row()) {
+                        $dumpContent .= $cRow[1] . ";\n\n";
+                    }
+                    $dRes = $conn->query("SELECT * FROM `$tbl` LIMIT 100");
+                    if ($dRes && $dRes->num_rows > 0) {
+                        while ($r = $dRes->fetch_assoc()) {
+                            $keys = array_map(fn($k) => "`$k`", array_keys($r));
+                            $vals = array_map(fn($v) => $v === null ? "NULL" : "'" . $conn->real_escape_string($v) . "'", array_values($r));
+                            $dumpContent .= "INSERT INTO `$tbl` (" . implode(', ', $keys) . ") VALUES (" . implode(', ', $vals) . ");\n";
+                        }
+                        $dumpContent .= "\n";
+                    }
+                }
+            }
+            @file_put_contents($backupPath, $dumpContent);
+            $fileSize = file_exists($backupPath) ? filesize($backupPath) : 0;
+
+            if ($conn) {
+                $bStmt = $conn->prepare("INSERT INTO backup_logs (filename, file_size, backup_type, status, created_by, created_at) VALUES (?, ?, 'database', 'success', ?, NOW())");
+                if ($bStmt) {
+                    $bStmt->bind_param("sii", $backupFile, $fileSize, $userId);
+                    $bStmt->execute();
+                    $bStmt->close();
+                }
+                $details = "Snapshot dump generated: {$backupFile} (Storage path: storage/backups/)";
+                $aud = $conn->prepare("INSERT INTO audit_logs (user_id, action, resource, details, ip_address) VALUES (?, 'DATABASE_BACKUP_INITIATED', 'database', ?, ?)");
+                if ($aud) { $aud->bind_param("iss", $userId, $details, $ip); $aud->execute(); $aud->close(); }
             }
             $successMsg = "Database snapshot created successfully: {$backupFile}";
         } elseif ($routine === 'invalidate_sessions') {
             if ($conn) {
-                $conn->query("UPDATE sessions SET is_valid = 0 WHERE user_id != $userId");
+                $conn->query("UPDATE user_sessions SET expires_at = NOW() WHERE user_id != $userId");
                 $details = 'Super Admin invalidated all stale concurrent sessions';
-                $conn->query("INSERT INTO audit_logs (user_id, action, resource, details, ip_address) VALUES ($userId, 'SESSIONS_INVALIDATED', 'sessions', '$details', '$ip')");
+                $aud = $conn->prepare("INSERT INTO audit_logs (user_id, action, resource, details, ip_address) VALUES (?, 'SESSIONS_INVALIDATED', 'sessions', ?, ?)");
+                if ($aud) { $aud->bind_param("iss", $userId, $details, $ip); $aud->execute(); $aud->close(); }
             }
             $successMsg = 'All concurrent sessions (except current root session) invalidated successfully!';
         } elseif ($routine === 'resync_ai_vector') {
-            $details = 'Rebuilt vector embeddings index across 12 academic syllabi';
+            $details = 'Rebuilt vector embeddings index across course documents';
             if ($conn) {
-                $conn->query("INSERT INTO audit_logs (user_id, action, resource, details, ip_address) VALUES ($userId, 'AI_VECTOR_RESYNC', 'ai_embeddings', '$details', '$ip')");
+                $aud = $conn->prepare("INSERT INTO audit_logs (user_id, action, resource, details, ip_address) VALUES (?, 'AI_VECTOR_RESYNC', 'ai_embeddings', ?, ?)");
+                if ($aud) { $aud->bind_param("iss", $userId, $details, $ip); $aud->execute(); $aud->close(); }
             }
             $successMsg = 'AI Document Vector store resynchronized with zero embedding drift!';
         }
     }
 }
 
-$allTasks = $_SESSION['super_admin_tasks'];
+$allTasks = [];
+if ($conn) {
+    $stmt = $conn->prepare("SELECT id, title, description, CASE WHEN priority = 'urgent' THEN 'critical' ELSE priority END AS priority, CASE WHEN status = 'todo' THEN 'pending' ELSE status END AS status, category, deadline AS due_date, deadline FROM tasks WHERE user_id = ? OR category IN ('Security', 'Database', 'AI Engine', 'Maintenance', 'system') ORDER BY (status = 'completed') ASC, deadline ASC, id DESC");
+    if ($stmt) {
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $allTasks = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+    }
+}
+
 $filter = $_GET['filter'] ?? 'all';
 
 $filteredTasks = array_filter($allTasks, function($t) use ($filter) {

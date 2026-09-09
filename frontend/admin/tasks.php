@@ -11,13 +11,34 @@ $userId = $_SESSION['user']['id'];
 $successMsg = '';
 $errorMsg = '';
 
-if (!isset($_SESSION['admin_tasks'])) {
-    $_SESSION['admin_tasks'] = [
-        ['id' => 201, 'title' => 'Verify Spring 2026 Student Admissions & Enrollments', 'description' => 'Verify prerequisite credits for 45 incoming transfer students', 'priority' => 'high', 'due_date' => date('Y-m-d', strtotime('+3 days')), 'status' => 'pending'],
-        ['id' => 202, 'title' => 'Publish Finalized Semester 6 Master Timetable', 'description' => 'Cross-verify lab allocation conflicts across Computer Science & IT', 'priority' => 'high', 'due_date' => date('Y-m-d', strtotime('+2 days')), 'status' => 'pending'],
-        ['id' => 203, 'title' => 'Conduct Departmental Faculty Workload Audit', 'description' => 'Ensure maximum 16 teaching credit hours per faculty member', 'priority' => 'medium', 'due_date' => date('Y-m-d', strtotime('+7 days')), 'status' => 'completed'],
-        ['id' => 204, 'title' => 'Generate Midterm Hall Tickets & Seating Arrangements', 'description' => 'Coordinate with examination controller for hall numbers', 'priority' => 'medium', 'due_date' => date('Y-m-d', strtotime('+5 days')), 'status' => 'pending']
-    ];
+$db = getDbConnection();
+
+// Auto-seed initial administrative tasks if none exist for this admin
+if ($db) {
+    $chkStmt = $db->prepare("SELECT COUNT(*) AS cnt FROM tasks WHERE user_id = ?");
+    if ($chkStmt) {
+        $chkStmt->bind_param("i", $userId);
+        $chkStmt->execute();
+        $hasTasks = (int)$chkStmt->get_result()->fetch_assoc()['cnt'];
+        $chkStmt->close();
+
+        if ($hasTasks === 0) {
+            $seedStmt = $db->prepare("INSERT INTO tasks (user_id, title, description, priority, status, category, deadline, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'admin', ?, NOW(), NOW())");
+            if ($seedStmt) {
+                $seeds = [
+                    ['Verify Spring 2026 Student Admissions & Enrollments', 'Verify prerequisite credits for 45 incoming transfer students', 'high', 'todo', date('Y-m-d 23:59:59', strtotime('+3 days'))],
+                    ['Publish Finalized Semester 6 Master Timetable', 'Cross-verify lab allocation conflicts across Computer Science & IT', 'high', 'todo', date('Y-m-d 23:59:59', strtotime('+2 days'))],
+                    ['Conduct Departmental Faculty Workload Audit', 'Ensure maximum 16 teaching credit hours per faculty member', 'medium', 'completed', date('Y-m-d 23:59:59', strtotime('+7 days'))],
+                    ['Generate Midterm Hall Tickets & Seating Arrangements', 'Coordinate with examination controller for hall numbers', 'medium', 'todo', date('Y-m-d 23:59:59', strtotime('+5 days'))]
+                ];
+                foreach ($seeds as $s) {
+                    $seedStmt->bind_param("isssss", $userId, $s[0], $s[1], $s[2], $s[3], $s[4]);
+                    $seedStmt->execute();
+                }
+                $seedStmt->close();
+            }
+        }
+    }
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -25,40 +46,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'create') {
         $title = sanitize($_POST['title'] ?? '');
         $description = sanitize($_POST['description'] ?? '');
-        $priority = sanitize($_POST['priority'] ?? 'medium');
-        $dueDate = sanitize($_POST['due_date'] ?? date('Y-m-d'));
-        if (!empty($title)) {
-            array_unshift($_SESSION['admin_tasks'], [
-                'id' => time(),
-                'title' => $title,
-                'description' => $description,
-                'priority' => $priority,
-                'due_date' => $dueDate,
-                'status' => 'pending'
-            ]);
-            $successMsg = 'Administrative task scheduled successfully!';
+        $priorityRaw = strtolower(sanitize($_POST['priority'] ?? 'medium'));
+        $priority = in_array($priorityRaw, ['low', 'medium', 'high', 'urgent']) ? $priorityRaw : 'medium';
+        $dueDateRaw = sanitize($_POST['due_date'] ?? date('Y-m-d'));
+        $deadline = date('Y-m-d 23:59:59', strtotime($dueDateRaw));
+
+        if (!empty($title) && $db) {
+            $stmt = $db->prepare("INSERT INTO tasks (user_id, title, description, priority, status, category, deadline, created_at, updated_at) VALUES (?, ?, ?, ?, 'todo', 'admin', ?, NOW(), NOW())");
+            if ($stmt) {
+                $stmt->bind_param("issss", $userId, $title, $description, $priority, $deadline);
+                if ($stmt->execute()) {
+                    $successMsg = 'Administrative task scheduled successfully!';
+                } else {
+                    $errorMsg = 'Failed to create task: ' . $stmt->error;
+                }
+                $stmt->close();
+            }
+        } else {
+            $errorMsg = 'Please enter a valid task title.';
         }
     } elseif ($action === 'toggle_status') {
         $taskId = (int)($_POST['task_id'] ?? 0);
-        $newStatus = sanitize($_POST['status'] ?? 'completed');
-        foreach ($_SESSION['admin_tasks'] as &$t) {
-            if ($t['id'] == $taskId) {
-                $t['status'] = $newStatus;
-                break;
+        $reqStatus = sanitize($_POST['status'] ?? 'completed');
+        $newStatus = ($reqStatus === 'completed') ? 'completed' : 'todo';
+        if ($db && $taskId > 0) {
+            $stmt = $db->prepare("UPDATE tasks SET status = ?, updated_at = NOW() WHERE id = ? AND user_id = ?");
+            if ($stmt) {
+                $stmt->bind_param("sii", $newStatus, $taskId, $userId);
+                $stmt->execute();
+                $stmt->close();
+                $successMsg = 'Task status updated!';
             }
         }
-        $successMsg = 'Task status updated!';
     } elseif ($action === 'delete') {
         $taskId = (int)($_POST['task_id'] ?? 0);
-        $_SESSION['admin_tasks'] = array_values(array_filter($_SESSION['admin_tasks'], fn($t) => $t['id'] != $taskId));
-        $successMsg = 'Task deleted.';
+        if ($db && $taskId > 0) {
+            $stmt = $db->prepare("DELETE FROM tasks WHERE id = ? AND user_id = ?");
+            if ($stmt) {
+                $stmt->bind_param("ii", $taskId, $userId);
+                $stmt->execute();
+                $stmt->close();
+                $successMsg = 'Task deleted successfully.';
+            }
+        }
     }
 }
 
-$tasks = $_SESSION['admin_tasks'];
+$tasks = [];
+if ($db) {
+    $stmt = $db->prepare("SELECT id, title, description, priority, status, deadline AS due_date, deadline FROM tasks WHERE user_id = ? ORDER BY (status = 'completed') ASC, deadline ASC, id DESC");
+    if ($stmt) {
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $tasks = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+    }
+}
+
 $totalCount = count($tasks);
-$pendingCount = count(array_filter($tasks, fn($t) => ($t['status'] ?? '') !== 'completed'));
-$completedCount = $totalCount - $pendingCount;
+$completedCount = count(array_filter($tasks, fn($t) => ($t['status'] ?? '') === 'completed'));
+$pendingCount = $totalCount - $completedCount;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -97,6 +144,11 @@ $completedCount = $totalCount - $pendingCount;
                 <?php if ($successMsg): ?>
                     <div class="alert alert-success" style="display: flex; align-items: center; gap: 10px;">
                         <i class="fas fa-check-circle"></i> <?php echo htmlspecialchars($successMsg); ?>
+                    </div>
+                <?php endif; ?>
+                <?php if ($errorMsg): ?>
+                    <div class="alert alert-danger" style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+                        <i class="fas fa-exclamation-circle"></i> <?php echo htmlspecialchars($errorMsg); ?>
                     </div>
                 <?php endif; ?>
 

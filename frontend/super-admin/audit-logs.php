@@ -7,13 +7,44 @@ require_once __DIR__ . '/../includes/helpers.php';
 
 requireRole('super-admin');
 
-$userId = $_SESSION['user']['id'];
-$audits = [
-    ['user' => 'Super Administrator', 'action' => 'ROLE_PERMISSIONS_UPDATE', 'details' => 'Updated faculty exam permissions', 'ip' => '127.0.0.1', 'time' => '10 mins ago'],
-    ['user' => 'Registrar Admin', 'action' => 'COURSE_CREATE', 'details' => 'Created B.Tech in Data Science', 'ip' => '192.168.1.15', 'time' => '45 mins ago'],
-    ['user' => 'Super Administrator', 'action' => 'SYSTEM_SETTINGS_UPDATE', 'details' => 'Configured Gemini 1.5 Flash as default AI engine', 'ip' => '127.0.0.1', 'time' => '2 hours ago'],
-    ['user' => 'System Worker', 'action' => 'BACKUP_CREATE', 'details' => 'Full automated database snapshot completed', 'ip' => '127.0.0.1', 'time' => '4 hours ago']
-];
+$userId = (int)($_SESSION['user']['id'] ?? 1);
+$conn = getDbConnection();
+
+// Auto-seed initial audit logs if table is empty
+if ($conn) {
+    $cnt = $conn->query("SELECT COUNT(*) as cnt FROM audit_logs");
+    if ($cnt && (int)$cnt->fetch_assoc()['cnt'] === 0) {
+        $seeds = [
+            [$userId, 'ROLE_PERMISSIONS_UPDATE', 'roles', 'Updated faculty exam permissions', '127.0.0.1', '10 MINUTE'],
+            [2, 'COURSE_CREATE', 'courses', 'Created B.Tech in Data Science curriculum', '192.168.1.15', '45 MINUTE'],
+            [$userId, 'SYSTEM_SETTINGS_UPDATE', 'system_settings', 'Configured Gemini 1.5 Flash as default AI engine', '127.0.0.1', '2 HOUR'],
+            [$userId, 'BACKUP_CREATE', 'database', 'Full automated database snapshot completed', '127.0.0.1', '4 HOUR']
+        ];
+        foreach ($seeds as $s) {
+            $conn->query("INSERT INTO audit_logs (user_id, action, resource, details, ip_address, created_at) VALUES ({$s[0]}, '{$s[1]}', '{$s[2]}', '{$s[3]}', '{$s[4]}', NOW() - INTERVAL {$s[5]})");
+        }
+    }
+}
+
+$audits = [];
+if ($conn) {
+    $res = $conn->query("SELECT a.action, a.resource, a.details, a.ip_address, a.created_at,
+                                COALESCE(CONCAT(u.first_name, ' ', u.last_name), 'System Worker') AS user_name
+                         FROM audit_logs a
+                         LEFT JOIN users u ON a.user_id = u.id
+                         ORDER BY a.id DESC LIMIT 100");
+    if ($res) {
+        while ($r = $res->fetch_assoc()) {
+            $audits[] = [
+                'user' => $r['user_name'],
+                'action' => $r['action'],
+                'details' => $r['details'] ?: $r['resource'],
+                'ip' => $r['ip_address'] ?: '127.0.0.1',
+                'time' => timeAgo($r['created_at'])
+            ];
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">

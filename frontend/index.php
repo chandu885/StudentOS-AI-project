@@ -6,6 +6,100 @@ require_once __DIR__ . '/includes/auth.php';
 
 $loggedIn = isLoggedIn();
 $currentUser = $loggedIn ? ($_SESSION['user'] ?? null) : null;
+
+// Live Institutional Statistics from Database
+$db = getDbConnection();
+$totalStudents = 120;
+$totalFaculty = 18;
+$totalCourses = 8;
+$totalDepartments = 4;
+
+if ($db) {
+    $cRes = $db->query("SELECT 
+        (SELECT COUNT(*) FROM users WHERE role_id = 4 AND is_active = 1 AND deleted_at IS NULL) as students,
+        (SELECT COUNT(*) FROM users WHERE role_id = 3 AND is_active = 1 AND deleted_at IS NULL) as faculty,
+        (SELECT COUNT(*) FROM courses WHERE status = 'active') as courses,
+        (SELECT COUNT(*) FROM departments) as departments
+    ");
+    if ($cRes && $row = $cRes->fetch_assoc()) {
+        $totalStudents = max((int)$row['students'], 1);
+        $totalFaculty = max((int)$row['faculty'], 1);
+        $totalCourses = max((int)$row['courses'], 1);
+        $totalDepartments = max((int)$row['departments'], 1);
+    }
+}
+
+// Hero Showcase Data
+$heroStudent = [
+    'name' => 'Alex Johnson',
+    'initials' => 'AJ',
+    'program' => 'B.Tech Computer Science • Sem 6',
+    'cohort_badge' => 'Active Cohort',
+    'sgpa' => '9.15',
+    'attendance' => '89.4%',
+    'credits' => '82 / 160'
+];
+
+if ($loggedIn && $currentUser) {
+    $uName = trim(($currentUser['first_name'] ?? '') . ' ' . ($currentUser['last_name'] ?? ''));
+    if (empty($uName)) $uName = $currentUser['email'] ?? 'Authenticated User';
+    $heroStudent['name'] = $uName;
+    $heroStudent['initials'] = getInitials($uName);
+    $roleId = (int)($currentUser['role_id'] ?? 4);
+
+    if ($roleId === 4 && $db) {
+        $uId = (int)$currentUser['id'];
+        $heroStudent['cohort_badge'] = 'Enrolled Student';
+        $spStmt = $db->prepare("SELECT sp.*, c.name as course_name, c.code as course_code FROM student_profiles sp LEFT JOIN courses c ON sp.course_id = c.id WHERE sp.user_id = ?");
+        if ($spStmt) {
+            $spStmt->bind_param("i", $uId);
+            $spStmt->execute();
+            if ($sp = $spStmt->get_result()->fetch_assoc()) {
+                $cCode = $sp['course_code'] ?? 'BCA';
+                $sem = $sp['semester'] ?? '1';
+                $heroStudent['program'] = $cCode . ' • Semester ' . $sem;
+            }
+            $spStmt->close();
+        }
+        $attStmt = $db->prepare("SELECT ROUND(COUNT(CASE WHEN LOWER(status) = 'present' THEN 1 END) * 100 / NULLIF(COUNT(*), 0), 1) as pct FROM attendance WHERE student_id = ?");
+        if ($attStmt) {
+            $attStmt->bind_param("i", $uId);
+            $attStmt->execute();
+            if ($ar = $attStmt->get_result()->fetch_assoc()) {
+                if ($ar['pct'] !== null) $heroStudent['attendance'] = $ar['pct'] . '%';
+            }
+            $attStmt->close();
+        }
+        $perfStmt = $db->prepare("SELECT gpa, cgpa, credits_completed FROM performance WHERE student_id = ? ORDER BY id DESC LIMIT 1");
+        if ($perfStmt) {
+            $perfStmt->bind_param("i", $uId);
+            $perfStmt->execute();
+            if ($pr = $perfStmt->get_result()->fetch_assoc()) {
+                $heroStudent['sgpa'] = number_format((float)($pr['gpa'] ?? $pr['cgpa'] ?? 8.5), 2);
+                $heroStudent['credits'] = ($pr['credits_completed'] ?? 0) . ' pts';
+            }
+            $perfStmt->close();
+        }
+    } elseif ($roleId === 3) {
+        $heroStudent['cohort_badge'] = 'Faculty Staff';
+        $heroStudent['program'] = 'Department Instructor';
+        $heroStudent['sgpa'] = 'Faculty';
+        $heroStudent['attendance'] = 'Active';
+        $heroStudent['credits'] = 'Teaching';
+    } elseif ($roleId === 2) {
+        $heroStudent['cohort_badge'] = 'Administrator';
+        $heroStudent['program'] = 'Campus Administration';
+        $heroStudent['sgpa'] = 'Admin';
+        $heroStudent['attendance'] = 'Active';
+        $heroStudent['credits'] = 'Managed';
+    } elseif ($roleId === 1) {
+        $heroStudent['cohort_badge'] = 'Super Admin';
+        $heroStudent['program'] = 'Full Institutional Governance';
+        $heroStudent['sgpa'] = 'System';
+        $heroStudent['attendance'] = 'Active';
+        $heroStudent['credits'] = 'Root';
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -103,16 +197,16 @@ $currentUser = $loggedIn ? ($_SESSION['user'] ?? null) : null;
 
                         <div class="hero-stats">
                             <div class="stat-item">
-                                <span class="stat-number">4</span>
-                                <span class="stat-label">Institutional Tiers</span>
+                                <span class="stat-number"><?php echo $totalDepartments; ?></span>
+                                <span class="stat-label">Departments</span>
                             </div>
                             <div class="stat-item">
-                                <span class="stat-number">54+</span>
-                                <span class="stat-label">System Modules</span>
+                                <span class="stat-number"><?php echo $totalCourses; ?>+</span>
+                                <span class="stat-label">Degree Programs</span>
                             </div>
                             <div class="stat-item">
-                                <span class="stat-number">100%</span>
-                                <span class="stat-label">Zero Latency RAG</span>
+                                <span class="stat-number"><?php echo $totalStudents; ?>+</span>
+                                <span class="stat-label">Active Learners</span>
                             </div>
                         </div>
                     </div>
@@ -137,31 +231,31 @@ $currentUser = $loggedIn ? ($_SESSION['user'] ?? null) : null;
                                 <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: var(--radius-lg);">
                                     <div style="display: flex; align-items: center; gap: 12px;">
                                         <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, var(--primary), var(--ai-accent)); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700;">
-                                            AJ
+                                            <?php echo htmlspecialchars($heroStudent['initials']); ?>
                                         </div>
                                         <div>
-                                            <div style="font-weight: 700; font-size: 13.5px; color: var(--text-primary);">Alex Johnson</div>
-                                            <div style="font-size: 11.5px; color: var(--text-muted);">B.Tech Computer Science • Sem 6</div>
+                                            <div style="font-weight: 700; font-size: 13.5px; color: var(--text-primary);"><?php echo htmlspecialchars($heroStudent['name']); ?></div>
+                                            <div style="font-size: 11.5px; color: var(--text-muted);"><?php echo htmlspecialchars($heroStudent['program']); ?></div>
                                         </div>
                                     </div>
-                                    <span class="badge badge-primary">Active Cohort</span>
+                                    <span class="badge badge-primary"><?php echo htmlspecialchars($heroStudent['cohort_badge']); ?></span>
                                 </div>
 
                                 <!-- Key Academic Metrics -->
                                 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
                                     <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px; text-align: center;">
-                                        <span style="font-size: 10.5px; color: var(--text-muted); text-transform: uppercase;">SGPA</span>
-                                        <div style="font-size: 18px; font-weight: 800; color: #34D399; margin: 2px 0;">9.15</div>
-                                        <span style="font-size: 10px; color: var(--text-secondary);">Top 5%</span>
+                                        <span style="font-size: 10.5px; color: var(--text-muted); text-transform: uppercase;">SGPA / GPA</span>
+                                        <div style="font-size: 18px; font-weight: 800; color: #34D399; margin: 2px 0;"><?php echo htmlspecialchars($heroStudent['sgpa']); ?></div>
+                                        <span style="font-size: 10px; color: var(--text-secondary);">Standing</span>
                                     </div>
                                     <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px; text-align: center;">
                                         <span style="font-size: 10.5px; color: var(--text-muted); text-transform: uppercase;">Attendance</span>
-                                        <div style="font-size: 18px; font-weight: 800; color: #818CF8; margin: 2px 0;">89.4%</div>
-                                        <span style="font-size: 10px; color: var(--success);"><i class="fas fa-check-circle"></i> Safe</span>
+                                        <div style="font-size: 18px; font-weight: 800; color: #818CF8; margin: 2px 0;"><?php echo htmlspecialchars($heroStudent['attendance']); ?></div>
+                                        <span style="font-size: 10px; color: var(--success);"><i class="fas fa-check-circle"></i> Verified</span>
                                     </div>
                                     <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px; text-align: center;">
-                                        <span style="font-size: 10.5px; color: var(--text-muted); text-transform: uppercase;">Credits</span>
-                                        <div style="font-size: 18px; font-weight: 800; color: #F59E0B; margin: 2px 0;">82 / 160</div>
+                                        <span style="font-size: 10.5px; color: var(--text-muted); text-transform: uppercase;">Credits / Role</span>
+                                        <div style="font-size: 18px; font-weight: 800; color: #F59E0B; margin: 2px 0;"><?php echo htmlspecialchars($heroStudent['credits']); ?></div>
                                         <span style="font-size: 10px; color: var(--text-secondary);">On Track</span>
                                     </div>
                                 </div>

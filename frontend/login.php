@@ -29,7 +29,7 @@ if (empty($email) && isset($_GET['role'])) {
     $roleName = strtolower(trim($_GET['role']));
     $db = getDbConnection();
     if ($db) {
-        $stmt = $db->prepare("SELECT u.email FROM users u JOIN roles r ON u.role_id = r.id WHERE LOWER(r.name) = ? OR LOWER(r.slug) = ? ORDER BY u.id ASC LIMIT 1");
+        $stmt = $db->prepare("SELECT u.email FROM users u JOIN roles r ON u.role_id = r.id WHERE LOWER(r.name) = ? OR LOWER(r.display_name) = ? ORDER BY u.id ASC LIMIT 1");
         if ($stmt) {
             $stmt->bind_param("ss", $roleName, $roleName);
             $stmt->execute();
@@ -63,17 +63,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
         
-        if ($httpCode === 200) {
+        $loginSuccess = false;
+        $userRow = null;
+        $authToken = null;
+        $sessionToken = null;
+
+        if ($httpCode === 200 && $response) {
             $result = json_decode($response, true);
-            $_SESSION['auth_token'] = $result['token'];
-            $_SESSION['session_token'] = $result['session_token'];
-            $_SESSION['user'] = $result['user'];
+            if (!empty($result['success']) && !empty($result['user'])) {
+                $userRow = $result['user'];
+                $authToken = $result['token'] ?? bin2hex(random_bytes(32));
+                $sessionToken = $result['session_token'] ?? bin2hex(random_bytes(32));
+                $loginSuccess = true;
+            }
+        }
+
+        // Direct database authentication fallback
+        if (!$loginSuccess) {
+            $db = getDbConnection();
+            if ($db) {
+                $stmt = $db->prepare("SELECT u.*, r.display_name as role_name, LOWER(r.name) as role_slug FROM users u JOIN roles r ON u.role_id = r.id WHERE (u.email = ? OR u.phone = ?) AND u.is_active = 1 AND u.deleted_at IS NULL LIMIT 1");
+                if ($stmt) {
+                    $stmt->bind_param("ss", $email, $email);
+                    $stmt->execute();
+                    $dbUser = $stmt->get_result()->fetch_assoc();
+                    $stmt->close();
+                    if ($dbUser && password_verify($password, $dbUser['password_hash'])) {
+                        $userRow = $dbUser;
+                        unset($userRow['password_hash']);
+                        $authToken = bin2hex(random_bytes(32));
+                        $sessionToken = bin2hex(random_bytes(32));
+                        $loginSuccess = true;
+
+                        // Record user session
+                        $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+                        $ua = $_SERVER['HTTP_USER_AGENT'] ?? 'Web';
+                        $sessStmt = $db->prepare("INSERT INTO user_sessions (user_id, session_token, ip_address, user_agent, last_activity, expires_at) VALUES (?, ?, ?, ?, NOW(), DATE_ADD(NOW(), INTERVAL 30 DAY))");
+                        if ($sessStmt) {
+                            $sessStmt->bind_param("isss", $dbUser['id'], $sessionToken, $ip, $ua);
+                            $sessStmt->execute();
+                            $sessStmt->close();
+                        }
+                    }
+                }
+            }
+        }
+
+        if ($loginSuccess && $userRow) {
+            $_SESSION['auth_token'] = $authToken;
+            $_SESSION['session_token'] = $sessionToken;
+            $_SESSION['user'] = $userRow;
             
             if ($remember) {
-                setcookie('remember_token', $result['token'], time() + 86400 * 30, '/');
+                setcookie('remember_token', $authToken, time() + 86400 * 30, '/');
             }
             
-            $roleId = (int)$result['user']['role_id'];
+            $roleId = (int)$userRow['role_id'];
             $redirectMap = [
                 1 => '/super-admin/dashboard.php',
                 2 => '/admin/dashboard.php',
@@ -83,8 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $redirect = $redirectMap[$roleId] ?? '/student/dashboard.php';
             redirect($redirect);
         } else {
-            $result = json_decode($response, true);
-            $error = $result['error'] ?? 'Invalid email address or password.';
+            $error = 'Invalid email address or password.';
         }
     }
 }

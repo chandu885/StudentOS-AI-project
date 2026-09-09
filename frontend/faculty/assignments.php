@@ -7,31 +7,72 @@ require_once __DIR__ . '/../includes/helpers.php';
 
 requireRole('faculty');
 
-$userId = $_SESSION['user']['id'];
+$userId = (int)($_SESSION['user']['id'] ?? 0);
 $successMsg = '';
+$errorMsg = '';
+$db = getDbConnection();
+
+// Fetch faculty subjects for dropdown and filtering
+$facultySubjects = [];
+if ($db) {
+    $stmt = $db->prepare("SELECT id, name, code, semester FROM subjects WHERE faculty_id = ? ORDER BY name ASC");
+    if ($stmt) {
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $facultySubjects = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+    }
+    if (empty($facultySubjects)) {
+        $res = $db->query("SELECT id, name, code, semester FROM subjects ORDER BY name ASC LIMIT 10");
+        if ($res) {
+            $facultySubjects = $res->fetch_all(MYSQLI_ASSOC);
+        }
+    }
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $title = sanitize($_POST['title'] ?? '');
-    $subjectId = (int)($_POST['subject_id'] ?? 1);
+    $subjectId = (int)($_POST['subject_id'] ?? 0);
     $description = sanitize($_POST['description'] ?? '');
     $deadline = sanitize($_POST['deadline'] ?? date('Y-m-d H:i:s', strtotime('+7 days')));
     $maxMarks = (int)($_POST['max_marks'] ?? 20);
 
-    $res = apiCall('/assignments.php?action=create', 'POST', [
-        'subject_id' => $subjectId,
-        'title' => $title,
-        'description' => $description,
-        'deadline' => $deadline,
-        'max_marks' => $maxMarks
-    ]);
-    $successMsg = 'Assignment created and published to students!';
+    if (!empty($title) && $subjectId > 0 && $db) {
+        $stmt = $db->prepare("INSERT INTO assignments (subject_id, faculty_id, title, description, deadline, max_marks, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'published', NOW(), NOW())");
+        if ($stmt) {
+            $stmt->bind_param("iisssi", $subjectId, $userId, $title, $description, $deadline, $maxMarks);
+            if ($stmt->execute()) {
+                $successMsg = 'Assignment created and published to students!';
+            } else {
+                $errorMsg = 'Failed to create assignment in database: ' . $stmt->error;
+            }
+            $stmt->close();
+        }
+    } else {
+        $errorMsg = 'Please complete all required fields.';
+    }
 }
 
-$assignments = [
-    ['id' => 1, 'title' => 'ER Diagram & Relational Schema Design', 'subject_name' => 'Database Management Systems', 'deadline' => date('Y-m-d H:i:s', strtotime('+3 days')), 'submissions_count' => 48, 'total_students' => 64, 'max_marks' => 20],
-    ['id' => 2, 'title' => 'SQL Queries, Joins, and Aggregations', 'subject_name' => 'Database Management Systems', 'deadline' => date('Y-m-d H:i:s', strtotime('-5 days')), 'submissions_count' => 62, 'total_students' => 64, 'max_marks' => 25],
-    ['id' => 3, 'title' => 'B-Tree & Indexing Research Summary', 'subject_name' => 'Advanced Database Systems', 'deadline' => date('Y-m-d H:i:s', strtotime('+10 days')), 'submissions_count' => 12, 'total_students' => 42, 'max_marks' => 30]
-];
+$assignments = [];
+if ($db) {
+    $subIds = array_column($facultySubjects, 'id');
+    $subList = !empty($subIds) ? implode(',', array_map('intval', $subIds)) : '0';
+
+    $query = "SELECT a.*, s.name as subject_name, s.code as subject_code,
+                     (SELECT COUNT(*) FROM assignment_submissions WHERE assignment_id = a.id) as submissions_count,
+                     (SELECT COUNT(DISTINCT student_id) FROM student_subjects WHERE subject_id = a.subject_id) as total_students
+              FROM assignments a 
+              JOIN subjects s ON a.subject_id = s.id 
+              WHERE a.faculty_id = ? OR a.subject_id IN ($subList) 
+              ORDER BY a.deadline DESC";
+    $stmt = $db->prepare($query);
+    if ($stmt) {
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $assignments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -73,11 +114,18 @@ $assignments = [
                     </div>
                 <?php endif; ?>
 
+                <?php if ($errorMsg): ?>
+                    <div class="alert alert-error" style="background: rgba(239, 68, 68, 0.15); border: 1px solid var(--danger); color: var(--danger); padding: 12px 16px; border-radius: var(--radius-md); margin-bottom: 20px;">
+                        <i class="fas fa-exclamation-circle"></i> <?php echo htmlspecialchars($errorMsg); ?>
+                    </div>
+                <?php endif; ?>
+
                 <div class="card">
                     <div class="card-header">
                         <h3><i class="fas fa-file-alt"></i> Published Coursework</h3>
                     </div>
                     <div class="card-body">
+                        <?php if (!empty($assignments)): ?>
                         <div class="table-responsive">
                             <table class="data-table">
                                 <thead>
@@ -100,7 +148,7 @@ $assignments = [
                                                 <span style="font-weight: 500;"><?php echo date('M d, Y h:i A', strtotime($asg['deadline'])); ?></span>
                                             </td>
                                             <td>
-                                                <span class="badge badge-info"><?php echo $asg['submissions_count']; ?> / <?php echo $asg['total_students']; ?> Submitted</span>
+                                                <span class="badge badge-info"><?php echo (int)($asg['submissions_count'] ?? 0); ?> / <?php echo (int)($asg['total_students'] ?? 0); ?> Submitted</span>
                                             </td>
                                             <td><strong><?php echo $asg['max_marks']; ?></strong> pts</td>
                                             <td>
@@ -113,6 +161,13 @@ $assignments = [
                                 </tbody>
                             </table>
                         </div>
+                        <?php else: ?>
+                            <div class="empty-state" style="text-align: center; padding: 40px; color: var(--text-muted);">
+                                <i class="fas fa-file-alt" style="font-size: 32px; margin-bottom: 10px; display: block;"></i>
+                                <strong style="color: var(--text-primary);">No Assignments Published Yet</strong>
+                                <p style="font-size: 13px; margin-top: 4px;">Click "Create Assignment" above to assign coursework to your students.</p>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -135,9 +190,10 @@ $assignments = [
                     </div>
                     <div class="form-group">
                         <label for="asgSubject">Course</label>
-                        <select name="subject_id" id="asgSubject" class="form-control">
-                            <option value="1">Database Management Systems (CS301)</option>
-                            <option value="2">Advanced Database Systems (CS502)</option>
+                        <select name="subject_id" id="asgSubject" class="form-control" required>
+                            <?php foreach ($facultySubjects as $fsub): ?>
+                                <option value="<?php echo $fsub['id']; ?>"><?php echo htmlspecialchars($fsub['name'] . ' (' . $fsub['code'] . ')'); ?></option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">

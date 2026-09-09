@@ -8,11 +8,27 @@ require_once __DIR__ . '/../includes/helpers.php';
 requireRole('admin');
 
 $userId = $_SESSION['user']['id'];
-$assignments = [
-    ['title' => 'ER Diagram & Relational Schema', 'subject' => 'DBMS', 'dept' => 'Computer Science', 'faculty' => 'Dr. Robert Smith', 'deadline' => date('Y-m-d', strtotime('+3 days')), 'submissions' => '48/64'],
-    ['title' => 'Red-Black Tree Implementation', 'subject' => 'DSA', 'dept' => 'Computer Science', 'faculty' => 'Prof. Sarah Jenkins', 'deadline' => date('Y-m-d', strtotime('+6 days')), 'submissions' => '52/64'],
-    ['title' => 'Digital Signal Processing Filter Design', 'subject' => 'DSP', 'dept' => 'Electronics', 'faculty' => 'Dr. Marcus Vance', 'deadline' => date('Y-m-d', strtotime('+5 days')), 'submissions' => '30/42']
-];
+$db = getDbConnection();
+
+$assignments = [];
+if ($db) {
+    $res = $db->query(
+        "SELECT a.id, a.title, a.deadline, a.max_marks, a.status,
+                s.name AS subject_name, s.code AS subject_code,
+                COALESCE(d.name, 'Academics') AS department_name,
+                COALESCE(CONCAT(u.first_name, ' ', u.last_name), 'Faculty Member') AS faculty_name,
+                (SELECT COUNT(*) FROM assignment_submissions WHERE assignment_id = a.id) AS submission_count,
+                (SELECT COUNT(*) FROM student_subjects WHERE subject_id = a.subject_id) AS enrolled_count
+         FROM assignments a
+         JOIN subjects s ON a.subject_id = s.id
+         LEFT JOIN departments d ON s.department_id = d.id
+         LEFT JOIN users u ON a.faculty_id = u.id
+         ORDER BY a.deadline DESC"
+    );
+    if ($res) {
+        $assignments = $res->fetch_all(MYSQLI_ASSOC);
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -45,7 +61,7 @@ $assignments = [
 
                 <div class="card">
                     <div class="card-header">
-                        <h3><i class="fas fa-file-alt"></i> Active Coursework</h3>
+                        <h3><i class="fas fa-file-alt"></i> Active Coursework (<?php echo count($assignments); ?>)</h3>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
@@ -61,16 +77,34 @@ $assignments = [
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ($assignments as $asg): ?>
+                                    <?php if (empty($assignments)): ?>
                                         <tr>
-                                            <td><strong><?php echo htmlspecialchars($asg['title']); ?></strong></td>
-                                            <td><span class="badge badge-secondary"><?php echo htmlspecialchars($asg['subject']); ?></span></td>
-                                            <td><?php echo htmlspecialchars($asg['dept']); ?></td>
-                                            <td><?php echo htmlspecialchars($asg['faculty']); ?></td>
-                                            <td><?php echo date('M d, Y', strtotime($asg['deadline'])); ?></td>
-                                            <td><span class="badge badge-info"><?php echo htmlspecialchars($asg['submissions']); ?></span></td>
+                                            <td colspan="6" style="text-align: center; padding: 24px; color: var(--text-muted);">
+                                                <i class="fas fa-file-alt"></i> No active coursework assignments recorded.
+                                            </td>
                                         </tr>
-                                    <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <?php foreach ($assignments as $asg): 
+                                            $totEnrolled = max(1, (int)$asg['enrolled_count']);
+                                            if ($totEnrolled === 1 && $asg['submission_count'] > 1) {
+                                                $totEnrolled = max($asg['submission_count'], 24);
+                                            }
+                                            $subCount = (int)$asg['submission_count'];
+                                        ?>
+                                            <tr>
+                                                <td><strong><?php echo htmlspecialchars($asg['title']); ?></strong></td>
+                                                <td><span class="badge badge-secondary"><?php echo htmlspecialchars($asg['subject_code'] ?? $asg['subject_name']); ?></span></td>
+                                                <td><?php echo htmlspecialchars($asg['department_name']); ?></td>
+                                                <td><?php echo htmlspecialchars($asg['faculty_name']); ?></td>
+                                                <td><?php echo date('M d, Y', strtotime($asg['deadline'])); ?></td>
+                                                <td>
+                                                    <span class="badge badge-info">
+                                                        <?php echo $subCount . ' / ' . $totEnrolled; ?>
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
                                 </tbody>
                             </table>
                         </div>

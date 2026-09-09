@@ -138,34 +138,44 @@ $overallPct = $totalHeld > 0 ? round(($totalAttended / $totalHeld) * 100, 1) : 0
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ($attendanceRecords as $rec): 
-                                        $pct = $rec['percentage'] ?? 0;
-                                        $isEligible = $pct >= 75;
-                                        $fillColor = $pct >= 85 ? 'success' : ($pct >= 75 ? 'warning' : 'danger');
-                                        $attCount = $rec['present_count'] ?? $rec['attended'] ?? 0;
-                                        $totClasses = $rec['total_classes'] ?? 0;
-                                        $missedCount = max(0, $totClasses - $attCount);
-                                    ?>
+                                    <?php if (empty($attendanceRecords)): ?>
                                         <tr>
-                                            <td><strong><?php echo htmlspecialchars($rec['subject_name']); ?></strong></td>
-                                            <td><?php echo htmlspecialchars($totClasses); ?></td>
-                                            <td><span style="color: var(--success); font-weight: 600;"><?php echo htmlspecialchars($attCount); ?></span></td>
-                                            <td><span style="color: var(--danger); font-weight: 600;"><?php echo htmlspecialchars($missedCount); ?></span></td>
-                                            <td style="width: 200px;">
-                                                <div class="attendance-bar" style="height: 10px;">
-                                                    <div class="attendance-fill <?php echo $fillColor; ?>" style="width: <?php echo $pct; ?>%;"></div>
-                                                </div>
-                                            </td>
-                                            <td><strong><?php echo $pct; ?>%</strong></td>
-                                            <td>
-                                                <?php if ($isEligible): ?>
-                                                    <span class="badge badge-success"><i class="fas fa-check"></i> Eligible</span>
-                                                <?php else: ?>
-                                                    <span class="badge badge-danger"><i class="fas fa-times"></i> At Risk</span>
-                                                <?php endif; ?>
+                                            <td colspan="7" style="text-align: center; padding: 36px; color: var(--text-muted);">
+                                                <i class="fas fa-calendar-check" style="font-size: 32px; margin-bottom: 8px; display: block;"></i>
+                                                <strong style="color: var(--text-primary);">No Attendance Data Recorded</strong>
+                                                <p style="font-size: 13px; margin-top: 4px;">Attendance records marked by your faculty will be displayed here.</p>
                                             </td>
                                         </tr>
-                                    <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <?php foreach ($attendanceRecords as $rec): 
+                                            $pct = $rec['percentage'] ?? 0;
+                                            $isEligible = $pct >= 75;
+                                            $fillColor = $pct >= 85 ? 'success' : ($pct >= 75 ? 'warning' : 'danger');
+                                            $attCount = $rec['present_count'] ?? $rec['attended'] ?? 0;
+                                            $totClasses = $rec['total_classes'] ?? 0;
+                                            $missedCount = max(0, $totClasses - $attCount);
+                                        ?>
+                                            <tr>
+                                                <td><strong><?php echo htmlspecialchars($rec['subject_name']); ?></strong></td>
+                                                <td><?php echo htmlspecialchars($totClasses); ?></td>
+                                                <td><span style="color: var(--success); font-weight: 600;"><?php echo htmlspecialchars($attCount); ?></span></td>
+                                                <td><span style="color: var(--danger); font-weight: 600;"><?php echo htmlspecialchars($missedCount); ?></span></td>
+                                                <td style="width: 200px;">
+                                                    <div class="attendance-bar" style="height: 10px;">
+                                                        <div class="attendance-fill <?php echo $fillColor; ?>" style="width: <?php echo $pct; ?>%;"></div>
+                                                    </div>
+                                                </td>
+                                                <td><strong><?php echo $pct; ?>%</strong></td>
+                                                <td>
+                                                    <?php if ($isEligible): ?>
+                                                        <span class="badge badge-success"><i class="fas fa-check"></i> Eligible</span>
+                                                    <?php else: ?>
+                                                        <span class="badge badge-danger"><i class="fas fa-times"></i> At Risk</span>
+                                                    <?php endif; ?>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
                                 </tbody>
                             </table>
                         </div>

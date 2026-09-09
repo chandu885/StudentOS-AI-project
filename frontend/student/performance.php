@@ -65,6 +65,7 @@ if ($db && $userId > 0) {
     }
 
     // 4. Subject Scores from database
+    $detailedScores = [];
     $stmt = $db->prepare(
         "SELECT s.code, s.name, r.marks_obtained 
          FROM results r 
@@ -80,8 +81,55 @@ if ($db && $userId > 0) {
         while ($row = $res->fetch_assoc()) {
             $subjectLabels[] = $row['code'];
             $subjectScores[] = (float)$row['marks_obtained'];
+            $detailedScores[] = [
+                'code' => $row['code'],
+                'name' => $row['name'],
+                'marks' => (float)$row['marks_obtained']
+            ];
         }
         $stmt->close();
+    }
+
+    // 5. Check attendance warnings for focus area
+    $lowAttSubject = null;
+    $attCheckStmt = $db->prepare(
+        "SELECT s.name as subject_name,
+                ROUND(COUNT(CASE WHEN LOWER(a.status) = 'present' THEN 1 END) * 100 / NULLIF(COUNT(*), 0), 1) as percentage
+         FROM attendance a
+         JOIN subjects s ON a.subject_id = s.id
+         WHERE a.student_id = ?
+         GROUP BY a.subject_id
+         HAVING percentage < 75
+         ORDER BY percentage ASC
+         LIMIT 1"
+    );
+    if ($attCheckStmt) {
+        $attCheckStmt->bind_param("i", $userId);
+        $attCheckStmt->execute();
+        $lowAttSubject = $attCheckStmt->get_result()->fetch_assoc();
+        $attCheckStmt->close();
+    }
+
+    // Dynamic AI Insights synthesis
+    if (!empty($detailedScores)) {
+        $sortedScores = $detailedScores;
+        usort($sortedScores, function($a, $b) { return $b['marks'] <=> $a['marks']; });
+        $topSubjects = array_slice($sortedScores, 0, min(2, count($sortedScores)));
+        $strengthsText = "Strong conceptual understanding demonstrated in " . implode(' and ', array_map(function($s) {
+            return $s['name'] . ' (' . $s['marks'] . ' pts)';
+        }, $topSubjects)) . ". Excellent foundation for upcoming assessments!";
+
+        if ($lowAttSubject) {
+            $focusText = $lowAttSubject['subject_name'] . ' attendance is currently at ' . $lowAttSubject['percentage'] . '%. Attend upcoming lectures to exceed the 75% threshold.';
+        } elseif (count($sortedScores) > 1) {
+            $lowestSub = end($sortedScores);
+            $focusText = "Targeted revision recommended for " . $lowestSub['name'] . " (" . $lowestSub['marks'] . " pts). Review lecture notes or use AI Practice Quiz to boost retention.";
+        } else {
+            $focusText = "Keep pacing your weekly milestones and review syllabus guidelines to maintain momentum.";
+        }
+    } else {
+        $strengthsText = "Consistent coursework engagement recorded across registered subjects. Keep up the disciplined study routine.";
+        $focusText = $lowAttSubject ? ($lowAttSubject['subject_name'] . ' attendance is at ' . $lowAttSubject['percentage'] . '%. Attend classes to stay eligible.') : "Stay proactive by setting targets in the Goals and Milestones module.";
     }
 }
 ?>
@@ -176,11 +224,11 @@ if ($db && $userId > 0) {
                         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
                             <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 16px;">
                                 <h4 style="color: var(--success); font-size: 14px; margin-bottom: 6px;"><i class="fas fa-arrow-trend-up"></i> Academic Strengths</h4>
-                                <p style="font-size: 13px; color: var(--text-secondary);">Strong conceptual understanding demonstrated in Software Engineering (95%) and Database Management Systems (88%).</p>
+                                <p style="font-size: 13px; color: var(--text-secondary);"><?php echo htmlspecialchars($strengthsText ?? 'Solid academic performance across registered coursework.'); ?></p>
                             </div>
                             <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 16px;">
                                 <h4 style="color: var(--warning); font-size: 14px; margin-bottom: 6px;"><i class="fas fa-exclamation-triangle"></i> Focus Area</h4>
-                                <p style="font-size: 13px; color: var(--text-secondary);">Operating Systems attendance is at 73.1%. Spend 30 minutes extra on Process Synchronization this week.</p>
+                                <p style="font-size: 13px; color: var(--text-secondary);"><?php echo htmlspecialchars($focusText ?? 'Review upcoming deadlines and review lecture notes regularly.'); ?></p>
                             </div>
                         </div>
                     </div>

@@ -7,10 +7,11 @@ require_once __DIR__ . '/../includes/helpers.php';
 
 requireRole('student');
 
-$userId = $_SESSION['user']['id'];
+$userId = (int)($_SESSION['user']['id'] ?? 0);
 $db = getDbConnection();
 $recommendations = [];
-if ($db) {
+
+if ($db && $userId > 0) {
     $stmt = $db->prepare("SELECT * FROM `ai_recommendations` WHERE `user_id` = ? OR `user_id` = 0 ORDER BY `created_at` DESC");
     if ($stmt) {
         $stmt->bind_param("i", $userId);
@@ -31,6 +32,102 @@ if ($db) {
                 'category' => ucfirst($cat),
                 'icon' => $icon,
                 'priority' => $row['priority'] ?? 'medium'
+            ];
+        }
+        $stmt->close();
+    }
+
+    // If no saved recommendations, dynamically synthesize from real student data
+    if (empty($recommendations)) {
+        // 1. Attendance checks
+        $attStmt = $db->prepare(
+            "SELECT s.name as subject_name,
+                    ROUND(COUNT(CASE WHEN LOWER(a.status) = 'present' THEN 1 END) * 100 / NULLIF(COUNT(*), 0), 1) as percentage
+             FROM attendance a
+             JOIN subjects s ON a.subject_id = s.id
+             WHERE a.student_id = ?
+             GROUP BY a.subject_id
+             HAVING percentage < 75"
+        );
+        if ($attStmt) {
+            $attStmt->bind_param("i", $userId);
+            $attStmt->execute();
+            $attRes = $attStmt->get_result();
+            while ($ar = $attRes->fetch_assoc()) {
+                $recommendations[] = [
+                    'id' => 'att-' . rand(100, 999),
+                    'title' => 'Attendance Warning: ' . $ar['subject_name'],
+                    'description' => 'Your current attendance is ' . $ar['percentage'] . '%. Regulations require a minimum of 75% to sit for semester examinations. Attend the next consecutive lectures to recover eligibility.',
+                    'category' => 'Attendance',
+                    'icon' => 'exclamation-triangle',
+                    'priority' => 'high'
+                ];
+            }
+            $attStmt->close();
+        }
+
+        // 2. Urgent pending assignments
+        $asgStmt = $db->prepare(
+            "SELECT a.title, a.deadline, s.name as subject_name 
+             FROM assignments a 
+             JOIN subjects s ON a.subject_id = s.id 
+             JOIN student_subjects ss ON ss.subject_id = s.id 
+             WHERE ss.student_id = ? 
+             AND a.id NOT IN (SELECT assignment_id FROM assignment_submissions WHERE student_id = ?)
+             ORDER BY a.deadline ASC LIMIT 2"
+        );
+        if ($asgStmt) {
+            $asgStmt->bind_param("ii", $userId, $userId);
+            $asgStmt->execute();
+            $asgRes = $asgStmt->get_result();
+            while ($ar = $asgRes->fetch_assoc()) {
+                $diffDays = round((strtotime($ar['deadline']) - time()) / 86400);
+                $recommendations[] = [
+                    'id' => 'asg-' . rand(100, 999),
+                    'title' => 'Assignment Due: ' . $ar['title'],
+                    'description' => 'Coursework for ' . $ar['subject_name'] . ' is due in ' . max(0, (int)$diffDays) . ' day(s) (' . date('M d, h:i A', strtotime($ar['deadline'])) . '). Start drafting your submission or consult the lecture notes.',
+                    'category' => 'Coursework',
+                    'icon' => 'clock',
+                    'priority' => ($diffDays <= 2) ? 'high' : 'medium'
+                ];
+            }
+            $asgStmt->close();
+        }
+
+        // 3. Upcoming exams
+        $exStmt = $db->prepare(
+            "SELECT e.title, e.exam_date, s.name as subject_name 
+             FROM exams e 
+             JOIN subjects s ON e.subject_id = s.id 
+             JOIN student_subjects ss ON ss.subject_id = s.id 
+             WHERE ss.student_id = ? AND e.exam_date >= CURDATE() 
+             ORDER BY e.exam_date ASC LIMIT 1"
+        );
+        if ($exStmt) {
+            $exStmt->bind_param("i", $userId);
+            $exStmt->execute();
+            if ($er = $exStmt->get_result()->fetch_assoc()) {
+                $recommendations[] = [
+                    'id' => 'exam-' . rand(100, 999),
+                    'title' => 'Upcoming Assessment: ' . $er['subject_name'],
+                    'description' => 'Exam scheduled on ' . date('M d, Y', strtotime($er['exam_date'])) . '. Use the AI Study Planner to generate a 7-day revision roadmap or take an AI Practice Quiz.',
+                    'category' => 'Exam',
+                    'icon' => 'book-open',
+                    'priority' => 'medium'
+                ];
+            }
+            $exStmt->close();
+        }
+
+        // 4. Fallback baseline tip
+        if (empty($recommendations)) {
+            $recommendations[] = [
+                'id' => 'base-1',
+                'title' => 'Optimal Academic Standing',
+                'description' => 'All coursework is up-to-date and attendance is healthy. Try challenging your knowledge with an AI Practice Quiz to reinforce retention.',
+                'category' => 'Study',
+                'icon' => 'brain',
+                'priority' => 'low'
             ];
         }
     }

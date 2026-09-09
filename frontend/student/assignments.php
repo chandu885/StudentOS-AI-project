@@ -23,23 +23,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0777, true);
         }
-        $fileName = time() . '_' . basename($_FILES['submission_file']['name']);
+        $ext = pathinfo($_FILES['submission_file']['name'], PATHINFO_EXTENSION);
+        $fileName = time() . '_' . uniqid() . '.' . $ext;
         $targetFile = $uploadDir . $fileName;
         if (move_uploaded_file($_FILES['submission_file']['tmp_name'], $targetFile)) {
             $filePath = 'assignments/' . $fileName;
         }
     }
 
-    $res = apiCall('/assignments.php?action=submit', 'POST', [
-        'assignment_id' => $asgId,
-        'submission_text' => $text,
-        'file_path' => $filePath
-    ]);
+    if ($asgId > 0 && $userId > 0 && $db) {
+        // Fetch deadline to determine if submission is on-time or late
+        $deadline = null;
+        $asgCheck = $db->prepare("SELECT deadline, title FROM assignments WHERE id = ?");
+        if ($asgCheck) {
+            $asgCheck->bind_param("i", $asgId);
+            $asgCheck->execute();
+            $asgMeta = $asgCheck->get_result()->fetch_assoc();
+            $deadline = $asgMeta['deadline'] ?? null;
+            $asgTitle = $asgMeta['title'] ?? 'Assignment';
+            $asgCheck->close();
+        }
 
-    if (!empty($res['success'])) {
-        $successMsg = 'Assignment submitted successfully!';
+        $isLate = ($deadline && strtotime($deadline) < time());
+        $subStatus = $isLate ? 'late' : 'submitted';
+
+        // Check if previous submission exists
+        $checkStmt = $db->prepare("SELECT id FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?");
+        if ($checkStmt) {
+            $checkStmt->bind_param("ii", $asgId, $userId);
+            $checkStmt->execute();
+            $existing = $checkStmt->get_result()->fetch_assoc();
+            $checkStmt->close();
+
+            if ($existing) {
+                // Update submission
+                if ($filePath) {
+                    $upStmt = $db->prepare("UPDATE assignment_submissions SET submission_text = ?, file_path = ?, status = 'resubmitted', submitted_at = NOW() WHERE id = ?");
+                    $upStmt->bind_param("ssi", $text, $filePath, $existing['id']);
+                } else {
+                    $upStmt = $db->prepare("UPDATE assignment_submissions SET submission_text = ?, status = 'resubmitted', submitted_at = NOW() WHERE id = ?");
+                    $upStmt->bind_param("si", $text, $existing['id']);
+                }
+                if ($upStmt->execute()) {
+                    $successMsg = 'Assignment resubmitted successfully!';
+                } else {
+                    $errorMsg = 'Failed to update assignment submission.';
+                }
+                $upStmt->close();
+            } else {
+                // Insert new submission
+                $insStmt = $db->prepare("INSERT INTO assignment_submissions (assignment_id, student_id, submission_text, file_path, status, submitted_at) VALUES (?, ?, ?, ?, ?, NOW())");
+                if ($insStmt) {
+                    $insStmt->bind_param("iisss", $asgId, $userId, $text, $filePath, $subStatus);
+                    if ($insStmt->execute()) {
+                        $successMsg = 'Assignment submitted successfully!';
+                    } else {
+                        $errorMsg = 'Failed to record assignment submission in database.';
+                    }
+                    $insStmt->close();
+                }
+            }
+        }
     } else {
-        $errorMsg = $res['error'] ?? 'Submission failed. Please try again.';
+        $errorMsg = 'Invalid assignment selection or database connection issue.';
     }
 }
 
@@ -138,47 +184,61 @@ if ($db && $userId > 0) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ($assignments as $asg): 
-                                        $overdue = isOverdue($asg['deadline']) && ($asg['status'] ?? 'pending') === 'pending';
-                                    ?>
+                                    <?php if (empty($assignments)): ?>
                                         <tr>
-                                            <td>
-                                                <strong style="color: var(--text-primary); font-size: 14px;"><?php echo htmlspecialchars($asg['title']); ?></strong>
-                                                <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;"><?php echo htmlspecialchars($asg['subject_name']); ?></div>
-                                            </td>
-                                            <td>
-                                                <span style="font-size: 13px; font-weight: 500; <?php echo $overdue ? 'color: var(--danger);' : ''; ?>">
-                                                    <?php echo date('M d, Y h:i A', strtotime($asg['deadline'])); ?>
-                                                </span>
-                                                <?php if ($overdue): ?>
-                                                    <span class="badge badge-danger" style="margin-left: 6px;">Overdue</span>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td><?php echo htmlspecialchars($asg['max_marks'] ?? 100); ?> pts</td>
-                                            <td>
-                                                <?php 
-                                                $st = strtolower($asg['status'] ?? 'pending');
-                                                if ($st === 'submitted') echo '<span class="badge badge-info">Submitted</span>';
-                                                elseif ($st === 'graded') echo '<span class="badge badge-success">Graded</span>';
-                                                else echo '<span class="badge badge-warning">Pending</span>';
-                                                ?>
-                                            </td>
-                                            <td>
-                                                <?php echo isset($asg['obtained_marks']) ? "<strong>{$asg['obtained_marks']}</strong> / {$asg['max_marks']}" : '—'; ?>
-                                            </td>
-                                            <td>
-                                                <?php if (($asg['status'] ?? 'pending') === 'pending'): ?>
-                                                    <button class="btn btn-primary" style="padding: 6px 14px; font-size: 12px;" onclick="openSubmitModal(<?php echo $asg['id']; ?>, '<?php echo addslashes($asg['title']); ?>')">
-                                                        <i class="fas fa-upload"></i> Submit
-                                                    </button>
-                                                <?php else: ?>
-                                                    <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 12px;" disabled>
-                                                        <i class="fas fa-check"></i> Submitted
-                                                    </button>
-                                                <?php endif; ?>
+                                            <td colspan="6" style="text-align: center; padding: 36px; color: var(--text-muted);">
+                                                <i class="fas fa-file-signature" style="font-size: 32px; margin-bottom: 8px; display: block;"></i>
+                                                <strong style="color: var(--text-primary);">No Coursework Assigned Yet</strong>
+                                                <p style="font-size: 13px; margin-top: 4px;">You are all caught up! Assignments published by faculty will appear here.</p>
                                             </td>
                                         </tr>
-                                    <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <?php foreach ($assignments as $asg): 
+                                            $subStatus = strtolower($asg['submission_status'] ?? ($asg['computed_status'] ?? 'pending'));
+                                            $hasSubmitted = !empty($asg['submission_id']) || in_array($subStatus, ['submitted', 'late', 'graded', 'resubmitted']);
+                                            $overdue = isOverdue($asg['deadline']) && !$hasSubmitted;
+                                        ?>
+                                            <tr>
+                                                <td>
+                                                    <strong style="color: var(--text-primary); font-size: 14px;"><?php echo htmlspecialchars($asg['title']); ?></strong>
+                                                    <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;"><?php echo htmlspecialchars($asg['subject_name']); ?></div>
+                                                </td>
+                                                <td>
+                                                    <span style="font-size: 13px; font-weight: 500; <?php echo $overdue ? 'color: var(--danger);' : ''; ?>">
+                                                        <?php echo date('M d, Y h:i A', strtotime($asg['deadline'])); ?>
+                                                    </span>
+                                                    <?php if ($overdue): ?>
+                                                        <span class="badge badge-danger" style="margin-left: 6px;">Overdue</span>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td><?php echo htmlspecialchars($asg['max_marks'] ?? 100); ?> pts</td>
+                                                <td>
+                                                    <?php 
+                                                    if ($subStatus === 'graded') echo '<span class="badge badge-success">Graded</span>';
+                                                    elseif ($subStatus === 'submitted') echo '<span class="badge badge-info">Submitted</span>';
+                                                    elseif ($subStatus === 'resubmitted') echo '<span class="badge badge-info">Resubmitted</span>';
+                                                    elseif ($subStatus === 'late') echo '<span class="badge badge-warning">Late</span>';
+                                                    elseif ($overdue) echo '<span class="badge badge-danger">Missing</span>';
+                                                    else echo '<span class="badge badge-warning">Pending</span>';
+                                                    ?>
+                                                </td>
+                                                <td>
+                                                    <?php echo ($asg['sub_marks'] !== null) ? "<strong>{$asg['sub_marks']}</strong> / {$asg['max_marks']}" : '—'; ?>
+                                                </td>
+                                                <td>
+                                                    <?php if ($hasSubmitted): ?>
+                                                        <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="openSubmitModal(<?php echo $asg['id']; ?>, '<?php echo addslashes($asg['title']); ?>')">
+                                                            <i class="fas fa-redo"></i> Resubmit
+                                                        </button>
+                                                    <?php else: ?>
+                                                        <button class="btn btn-primary" style="padding: 6px 14px; font-size: 12px;" onclick="openSubmitModal(<?php echo $asg['id']; ?>, '<?php echo addslashes($asg['title']); ?>')">
+                                                            <i class="fas fa-upload"></i> Submit
+                                                        </button>
+                                                    <?php endif; ?>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
                                 </tbody>
                             </table>
                         </div>

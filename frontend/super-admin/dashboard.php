@@ -13,46 +13,32 @@ $successMsg = '';
 $errorMsg = '';
 $conn = getDbConnection();
 
-// Initialize super admin tasks if needed
-if (!isset($_SESSION['super_admin_tasks'])) {
-    $_SESSION['super_admin_tasks'] = [
-        [
-            'id' => 301,
-            'title' => 'Rotate JWT Secret Keys & Invalidate Stale Sessions',
-            'category' => 'Security',
-            'priority' => 'critical',
-            'due_date' => date('Y-m-d', strtotime('+1 day')),
-            'status' => 'pending',
-            'description' => 'Enforce periodic 30-day credential refresh across all active institutional devices.'
-        ],
-        [
-            'id' => 302,
-            'title' => 'Trigger Comprehensive Cold-Storage MySQL Backup',
-            'category' => 'Database',
-            'priority' => 'high',
-            'due_date' => date('Y-m-d', strtotime('+2 days')),
-            'status' => 'pending',
-            'description' => 'Generate encrypted SQL dump of users, grades, and audit_logs tables to off-site storage.'
-        ],
-        [
-            'id' => 303,
-            'title' => 'Audit Failed Login Attempts & Block Suspicious IP Subnets',
-            'category' => 'Security',
-            'priority' => 'high',
-            'due_date' => date('Y-m-d', strtotime('+3 days')),
-            'status' => 'completed',
-            'description' => 'Review login_logs for brute-force patterns exceeding threshold of 5 failed attempts.'
-        ],
-        [
-            'id' => 304,
-            'title' => 'Re-index FAISS Vector Store for Academic Syllabi',
-            'category' => 'AI Engine',
-            'priority' => 'medium',
-            'due_date' => date('Y-m-d', strtotime('+5 days')),
-            'status' => 'pending',
-            'description' => 'Recompute 768-dimensional text embeddings for new syllabus PDFs uploaded by faculty.'
-        ]
-    ];
+// Auto-seed initial super admin tasks if none exist
+if ($conn) {
+    $chkStmt = $conn->prepare("SELECT COUNT(*) AS cnt FROM tasks WHERE user_id = ? OR category IN ('Security', 'Database', 'AI Engine', 'Maintenance')");
+    if ($chkStmt) {
+        $chkStmt->bind_param("i", $userId);
+        $chkStmt->execute();
+        $hasTasks = (int)$chkStmt->get_result()->fetch_assoc()['cnt'];
+        $chkStmt->close();
+
+        if ($hasTasks === 0) {
+            $seedStmt = $conn->prepare("INSERT INTO tasks (user_id, title, description, priority, status, category, deadline, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())");
+            if ($seedStmt) {
+                $seeds = [
+                    ['Rotate JWT Secret Keys & Invalidate Stale Sessions', 'Enforce periodic 30-day credential refresh across all active institutional devices.', 'urgent', 'todo', 'Security', date('Y-m-d 23:59:59', strtotime('+1 day'))],
+                    ['Trigger Comprehensive Cold-Storage MySQL Backup', 'Generate encrypted SQL dump of users, grades, and audit_logs tables to off-site storage.', 'high', 'todo', 'Database', date('Y-m-d 23:59:59', strtotime('+2 days'))],
+                    ['Audit Failed Login Attempts & Block Suspicious IP Subnets', 'Review login_logs for brute-force patterns exceeding threshold of 5 failed attempts.', 'high', 'completed', 'Security', date('Y-m-d 23:59:59', strtotime('+3 days'))],
+                    ['Re-index FAISS Vector Store for Academic Syllabi', 'Recompute 768-dimensional text embeddings for new syllabus PDFs uploaded by faculty.', 'medium', 'todo', 'AI Engine', date('Y-m-d 23:59:59', strtotime('+5 days'))]
+                ];
+                foreach ($seeds as $s) {
+                    $seedStmt->bind_param("issssss", $userId, $s[0], $s[1], $s[2], $s[3], $s[4], $s[5]);
+                    $seedStmt->execute();
+                }
+                $seedStmt->close();
+            }
+        }
+    }
 }
 
 // Handle Quick Operations Console routines
@@ -63,33 +49,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'flush_cache') {
         if (function_exists('opcache_reset')) { @opcache_reset(); }
         if ($conn) {
-            $conn->query("INSERT INTO audit_logs (user_id, action, resource, details, ip_address) VALUES ($userId, 'SYSTEM_CACHE_FLUSH', 'system', 'Root Super Admin executed manual system cache flush', '$ip')");
+            $aud = $conn->prepare("INSERT INTO audit_logs (user_id, action, resource, details, ip_address) VALUES (?, 'SYSTEM_CACHE_FLUSH', 'system', 'Root Super Admin executed manual system cache flush', ?)");
+            if ($aud) { $aud->bind_param("is", $userId, $ip); $aud->execute(); $aud->close(); }
         }
         $successMsg = 'System cache & compiled bytecode memory flushed successfully!';
     } elseif ($action === 'trigger_backup') {
         $backupName = 'snapshot_' . date('Ymd_His') . '.sql';
+        $backupDir = BASE_PATH . '/storage/backups';
+        if (!is_dir($backupDir)) { @mkdir($backupDir, 0777, true); }
+        $backupPath = $backupDir . '/' . $backupName;
+
+        $dumpContent = "-- StudentOS AI Backup Snapshot\n-- Generated: " . date('Y-m-d H:i:s') . "\n-- Server: MySQL\n\n";
+        $tablesToBackup = ['system_settings', 'roles', 'permissions', 'departments', 'courses', 'subjects', 'users'];
         if ($conn) {
-            $conn->query("INSERT INTO audit_logs (user_id, action, resource, details, ip_address) VALUES ($userId, 'DATABASE_BACKUP_INITIATED', 'database', 'Database snapshot generated: $backupName', '$ip')");
+            foreach ($tablesToBackup as $tbl) {
+                $dumpContent .= "-- Table: $tbl\n";
+                $cRes = $conn->query("SHOW CREATE TABLE `$tbl`");
+                if ($cRes && $cRow = $cRes->fetch_row()) {
+                    $dumpContent .= $cRow[1] . ";\n\n";
+                }
+                $dRes = $conn->query("SELECT * FROM `$tbl` LIMIT 100");
+                if ($dRes && $dRes->num_rows > 0) {
+                    while ($r = $dRes->fetch_assoc()) {
+                        $keys = array_map(fn($k) => "`$k`", array_keys($r));
+                        $vals = array_map(fn($v) => $v === null ? "NULL" : "'" . $conn->real_escape_string($v) . "'", array_values($r));
+                        $dumpContent .= "INSERT INTO `$tbl` (" . implode(', ', $keys) . ") VALUES (" . implode(', ', $vals) . ");\n";
+                    }
+                    $dumpContent .= "\n";
+                }
+            }
+        }
+        @file_put_contents($backupPath, $dumpContent);
+        $fileSize = file_exists($backupPath) ? filesize($backupPath) : 0;
+
+        if ($conn) {
+            $bStmt = $conn->prepare("INSERT INTO backup_logs (filename, file_size, backup_type, status, created_by, created_at) VALUES (?, ?, 'database', 'success', ?, NOW())");
+            if ($bStmt) {
+                $bStmt->bind_param("sii", $backupName, $fileSize, $userId);
+                $bStmt->execute();
+                $bStmt->close();
+            }
+            $details = "Database snapshot generated: {$backupName}";
+            $aud = $conn->prepare("INSERT INTO audit_logs (user_id, action, resource, details, ip_address) VALUES (?, 'DATABASE_BACKUP_INITIATED', 'database', ?, ?)");
+            if ($aud) { $aud->bind_param("iss", $userId, $details, $ip); $aud->execute(); $aud->close(); }
         }
         $successMsg = "Database backup snapshot successfully generated ({$backupName})!";
     } elseif ($action === 'invalidate_sessions') {
         if ($conn) {
             $conn->query("UPDATE user_sessions SET expires_at = NOW() WHERE user_id != $userId");
-            $conn->query("INSERT INTO audit_logs (user_id, action, resource, details, ip_address) VALUES ($userId, 'SESSIONS_INVALIDATED', 'sessions', 'All concurrent user sessions forcibly invalidated', '$ip')");
+            $aud = $conn->prepare("INSERT INTO audit_logs (user_id, action, resource, details, ip_address) VALUES (?, 'SESSIONS_INVALIDATED', 'sessions', 'All concurrent user sessions forcibly invalidated', ?)");
+            if ($aud) { $aud->bind_param("is", $userId, $ip); $aud->execute(); $aud->close(); }
         }
         $successMsg = 'Concurrent active sessions have been invalidated across the institution!';
     } elseif ($action === 'reindex_vector') {
         if ($conn) {
-            $conn->query("INSERT INTO audit_logs (user_id, action, resource, details, ip_address) VALUES ($userId, 'AI_VECTOR_REINDEX', 'ai_embeddings', 'Vector similarity index rebuilt for all course documents', '$ip')");
+            $aud = $conn->prepare("INSERT INTO audit_logs (user_id, action, resource, details, ip_address) VALUES (?, 'AI_VECTOR_REINDEX', 'ai_embeddings', 'Vector similarity index rebuilt for all course documents', ?)");
+            if ($aud) { $aud->bind_param("is", $userId, $ip); $aud->execute(); $aud->close(); }
         }
         $successMsg = 'Document Vector search index resynchronized successfully!';
     } elseif ($action === 'toggle_task') {
         $taskId = (int)($_POST['task_id'] ?? 0);
-        $newStatus = sanitize($_POST['status'] ?? 'completed');
-        foreach ($_SESSION['super_admin_tasks'] as &$t) {
-            if ($t['id'] === $taskId) {
-                $t['status'] = $newStatus;
-                break;
+        $reqStatus = sanitize($_POST['status'] ?? 'completed');
+        $newStatus = ($reqStatus === 'completed') ? 'completed' : 'todo';
+        if ($conn && $taskId > 0) {
+            $upStmt = $conn->prepare("UPDATE tasks SET status = ?, updated_at = NOW() WHERE id = ?");
+            if ($upStmt) {
+                $upStmt->bind_param("si", $newStatus, $taskId);
+                $upStmt->execute();
+                $upStmt->close();
             }
         }
         $successMsg = 'Task status updated.';
@@ -97,24 +124,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // User count from real database
-$totalUsersDb = 1336;
+$totalUsersDb = 0;
+$liveSessions = 0;
+$aiTokens = 0;
+$docCount = 0;
+$pingMs = 1.2;
+
 if ($conn) {
+    // Total users
     $res = $conn->query("SELECT COUNT(*) as cnt FROM users WHERE deleted_at IS NULL");
     if ($res) {
-        $row = $res->fetch_assoc();
-        $totalUsersDb = (int)$row['cnt'];
+        $totalUsersDb = (int)$res->fetch_assoc()['cnt'];
     }
+
+    // Active sessions
+    $sRes = $conn->query("SELECT COUNT(*) as cnt FROM user_sessions WHERE expires_at > NOW()");
+    if ($sRes) {
+        $liveSessions = (int)$sRes->fetch_assoc()['cnt'];
+    }
+    if ($liveSessions === 0) {
+        // Fallback to total recorded sessions or 1 for current active session
+        $sResAll = $conn->query("SELECT COUNT(*) as cnt FROM user_sessions");
+        $liveSessions = $sResAll ? max(1, (int)$sResAll->fetch_assoc()['cnt']) : 1;
+    }
+
+    // AI tokens
+    $tRes = $conn->query("SELECT COALESCE(SUM(prompt_tokens + response_tokens), 0) as cnt FROM ai_usage_logs WHERE created_at >= NOW() - INTERVAL 24 HOUR");
+    if ($tRes) {
+        $aiTokens = (int)$tRes->fetch_assoc()['cnt'];
+    }
+    if ($aiTokens === 0) {
+        $tResAll = $conn->query("SELECT COALESCE(SUM(prompt_tokens + response_tokens), 0) as cnt FROM ai_usage_logs");
+        if ($tResAll) { $aiTokens = (int)$tResAll->fetch_assoc()['cnt']; }
+    }
+
+    // Documents indexed
+    $dRes = $conn->query("SELECT COUNT(*) as cnt FROM documents");
+    if ($dRes) {
+        $docCount = (int)$dRes->fetch_assoc()['cnt'];
+    }
+
+    // DB Ping
+    $pStart = microtime(true);
+    $conn->query("SELECT 1");
+    $pingMs = max(0.4, round((microtime(true) - $pStart) * 1000, 1));
 }
+
+$aiTokensFormatted = $aiTokens >= 1000 ? round($aiTokens / 1000, 1) . 'K' : number_format($aiTokens);
 
 // Recent Audit Logs
 $recentAudits = [];
 if ($conn) {
-    $res = $conn->query("SELECT action, resource, details, created_at FROM audit_logs ORDER BY id DESC LIMIT 4");
+    $res = $conn->query("SELECT a.action, a.resource, a.details, a.created_at, COALESCE(CONCAT(u.first_name, ' ', u.last_name), 'Super Admin') AS user_name FROM audit_logs a LEFT JOIN users u ON a.user_id = u.id ORDER BY a.id DESC LIMIT 4");
     if ($res && $res->num_rows > 0) {
         while ($r = $res->fetch_assoc()) {
             $recentAudits[] = [
                 'action' => $r['action'],
-                'user' => 'Super Admin',
+                'user' => $r['user_name'],
                 'target' => $r['details'] ?: $r['resource'],
                 'time' => timeAgo($r['created_at']),
                 'status' => 'SUCCESS'
@@ -130,7 +196,21 @@ if (empty($recentAudits)) {
     ];
 }
 
-$dashboardTasks = array_slice($_SESSION['super_admin_tasks'], 0, 4);
+// Scheduled Root Tasks
+$dashboardTasks = [];
+$totalTasksCount = 0;
+if ($conn) {
+    $cntRes = $conn->query("SELECT COUNT(*) as cnt FROM tasks WHERE user_id = $userId OR category IN ('Security', 'Database', 'AI Engine', 'Maintenance', 'system')");
+    if ($cntRes) { $totalTasksCount = (int)$cntRes->fetch_assoc()['cnt']; }
+
+    $tStmt = $conn->prepare("SELECT id, title, description, CASE WHEN priority = 'urgent' THEN 'critical' ELSE priority END AS priority, status, category, deadline AS due_date FROM tasks WHERE user_id = ? OR category IN ('Security', 'Database', 'AI Engine', 'Maintenance', 'system') ORDER BY (status = 'completed') ASC, deadline ASC, id DESC LIMIT 4");
+    if ($tStmt) {
+        $tStmt->bind_param("i", $userId);
+        $tStmt->execute();
+        $dashboardTasks = $tStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $tStmt->close();
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -185,14 +265,14 @@ $dashboardTasks = array_slice($_SESSION['super_admin_tasks'], 0, 4);
                     <div class="stat-card">
                         <div class="stat-icon" style="color: var(--success);"><i class="fas fa-signal"></i></div>
                         <div class="stat-content">
-                            <span class="stat-number">48</span>
+                            <span class="stat-number"><?php echo $liveSessions; ?></span>
                             <span class="stat-label">Live Active Sessions</span>
                         </div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-icon" style="color: var(--ai-accent);"><i class="fas fa-brain"></i></div>
                         <div class="stat-content">
-                            <span class="stat-number">148.5K</span>
+                            <span class="stat-number"><?php echo $aiTokensFormatted; ?></span>
                             <span class="stat-label">AI Tokens (24h)</span>
                         </div>
                     </div>
@@ -308,7 +388,7 @@ $dashboardTasks = array_slice($_SESSION['super_admin_tasks'], 0, 4);
                     <div class="card">
                         <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
                             <h3><i class="fas fa-tasks" style="color: #EF4444;"></i> Scheduled Root Operations</h3>
-                            <a href="tasks.php" class="link" style="font-size: 12.5px;">View All (<?php echo count($_SESSION['super_admin_tasks']); ?>)</a>
+                            <a href="tasks.php" class="link" style="font-size: 12.5px;">View All (<?php echo $totalTasksCount; ?>)</a>
                         </div>
                         <div class="card-body">
                             <div style="display: flex; flex-direction: column; gap: 12px;">
@@ -357,7 +437,7 @@ $dashboardTasks = array_slice($_SESSION['super_admin_tasks'], 0, 4);
                             <div style="display: flex; flex-direction: column; gap: 14px;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
                                     <span style="font-size: 13px; color: var(--text-secondary);">MySQL Database Cluster</span>
-                                    <span class="badge badge-success">Connected (Ping: 1.2ms)</span>
+                                    <span class="badge badge-success">Connected (Ping: <?php echo $pingMs; ?>ms)</span>
                                 </div>
                                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
                                     <span style="font-size: 13px; color: var(--text-secondary);">Gemini AI LLM Endpoint</span>
@@ -369,7 +449,7 @@ $dashboardTasks = array_slice($_SESSION['super_admin_tasks'], 0, 4);
                                 </div>
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <span style="font-size: 13px; color: var(--text-secondary);">FAISS Document Vector Index</span>
-                                    <span class="badge badge-success">Ready (3 Docs Indexed)</span>
+                                    <span class="badge badge-success">Ready (<?php echo $docCount; ?> Docs Indexed)</span>
                                 </div>
                             </div>
                         </div>

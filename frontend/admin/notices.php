@@ -9,16 +9,71 @@ requireRole('admin');
 
 $userId = $_SESSION['user']['id'];
 $successMsg = '';
+$errorMsg = '';
+$db = getDbConnection();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $successMsg = 'Campus-wide official circular published!';
+    if (isset($_POST['action']) && $_POST['action'] === 'delete') {
+        $delId = (int)($_POST['notice_id'] ?? 0);
+        if ($delId > 0 && $db) {
+            $del = $db->prepare("DELETE FROM notices WHERE id = ?");
+            $del->bind_param("i", $delId);
+            if ($del->execute()) {
+                $successMsg = 'Circular deleted successfully.';
+            } else {
+                $errorMsg = 'Failed to delete circular: ' . $db->error;
+            }
+            $del->close();
+        }
+    } elseif (isset($_POST['title'], $_POST['content'])) {
+        $title = sanitize($_POST['title'] ?? '');
+        $content = sanitize($_POST['content'] ?? '');
+        $target = sanitize($_POST['target_role'] ?? 'all');
+        $priority = sanitize($_POST['priority'] ?? 'medium');
+        $deptId = !empty($_POST['department_id']) ? (int)$_POST['department_id'] : null;
+
+        if (empty($title) || empty($content)) {
+            $errorMsg = 'Notice Title and Content are required.';
+        } elseif ($db) {
+            if ($deptId) {
+                $stmt = $db->prepare("INSERT INTO notices (title, content, target_role, department_id, priority, posted_by, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())");
+                $stmt->bind_param("sssisi", $title, $content, $target, $deptId, $priority, $userId);
+            } else {
+                $stmt = $db->prepare("INSERT INTO notices (title, content, target_role, priority, posted_by, created_at) VALUES (?, ?, ?, ?, ?, NOW())");
+                $stmt->bind_param("ssssi", $title, $content, $target, $priority, $userId);
+            }
+            if ($stmt && $stmt->execute()) {
+                $successMsg = 'Campus-wide official circular published successfully!';
+                $stmt->close();
+            } else {
+                $errorMsg = 'Failed to publish circular: ' . ($db->error ?? 'Database error');
+            }
+        }
+    }
 }
 
-$notices = [
-    ['id' => 1, 'title' => 'Final Exam Fee Submission Deadline Extended', 'target' => 'All Students', 'priority' => 'urgent', 'date' => '2026-03-05'],
-    ['id' => 2, 'title' => 'Annual Tech Fest "InnoVision 2026" Registrations Open', 'target' => 'Campus Wide', 'priority' => 'general', 'date' => '2026-03-02'],
-    ['id' => 3, 'title' => 'Library Extended Hours during Midterms', 'target' => 'All Students & Faculty', 'priority' => 'general', 'date' => '2026-02-28']
-];
+// Fetch departments
+$departments = [];
+if ($db) {
+    $dRes = $db->query("SELECT id, name, code FROM departments WHERE status = 'active' ORDER BY name ASC");
+    if ($dRes) $departments = $dRes->fetch_all(MYSQLI_ASSOC);
+}
+
+// Fetch notices
+$notices = [];
+if ($db) {
+    $q = "SELECT n.*, 
+                 CONCAT(u.first_name, ' ', u.last_name) AS author_name,
+                 COALESCE(d.name, 'Campus Wide') AS dept_name
+          FROM notices n
+          LEFT JOIN users u ON n.posted_by = u.id
+          LEFT JOIN departments d ON n.department_id = d.id
+          ORDER BY n.created_at DESC";
+    $nRes = $db->query($q);
+    if ($nRes) {
+        $notices = $nRes->fetch_all(MYSQLI_ASSOC);
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -60,34 +115,72 @@ $notices = [
                     </div>
                 <?php endif; ?>
 
+                <?php if ($errorMsg): ?>
+                    <div class="alert alert-danger" style="background: rgba(239, 68, 68, 0.15); border: 1px solid var(--danger); color: var(--danger); padding: 12px 16px; border-radius: var(--radius-md); margin-bottom: 20px;">
+                        <i class="fas fa-exclamation-circle"></i> <?php echo htmlspecialchars($errorMsg); ?>
+                    </div>
+                <?php endif; ?>
+
                 <div class="card">
-                    <div class="card-header">
-                        <h3><i class="fas fa-newspaper"></i> Published Circulars</h3>
+                    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                        <h3><i class="fas fa-newspaper"></i> Published Circulars (<?php echo count($notices); ?>)</h3>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
                             <table class="data-table">
                                 <thead>
                                     <tr>
-                                        <th>Circular Title</th>
+                                        <th>Circular Title & Summary</th>
                                         <th>Audience</th>
+                                        <th>Scope / Dept</th>
                                         <th>Priority</th>
+                                        <th>Author</th>
                                         <th>Date Issued</th>
+                                        <th>Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ($notices as $n): ?>
+                                    <?php if (empty($notices)): ?>
                                         <tr>
-                                            <td><strong><?php echo htmlspecialchars($n['title']); ?></strong></td>
-                                            <td><span class="badge badge-secondary"><?php echo htmlspecialchars($n['target']); ?></span></td>
-                                            <td>
-                                                <span class="badge badge-<?php echo $n['priority'] === 'urgent' ? 'danger' : 'primary'; ?>">
-                                                    <?php echo ucfirst($n['priority']); ?>
-                                                </span>
+                                            <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 32px;">
+                                                No circulars published. Click "Issue Circular" to publish one.
                                             </td>
-                                            <td><?php echo date('M d, Y', strtotime($n['date'])); ?></td>
                                         </tr>
-                                    <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <?php foreach ($notices as $n): 
+                                            $prio = strtolower($n['priority'] ?? 'medium');
+                                            $prioClass = 'badge-primary';
+                                            if ($prio === 'high' || $prio === 'urgent') $prioClass = 'badge-danger';
+                                            elseif ($prio === 'low') $prioClass = 'badge-secondary';
+                                        ?>
+                                            <tr>
+                                                <td>
+                                                    <strong><?php echo htmlspecialchars($n['title']); ?></strong>
+                                                    <div style="font-size: 11px; color: var(--text-muted); max-width: 360px; line-height: 1.4; margin-top: 3px;">
+                                                        <?php echo htmlspecialchars(mb_substr($n['content'], 0, 100)) . (mb_strlen($n['content']) > 100 ? '...' : ''); ?>
+                                                    </div>
+                                                </td>
+                                                <td><span class="badge badge-secondary"><?php echo ucfirst(htmlspecialchars($n['target_role'] ?? 'all')); ?></span></td>
+                                                <td><?php echo htmlspecialchars($n['dept_name']); ?></td>
+                                                <td>
+                                                    <span class="badge <?php echo $prioClass; ?>">
+                                                        <?php echo ucfirst($prio); ?>
+                                                    </span>
+                                                </td>
+                                                <td><?php echo htmlspecialchars($n['author_name'] ?? 'Admin Office'); ?></td>
+                                                <td><?php echo date('M d, Y', strtotime($n['created_at'])); ?></td>
+                                                <td>
+                                                    <form method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this circular?');">
+                                                        <input type="hidden" name="action" value="delete">
+                                                        <input type="hidden" name="notice_id" value="<?php echo (int)$n['id']; ?>">
+                                                        <button type="submit" class="btn btn-secondary" style="font-size: 11px; padding: 4px 8px; color: var(--danger);" title="Delete circular">
+                                                            <i class="fas fa-trash-alt"></i>
+                                                        </button>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
                                 </tbody>
                             </table>
                         </div>
@@ -108,29 +201,42 @@ $notices = [
             <form method="POST" action="notices.php">
                 <div class="modal-body">
                     <div class="form-group">
-                        <label for="nTitle">Title</label>
-                        <input type="text" name="title" id="nTitle" class="form-control" required>
+                        <label for="nTitle">Circular Title *</label>
+                        <input type="text" name="title" id="nTitle" class="form-control" placeholder="e.g. End-Semester Examination Registration Schedule" required>
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
                         <div class="form-group">
-                            <label for="nTarget">Audience</label>
-                            <select name="target" id="nTarget" class="form-control">
-                                <option value="All Students">All Students</option>
-                                <option value="Faculty Only">Faculty Only</option>
-                                <option value="Campus Wide">Campus Wide</option>
+                            <label for="nTarget">Audience *</label>
+                            <select name="target_role" id="nTarget" class="form-control">
+                                <option value="all">Campus Wide (All)</option>
+                                <option value="student">Students Only</option>
+                                <option value="faculty">Faculty Only</option>
+                                <option value="admin">Administrators Only</option>
                             </select>
                         </div>
                         <div class="form-group">
                             <label for="nPrio">Priority</label>
                             <select name="priority" id="nPrio" class="form-control">
-                                <option value="general">General</option>
-                                <option value="urgent">Urgent</option>
+                                <option value="medium">Medium</option>
+                                <option value="high">High / Urgent</option>
+                                <option value="low">Low</option>
                             </select>
                         </div>
                     </div>
                     <div class="form-group">
-                        <label for="nText">Circular Content</label>
-                        <textarea name="content" id="nText" class="form-control" rows="4" required></textarea>
+                        <label for="nDept">Department Filter (Optional)</label>
+                        <select name="department_id" id="nDept" class="form-control">
+                            <option value="">All Departments</option>
+                            <?php foreach ($departments as $d): ?>
+                                <option value="<?php echo (int)$d['id']; ?>">
+                                    <?php echo htmlspecialchars($d['name']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="nText">Circular Content *</label>
+                        <textarea name="content" id="nText" class="form-control" rows="4" placeholder="Detail the official instructions, timelines, and contact persons..." required></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">

@@ -120,7 +120,61 @@ if ($db && $userId) {
         $stmt->close();
     }
 }
+
+// Dynamic AI Recommendations
 $recommendations = [];
+if ($db && $userId) {
+    $stmt = $db->prepare("SELECT * FROM ai_recommendations WHERE user_id = ? OR user_id = 0 ORDER BY created_at DESC LIMIT 5");
+    if ($stmt) {
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $recommendations = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+    }
+}
+
+// Synthesize contextual recommendations if none stored
+if (empty($recommendations)) {
+    foreach ($attendanceSummary as $att) {
+        if (($att['percentage'] ?? 100) < 75) {
+            $recommendations[] = [
+                'title' => 'Attendance Warning: ' . ($att['subject_name'] ?? 'Subject'),
+                'description' => 'Current attendance is ' . $att['percentage'] . '%. Attend upcoming lectures to meet the mandatory 75% exam eligibility threshold.',
+                'icon' => 'exclamation-triangle',
+                'priority' => 'high'
+            ];
+        }
+    }
+    foreach ($pendingAssignments as $pa) {
+        $daysUntil = round((strtotime($pa['deadline']) - time()) / 86400);
+        if ($daysUntil <= 3) {
+            $recommendations[] = [
+                'title' => 'Deadline Alert: ' . $pa['title'],
+                'description' => 'Coursework for ' . $pa['subject_name'] . ' is due in ' . max(0, (int)$daysUntil) . ' day(s). Submit before deadline.',
+                'icon' => 'clock',
+                'priority' => 'high'
+            ];
+            break;
+        }
+    }
+    if (!empty($upcomingExams[0])) {
+        $ex = $upcomingExams[0];
+        $recommendations[] = [
+            'title' => 'Exam Preparation: ' . $ex['subject_name'],
+            'description' => 'Exam scheduled for ' . date('M d, Y', strtotime($ex['exam_date'])) . '. Generate an AI Study Plan to structure revision.',
+            'icon' => 'book-open',
+            'priority' => 'medium'
+        ];
+    }
+    if (empty($recommendations)) {
+        $recommendations[] = [
+            'title' => 'Great Academic Momentum',
+            'description' => 'You are on track with your coursework and attendance. Challenge yourself with an AI Practice Quiz to test retention.',
+            'icon' => 'lightbulb',
+            'priority' => 'low'
+        ];
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -284,7 +338,7 @@ $recommendations = [];
                             <div class="attendance-grid">
                                 <?php foreach ($attendanceSummary as $att): ?>
                                     <div class="attendance-item">
-                                        <span class="subject-name"><?php echo htmlspecialchars($att['name']); ?></span>
+                                        <span class="subject-name"><?php echo htmlspecialchars($att['subject_name'] ?? $att['name'] ?? 'Subject'); ?></span>
                                         <div class="attendance-bar">
                                             <div class="attendance-fill <?php echo $att['percentage'] < 75 ? 'danger' : ($att['percentage'] < 85 ? 'warning' : 'success'); ?>" 
                                                  style="width: <?php echo $att['percentage']; ?>%"></div>
@@ -310,7 +364,7 @@ $recommendations = [];
                     </div>
                     <div class="card-body">
                         <?php 
-                            $recList = $recommendations['recommendations'] ?? $recommendations['data'] ?? [];
+                            $recList = $recommendations['recommendations'] ?? $recommendations['data'] ?? $recommendations;
                         ?>
                         <?php if (!empty($recList)): ?>
                             <?php foreach (array_slice($recList, 0, 3) as $rec): ?>

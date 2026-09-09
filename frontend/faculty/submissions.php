@@ -9,25 +9,76 @@ requireRole('faculty');
 
 $userId = $_SESSION['user']['id'];
 $successMsg = '';
+$errorMsg = '';
+$db = getDbConnection();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'grade') {
-    $subId = (int)$_POST['submission_id'];
-    $marks = (float)$_POST['marks'];
+    $subId = (int)($_POST['submission_id'] ?? 0);
+    $marks = (float)($_POST['marks'] ?? 0);
     $feedback = sanitize($_POST['feedback'] ?? '');
 
-    $res = apiCall('/assignments.php?action=grade', 'POST', [
-        'submission_id' => $subId,
-        'marks' => $marks,
-        'feedback' => $feedback
-    ]);
-    $successMsg = 'Submission graded and score updated successfully!';
+    if ($db && $subId > 0) {
+        $stmt = $db->prepare(
+            "UPDATE assignment_submissions 
+             SET marks_obtained = ?, feedback = ?, graded_by = ?, status = 'graded', graded_at = NOW() 
+             WHERE id = ?"
+        );
+        if ($stmt) {
+            $stmt->bind_param("dsii", $marks, $feedback, $userId, $subId);
+            if ($stmt->execute()) {
+                $successMsg = 'Submission graded and score updated successfully!';
+            } else {
+                $errorMsg = 'Failed to grade submission: ' . $stmt->error;
+            }
+            $stmt->close();
+        }
+    }
 }
 
-$submissions = [
-    ['id' => 1, 'student_name' => 'Alex Morgan', 'roll' => 'CS-2023-01', 'assignment_title' => 'ER Diagram & Relational Schema', 'submitted_at' => date('Y-m-d H:i:s', strtotime('-1 day')), 'status' => 'graded', 'marks' => 19, 'max_marks' => 20, 'text' => 'GitHub Repo: https://github.com/alex/dbms-project'],
-    ['id' => 2, 'student_name' => 'Catherine Davis', 'roll' => 'CS-2023-03', 'assignment_title' => 'ER Diagram & Relational Schema', 'submitted_at' => date('Y-m-d H:i:s', strtotime('-12 hours')), 'status' => 'pending', 'marks' => null, 'max_marks' => 20, 'text' => 'Attached normalization matrix and proof of lossless join.'],
-    ['id' => 3, 'student_name' => 'Daniel Evans', 'roll' => 'CS-2023-04', 'assignment_title' => 'ER Diagram & Relational Schema', 'submitted_at' => date('Y-m-d H:i:s', strtotime('-3 hours')), 'status' => 'pending', 'marks' => null, 'max_marks' => 20, 'text' => 'Completed all normalization exercises including multi-valued dependencies.']
-];
+$submissions = [];
+if ($db) {
+    $stmt = $db->prepare(
+        "SELECT sub.id, sub.assignment_id, sub.student_id, sub.submission_text, sub.file_path,
+                sub.marks_obtained, sub.feedback, sub.submitted_at, sub.status,
+                CONCAT(u.first_name, ' ', u.last_name) AS student_name,
+                COALESCE(sp.student_id, sp.roll_number, CONCAT('STU-', u.id)) AS roll,
+                a.title AS assignment_title, a.max_marks,
+                s.name AS subject_name, s.code AS subject_code
+         FROM assignment_submissions sub
+         JOIN assignments a ON sub.assignment_id = a.id
+         JOIN subjects s ON a.subject_id = s.id
+         JOIN users u ON sub.student_id = u.id
+         LEFT JOIN student_profiles sp ON sp.user_id = u.id
+         WHERE a.faculty_id = ? OR s.faculty_id = ?
+         ORDER BY sub.submitted_at DESC"
+    );
+    if ($stmt) {
+        $stmt->bind_param("ii", $userId, $userId);
+        $stmt->execute();
+        $submissions = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+    }
+    if (empty($submissions)) {
+        $res = $db->query(
+            "SELECT sub.id, sub.assignment_id, sub.student_id, sub.submission_text, sub.file_path,
+                    sub.marks_obtained, sub.feedback, sub.submitted_at, sub.status,
+                    CONCAT(u.first_name, ' ', u.last_name) AS student_name,
+                    COALESCE(sp.student_id, sp.roll_number, CONCAT('STU-', u.id)) AS roll,
+                    a.title AS assignment_title, a.max_marks,
+                    s.name AS subject_name, s.code AS subject_code
+             FROM assignment_submissions sub
+             JOIN assignments a ON sub.assignment_id = a.id
+             JOIN subjects s ON a.subject_id = s.id
+             JOIN users u ON sub.student_id = u.id
+             LEFT JOIN student_profiles sp ON sp.user_id = u.id
+             ORDER BY sub.submitted_at DESC
+             LIMIT 25"
+        );
+        if ($res) {
+            $submissions = $res->fetch_all(MYSQLI_ASSOC);
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -66,7 +117,7 @@ $submissions = [
 
                 <div class="card">
                     <div class="card-header">
-                        <h3><i class="fas fa-inbox"></i> Submissions List</h3>
+                        <h3><i class="fas fa-inbox"></i> Submissions List (<?php echo count($submissions); ?>)</h3>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
@@ -74,7 +125,7 @@ $submissions = [
                                 <thead>
                                     <tr>
                                         <th>Student</th>
-                                        <th>Assignment</th>
+                                        <th>Assignment & Subject</th>
                                         <th>Submission Time</th>
                                         <th>Status</th>
                                         <th>Score</th>
@@ -82,31 +133,43 @@ $submissions = [
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ($submissions as $sub): 
-                                        $isGraded = ($sub['status'] ?? '') === 'graded';
-                                    ?>
+                                    <?php if (empty($submissions)): ?>
                                         <tr>
-                                            <td>
-                                                <strong style="color: var(--text-primary);"><?php echo htmlspecialchars($sub['student_name']); ?></strong>
-                                                <div style="font-size: 11px; color: var(--text-muted);"><?php echo htmlspecialchars($sub['roll']); ?></div>
-                                            </td>
-                                            <td><?php echo htmlspecialchars($sub['assignment_title']); ?></td>
-                                            <td><?php echo date('M d, h:i A', strtotime($sub['submitted_at'])); ?></td>
-                                            <td>
-                                                <span class="badge badge-<?php echo $isGraded ? 'success' : 'warning'; ?>">
-                                                    <?php echo ucfirst($sub['status']); ?>
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <?php echo $isGraded ? "<strong>{$sub['marks']}</strong> / {$sub['max_marks']}" : '—'; ?>
-                                            </td>
-                                            <td>
-                                                <button class="btn btn-primary" style="padding: 4px 10px; font-size: 12px;" onclick="openGradeModal(<?php echo $sub['id']; ?>, '<?php echo addslashes($sub['student_name']); ?>', <?php echo $sub['max_marks']; ?>, '<?php echo addslashes($sub['text']); ?>')">
-                                                    <i class="fas fa-pen"></i> <?php echo $isGraded ? 'Edit Grade' : 'Grade'; ?>
-                                                </button>
+                                            <td colspan="6" style="text-align: center; padding: 24px; color: var(--text-muted);">
+                                                <i class="fas fa-inbox"></i> No student submissions received yet.
                                             </td>
                                         </tr>
-                                    <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <?php foreach ($submissions as $sub): 
+                                            $isGraded = ($sub['status'] ?? '') === 'graded';
+                                            $subText = $sub['submission_text'] ?? $sub['file_path'] ?? '';
+                                        ?>
+                                            <tr>
+                                                <td>
+                                                    <strong style="color: var(--text-primary);"><?php echo htmlspecialchars($sub['student_name']); ?></strong>
+                                                    <div style="font-size: 11px; color: var(--text-muted);"><?php echo htmlspecialchars($sub['roll']); ?></div>
+                                                </td>
+                                                <td>
+                                                    <strong><?php echo htmlspecialchars($sub['assignment_title']); ?></strong>
+                                                    <div style="font-size: 11px; color: var(--text-muted);"><?php echo htmlspecialchars($sub['subject_name'] ?? ''); ?></div>
+                                                </td>
+                                                <td><?php echo !empty($sub['submitted_at']) ? date('M d, h:i A', strtotime($sub['submitted_at'])) : 'Recent'; ?></td>
+                                                <td>
+                                                    <span class="badge badge-<?php echo $isGraded ? 'success' : 'warning'; ?>">
+                                                        <?php echo ucfirst($sub['status']); ?>
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <?php echo $isGraded ? "<strong>" . (float)$sub['marks_obtained'] . "</strong> / {$sub['max_marks']}" : '—'; ?>
+                                                </td>
+                                                <td>
+                                                    <button class="btn btn-primary" style="padding: 4px 10px; font-size: 12px;" onclick="openGradeModal(<?php echo $sub['id']; ?>, '<?php echo addslashes($sub['student_name']); ?>', <?php echo (int)$sub['max_marks']; ?>, '<?php echo addslashes($subText); ?>')">
+                                                        <i class="fas fa-pen"></i> <?php echo $isGraded ? 'Edit Grade' : 'Grade'; ?>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
                                 </tbody>
                             </table>
                         </div>
