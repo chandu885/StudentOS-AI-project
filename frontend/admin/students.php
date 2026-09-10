@@ -515,11 +515,6 @@ if ($db) {
                                                             </button>
                                                         <?php endif; ?>
                                                         <button type="button" class="btn btn-outline" style="font-size: 11px; padding: 5px 9px;"
-                                                                title="Manage Opt-In Status"
-                                                                onclick='openToggleOptInModal(<?php echo htmlspecialchars(json_encode($stu), ENT_QUOTES, "UTF-8"); ?>)'>
-                                                            <i class="fas fa-sliders-h"></i> Opt-In
-                                                        </button>
-                                                        <button type="button" class="btn btn-outline" style="font-size: 11px; padding: 5px 9px;"
                                                                 title="Edit Student" 
                                                                 onclick='openEditStudentModal(<?php echo htmlspecialchars(json_encode($stu), ENT_QUOTES, "UTF-8"); ?>)'>
                                                             <i class="fas fa-edit" style="color: var(--primary);"></i> Edit
