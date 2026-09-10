@@ -40,13 +40,8 @@ if ($db && $userId > 0) {
             $deptName = $dbProf['department_name'] ?? '';
             $deptCode = strtoupper($dbProf['department_code'] ?? '');
             $courseCode = strtoupper($dbProf['course_code'] ?? '');
-            if ($deptId === 4 || stripos($deptName, 'Management') !== false || stripos($deptName, 'Business') !== false || $deptCode === 'MGMT' || $courseCode === 'BBA') {
-                $degreeProgram = 'BBA';
-                $departmentName = !empty($deptName) ? $deptName : 'Department of Business Administration';
-            } else {
-                $degreeProgram = 'BCA';
-                $departmentName = !empty($deptName) ? $deptName : 'Department of Computer Applications';
-            }
+            $degreeProgram = !empty($dbProf['course_name']) ? $dbProf['course_name'] : (!empty($dbProf['course_code']) ? $dbProf['course_code'] : 'BCA');
+            $departmentName = !empty($deptName) ? $deptName : 'Department of Computer Applications';
             if (!empty($dbProf['semester'])) {
                 $currentSemester = $dbProf['semester'];
             }

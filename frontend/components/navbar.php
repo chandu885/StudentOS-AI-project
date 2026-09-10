@@ -102,6 +102,9 @@ if (($user['role_id'] ?? 4) == 1) {
                 <a href="<?php echo htmlspecialchars(url($portalPrefix . '/profile.php')); ?>" class="dropdown-item">
                     <i class="fas fa-user-circle"></i> View Profile
                 </a>
+                <a href="<?php echo htmlspecialchars(url($portalPrefix . '/profile.php?tab=security')); ?>" class="dropdown-item">
+                    <i class="fas fa-key"></i> Change Password
+                </a>
                 <a href="<?php echo htmlspecialchars(url($portalPrefix . '/tasks.php')); ?>" class="dropdown-item">
                     <i class="fas fa-tasks"></i> My Tasks
                 </a>

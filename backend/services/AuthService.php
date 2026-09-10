@@ -92,6 +92,7 @@ class AuthService {
                 'password' => $data['password'],
                 'first_name' => $data['first_name'],
                 'last_name' => $data['last_name'],
+                'phone' => $data['phone'] ?? null,
                 'is_verified' => 1,
                 'is_active' => 1
             ];

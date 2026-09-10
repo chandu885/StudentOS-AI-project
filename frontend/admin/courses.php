@@ -36,6 +36,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $del->close();
             }
         }
+    } elseif (isset($_POST['action']) && $_POST['action'] === 'edit') {
+        $courseId = (int)($_POST['course_id'] ?? 0);
+        $name = sanitize($_POST['name'] ?? '');
+        $code = strtoupper(sanitize($_POST['code'] ?? ''));
+        $deptId = (int)($_POST['department_id'] ?? 0);
+        $semesters = max(1, (int)($_POST['semesters'] ?? 8));
+        $duration = max(1, (int)($_POST['duration_years'] ?? ceil($semesters / 2)));
+        $degreeType = sanitize($_POST['degree_type'] ?? 'Bachelor');
+        $description = sanitize($_POST['description'] ?? '');
+        $status = in_array($_POST['status'] ?? '', ['active', 'inactive']) ? $_POST['status'] : 'active';
+
+        if ($courseId <= 0 || empty($name) || empty($code) || $deptId <= 0) {
+            $errorMsg = 'Please fill in all required fields (Program ID, Name, Code, Department).';
+        } elseif ($db) {
+            $dupChk = $db->prepare("SELECT id FROM courses WHERE code = ? AND id != ?");
+            $dupChk->bind_param("si", $code, $courseId);
+            $dupChk->execute();
+            if ($dupChk->get_result()->fetch_assoc()) {
+                $errorMsg = "Another degree program with code '$code' already exists.";
+                $dupChk->close();
+            } else {
+                $dupChk->close();
+                $stmt = $db->prepare("UPDATE courses SET department_id = ?, code = ?, name = ?, description = ?, duration_years = ?, total_semesters = ?, degree_type = ?, status = ?, updated_at = NOW() WHERE id = ?");
+                if ($stmt) {
+                    $stmt->bind_param("isssiissi", $deptId, $code, $name, $description, $duration, $semesters, $degreeType, $status, $courseId);
+                    if ($stmt->execute()) {
+                        $successMsg = "Degree program '$name' ($code) updated successfully in the database!";
+                    } else {
+                        $errorMsg = 'Failed to update degree program: ' . $db->error;
+                    }
+                    $stmt->close();
+                }
+            }
+        }
     } elseif (isset($_POST['name'], $_POST['code'])) {
         $name = sanitize($_POST['name'] ?? '');
         $code = strtoupper(sanitize($_POST['code'] ?? ''));
@@ -188,7 +222,10 @@ if ($db) {
                                                         <?php echo ucfirst($c['status'] ?? 'active'); ?>
                                                     </span>
                                                 </td>
-                                                <td>
+                                                 <td>
+                                                    <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 4px 8px; color: var(--primary); margin-right: 4px;" title="Edit program details" onclick='openEditCourseModal(<?php echo htmlspecialchars(json_encode($c), ENT_QUOTES, "UTF-8"); ?>)'>
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
                                                     <form method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this program?');">
                                                         <input type="hidden" name="action" value="delete">
                                                         <input type="hidden" name="course_id" value="<?php echo (int)$c['id']; ?>">
@@ -269,7 +306,95 @@ if ($db) {
         </div>
     </div>
 
+    <!-- Edit Course Modal -->
+    <div class="modal-backdrop" id="editCourseModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3><i class="fas fa-edit" style="color: var(--primary); margin-right: 8px;"></i> Edit Degree Program</h3>
+                <button type="button" class="modal-close" onclick="closeModal('editCourseModal')">&times;</button>
+            </div>
+            <form method="POST" action="courses.php">
+                <input type="hidden" name="action" value="edit">
+                <input type="hidden" name="course_id" id="editCourseId" value="">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="editCName">Program Name *</label>
+                        <input type="text" name="name" id="editCName" class="form-control" required>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                        <div class="form-group">
+                            <label for="editCCode">Program Code *</label>
+                            <input type="text" name="code" id="editCCode" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="editCDept">Department *</label>
+                            <select name="department_id" id="editCDept" class="form-control" required>
+                                <option value="">Select Department</option>
+                                <?php foreach ($departments as $d): ?>
+                                    <option value="<?php echo (int)$d['id']; ?>">
+                                        <?php echo htmlspecialchars($d['name']); ?> (<?php echo htmlspecialchars($d['code']); ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                        <div class="form-group">
+                            <label for="editCSem">Total Semesters</label>
+                            <input type="number" name="semesters" id="editCSem" class="form-control" min="1" max="12" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="editCDur">Duration (Years)</label>
+                            <input type="number" name="duration_years" id="editCDur" class="form-control" min="1" max="6" required>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                        <div class="form-group">
+                            <label for="editCType">Degree Type *</label>
+                            <select name="degree_type" id="editCType" class="form-control" required>
+                                <option value="Bachelor">Bachelor</option>
+                                <option value="Master">Master</option>
+                                <option value="Doctorate">Doctorate</option>
+                                <option value="Diploma">Diploma</option>
+                                <option value="Certificate">Certificate</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="editCStatus">Status *</label>
+                            <select name="status" id="editCStatus" class="form-control" required>
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="editCDesc">Description / Specialization</label>
+                        <textarea name="description" id="editCDesc" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('editCourseModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Update Program in Database</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="../assets/js/utils.js"></script>
     <script src="../assets/js/notifications.js"></script>
+    <script>
+    function openEditCourseModal(c) {
+        document.getElementById('editCourseId').value = c.id || '';
+        document.getElementById('editCName').value = c.name || '';
+        document.getElementById('editCCode').value = c.code || '';
+        document.getElementById('editCDept').value = c.department_id || '';
+        document.getElementById('editCSem').value = c.total_semesters || 8;
+        document.getElementById('editCDur').value = c.duration_years || Math.ceil((c.total_semesters || 8) / 2);
+        document.getElementById('editCType').value = c.degree_type || 'Bachelor';
+        document.getElementById('editCStatus').value = c.status || 'active';
+        document.getElementById('editCDesc').value = c.description || '';
+        openModal('editCourseModal');
+    }
+    </script>
 </body>
 </html>

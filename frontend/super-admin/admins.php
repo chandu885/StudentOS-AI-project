@@ -94,13 +94,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
+    } elseif ($action === 'update_admin') {
+        $targetUserId = (int)($_POST['target_user_id'] ?? 0);
+        $firstName = sanitize($_POST['first_name'] ?? '');
+        $lastName = sanitize($_POST['last_name'] ?? '');
+        $email = sanitize($_POST['email'] ?? '');
+        $phone = sanitize($_POST['phone'] ?? '');
+        $roleId = (int)($_POST['role_id'] ?? 2); // 1 = Super Admin, 2 = Admin
+        $isActive = isset($_POST['is_active']) ? (int)$_POST['is_active'] : 1;
+
+        if ($targetUserId <= 0 || empty($firstName) || empty($lastName) || empty($email)) {
+            $errorMsg = 'Please complete all required fields (First Name, Last Name, Email).';
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $errorMsg = 'Please provide a valid email address.';
+        } else {
+            if ($conn) {
+                // Check duplicate email
+                $dup = $conn->prepare("SELECT id FROM users WHERE email = ? AND id != ? AND deleted_at IS NULL");
+                $dup->bind_param("si", $email, $targetUserId);
+                $dup->execute();
+                if ($dup->get_result()->fetch_assoc()) {
+                    $errorMsg = "Another user account with email '$email' already exists.";
+                    $dup->close();
+                } else {
+                    $dup->close();
+                    $up = $conn->prepare("UPDATE users SET first_name = ?, last_name = ?, email = ?, phone = ?, role_id = ?, is_active = ?, updated_at = NOW() WHERE id = ? AND role_id IN (1, 2)");
+                    if ($up) {
+                        $up->bind_param("ssssiii", $firstName, $lastName, $email, $phone, $roleId, $isActive, $targetUserId);
+                        if ($up->execute()) {
+                            $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+                            $details = "Super Admin updated details for Administrator #{$targetUserId} ({$email})";
+                            $aud = $conn->prepare("INSERT INTO audit_logs (user_id, action, resource, resource_id, details, ip_address) VALUES (?, 'ADMIN_UPDATED', 'users', ?, ?, ?)");
+                            if ($aud) {
+                                $aud->bind_param("iiss", $currentUserId, $targetUserId, $details, $ip);
+                                $aud->execute();
+                            }
+                            $successMsg = "Administrator {$firstName} {$lastName} ({$email}) details updated successfully in the database!";
+                        } else {
+                            $errorMsg = 'Database update failed: ' . $conn->error;
+                        }
+                        $up->close();
+                    }
+                }
+            }
+        }
     }
 }
 
 // Fetch real administrators
 $adminsList = [];
 if ($conn) {
-    $res = $conn->query("SELECT u.id, u.email, u.first_name, u.last_name, u.role_id, r.name as role_name, u.is_active, u.created_at, u.last_login_at 
+    $res = $conn->query("SELECT u.id, u.email, u.first_name, u.last_name, u.phone, u.role_id, r.name as role_name, u.is_active, u.created_at, u.last_login_at 
                          FROM users u 
                          LEFT JOIN roles r ON u.role_id = r.id 
                          WHERE u.role_id IN (1, 2) AND u.deleted_at IS NULL 
@@ -216,6 +260,10 @@ if ($conn) {
                                                 <?php endif; ?>
                                             </td>
                                             <td style="text-align: right;">
+                                                <button type="button" class="btn btn-outline" style="font-size: 11.5px; padding: 5px 10px; margin-right: 4px;"
+                                                        onclick='openEditAdminModal(<?php echo htmlspecialchars(json_encode($adm), ENT_QUOTES, "UTF-8"); ?>)'>
+                                                    <i class="fas fa-edit" style="color: var(--primary);"></i> Edit
+                                                </button>
                                                 <button type="button" class="btn btn-outline" style="font-size: 11.5px; padding: 5px 10px;"
                                                         onclick="openAdminPasswordModal('<?php echo $adm['id']; ?>', '<?php echo addslashes($adm['first_name'] . ' ' . $adm['last_name']); ?>', '<?php echo addslashes($adm['email']); ?>')">
                                                     <i class="fas fa-key" style="color: #F59E0B;"></i> Change Password
@@ -341,6 +389,69 @@ if ($conn) {
         </div>
     </div>
 
+    <!-- Edit Admin Modal -->
+    <div id="editAdminModal" class="modal-backdrop" style="display: none; align-items: center; justify-content: center; z-index: 1000;">
+        <div class="modal" style="width: 100%; max-width: 520px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-xl); box-shadow: 0 24px 60px rgba(0,0,0,0.8); overflow: hidden;">
+            <div class="modal-header" style="padding: 18px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="font-size: 16px; margin: 0; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-user-edit" style="color: var(--primary);"></i> Edit Administrator Details
+                </h3>
+                <button type="button" class="btn-close" onclick="closeEditAdminModal()" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form method="POST" action="admins.php" id="editAdminForm" style="padding: 24px;">
+                <input type="hidden" name="action" value="update_admin">
+                <input type="hidden" name="target_user_id" id="editAdminUserId" value="">
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+                    <div class="form-group">
+                        <label for="editAdminFn">First Name <span style="color: var(--danger);">*</span></label>
+                        <input type="text" name="first_name" id="editAdminFn" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editAdminLn">Last Name <span style="color: var(--danger);">*</span></label>
+                        <input type="text" name="last_name" id="editAdminLn" class="form-control" required>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 14px;">
+                    <label for="editAdminEmail">Email Address <span style="color: var(--danger);">*</span></label>
+                    <input type="email" name="email" id="editAdminEmail" class="form-control" required>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 14px;">
+                    <label for="editAdminPhone">Phone Number</label>
+                    <input type="text" name="phone" id="editAdminPhone" class="form-control" placeholder="+1 555-0199">
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px;">
+                    <div class="form-group">
+                        <label for="editAdminRole">Role Group <span style="color: var(--danger);">*</span></label>
+                        <select name="role_id" id="editAdminRole" class="form-control" required>
+                            <option value="2">Admin (Standard)</option>
+                            <option value="1">Super Admin (Universal Root)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="editAdminStatus">Account Status <span style="color: var(--danger);">*</span></label>
+                        <select name="is_active" id="editAdminStatus" class="form-control" required>
+                            <option value="1">Active</option>
+                            <option value="0">Disabled</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                    <button type="button" class="btn btn-secondary" onclick="closeEditAdminModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Save Changes to Database
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="../assets/js/utils.js"></script>
     <script src="../assets/js/notifications.js"></script>
     <script>
@@ -355,6 +466,21 @@ if ($conn) {
 
     function closeAdminPasswordModal() {
         document.getElementById('adminPasswordModal').style.display = 'none';
+    }
+
+    function openEditAdminModal(adm) {
+        document.getElementById('editAdminUserId').value = adm.id || '';
+        document.getElementById('editAdminFn').value = adm.first_name || '';
+        document.getElementById('editAdminLn').value = adm.last_name || '';
+        document.getElementById('editAdminEmail').value = adm.email || '';
+        document.getElementById('editAdminPhone').value = adm.phone || '';
+        document.getElementById('editAdminRole').value = adm.role_id || 2;
+        document.getElementById('editAdminStatus').value = (adm.is_active !== undefined) ? adm.is_active : 1;
+        document.getElementById('editAdminModal').style.display = 'flex';
+    }
+
+    function closeEditAdminModal() {
+        document.getElementById('editAdminModal').style.display = 'none';
     }
 
     function openProvisionModal() {
@@ -380,6 +506,7 @@ if ($conn) {
     window.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
             closeAdminPasswordModal();
+            closeEditAdminModal();
             closeProvisionModal();
         }
     });

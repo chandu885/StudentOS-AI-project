@@ -15,21 +15,87 @@ $db = getDbConnection();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action']) && $_POST['action'] === 'delete') {
         $delId = (int)($_POST['department_id'] ?? 0);
+        $deleteMode = sanitize($_POST['delete_mode'] ?? 'deactivate'); // 'deactivate' or 'permanent'
+
         if ($delId > 0 && $db) {
-            // Check student & faculty dependencies
-            $stuChk = $db->query("SELECT COUNT(*) AS c FROM student_profiles WHERE department_id = $delId")->fetch_assoc()['c'] ?? 0;
-            $facChk = $db->query("SELECT COUNT(*) AS c FROM faculty_profiles WHERE department_id = $delId")->fetch_assoc()['c'] ?? 0;
-            if ($stuChk > 0 || $facChk > 0) {
-                $errorMsg = "Cannot delete department: $stuChk student(s) and $facChk faculty member(s) are assigned to it.";
-            } else {
-                $del = $db->prepare("DELETE FROM departments WHERE id = ?");
-                $del->bind_param("i", $delId);
-                if ($del->execute()) {
-                    $successMsg = 'Department deleted successfully.';
+            // Check student & faculty dependencies, including section and phone numbers
+            $depInfoStmt = $db->prepare("SELECT d.name, d.code,
+                                                COUNT(DISTINCT sp.id) AS stu_count,
+                                                GROUP_CONCAT(DISTINCT sp.section ORDER BY sp.section SEPARATOR ', ') AS sections,
+                                                COUNT(DISTINCT NULLIF(COALESCE(sp.phone, su.phone), '')) AS phone_count,
+                                                (SELECT COUNT(*) FROM faculty_profiles fp JOIN users fu ON fp.user_id = fu.id WHERE fp.department_id = ? AND fu.deleted_at IS NULL) AS fac_count
+                                         FROM departments d
+                                         LEFT JOIN student_profiles sp ON sp.department_id = d.id
+                                         LEFT JOIN users su ON sp.user_id = su.id AND su.deleted_at IS NULL
+                                         WHERE d.id = ?
+                                         GROUP BY d.id");
+            $depInfoStmt->bind_param("ii", $delId, $delId);
+            $depInfoStmt->execute();
+            $depInfo = $depInfoStmt->get_result()->fetch_assoc();
+            $depInfoStmt->close();
+
+            $deptName = $depInfo['name'] ?? 'Department';
+            $stuCount = (int)($depInfo['stu_count'] ?? 0);
+            $facCount = (int)($depInfo['fac_count'] ?? 0);
+            $sections = !empty($depInfo['sections']) ? $depInfo['sections'] : 'None';
+            $phoneCount = (int)($depInfo['phone_count'] ?? 0);
+
+            if ($deleteMode === 'deactivate') {
+                $stmt = $db->prepare("UPDATE departments SET status = 'inactive', updated_at = NOW() WHERE id = ?");
+                $stmt->bind_param("i", $delId);
+                if ($stmt->execute()) {
+                    $successMsg = "Department '$deptName' ($delId) has been deactivated successfully. Enrolled students ($stuCount) across section(s) '$sections' with $phoneCount phone number(s) have been safely preserved.";
                 } else {
-                    $errorMsg = 'Failed to delete department: ' . $db->error;
+                    $errorMsg = 'Failed to deactivate department: ' . $db->error;
                 }
-                $del->close();
+                $stmt->close();
+            } elseif ($deleteMode === 'permanent') {
+                if ($stuCount > 0 || $facCount > 0) {
+                    $errorMsg = "Cannot permanently delete '$deptName': It contains $stuCount student(s) across section(s) '$sections' with $phoneCount registered phone number(s), and $facCount faculty member(s). Please deactivate the department instead or reassign the students.";
+                } else {
+                    $del = $db->prepare("DELETE FROM departments WHERE id = ?");
+                    $del->bind_param("i", $delId);
+                    if ($del->execute()) {
+                        $successMsg = "Department '$deptName' has been permanently deleted from the database.";
+                    } else {
+                        $errorMsg = 'Failed to delete department: ' . $db->error;
+                    }
+                    $del->close();
+                }
+            }
+        }
+    } elseif (isset($_POST['action']) && $_POST['action'] === 'edit') {
+        $deptId = (int)($_POST['department_id'] ?? 0);
+        $name = sanitize($_POST['name'] ?? '');
+        $code = strtoupper(sanitize($_POST['code'] ?? ''));
+        $headId = !empty($_POST['head_id']) ? (int)$_POST['head_id'] : null;
+        $description = sanitize($_POST['description'] ?? '');
+        $status = in_array($_POST['status'] ?? '', ['active', 'inactive']) ? $_POST['status'] : 'active';
+
+        if ($deptId <= 0 || empty($name) || empty($code)) {
+            $errorMsg = 'Department ID, Name, and Code are required.';
+        } elseif ($db) {
+            $dup = $db->prepare("SELECT id FROM departments WHERE code = ? AND id != ?");
+            $dup->bind_param("si", $code, $deptId);
+            $dup->execute();
+            if ($dup->get_result()->fetch_assoc()) {
+                $errorMsg = "Another department with code '$code' already exists.";
+                $dup->close();
+            } else {
+                $dup->close();
+                if ($headId) {
+                    $stmt = $db->prepare("UPDATE departments SET name = ?, code = ?, head_id = ?, description = ?, status = ?, updated_at = NOW() WHERE id = ?");
+                    $stmt->bind_param("sssisi", $name, $code, $headId, $description, $status, $deptId);
+                } else {
+                    $stmt = $db->prepare("UPDATE departments SET name = ?, code = ?, head_id = NULL, description = ?, status = ?, updated_at = NOW() WHERE id = ?");
+                    $stmt->bind_param("ssssi", $name, $code, $description, $status, $deptId);
+                }
+                if ($stmt && $stmt->execute()) {
+                    $successMsg = "Department '$name' ($code) updated successfully in the database!";
+                    $stmt->close();
+                } else {
+                    $errorMsg = 'Failed to update department: ' . ($db->error ?? 'Database error');
+                }
             }
         }
     } elseif (isset($_POST['name'], $_POST['code'])) {
@@ -82,7 +148,9 @@ if ($db) {
     $q = "SELECT d.*, 
                  CONCAT(u.first_name, ' ', u.last_name) AS hod_name,
                  (SELECT COUNT(*) FROM faculty_profiles fp JOIN users fu ON fp.user_id = fu.id WHERE fp.department_id = d.id AND fu.deleted_at IS NULL) AS faculty_count,
-                 (SELECT COUNT(*) FROM student_profiles sp JOIN users su ON sp.user_id = su.id WHERE sp.department_id = d.id AND su.deleted_at IS NULL) AS students_count
+                 (SELECT COUNT(*) FROM student_profiles sp JOIN users su ON sp.user_id = su.id WHERE sp.department_id = d.id AND su.deleted_at IS NULL) AS students_count,
+                 (SELECT GROUP_CONCAT(DISTINCT sp.section ORDER BY sp.section SEPARATOR ', ') FROM student_profiles sp JOIN users su ON sp.user_id = su.id WHERE sp.department_id = d.id AND su.deleted_at IS NULL AND sp.section IS NOT NULL AND sp.section != '') AS sections_list,
+                 (SELECT COUNT(DISTINCT NULLIF(COALESCE(sp.phone, su.phone), '')) FROM student_profiles sp JOIN users su ON sp.user_id = su.id WHERE sp.department_id = d.id AND su.deleted_at IS NULL) AS phones_count
           FROM departments d
           LEFT JOIN users u ON d.head_id = u.id
           ORDER BY d.id ASC";
@@ -152,13 +220,14 @@ if ($db) {
                                         <th>Head of Department (HOD)</th>
                                         <th>Faculty Staff</th>
                                         <th>Enrolled Students</th>
+                                        <th>Status</th>
                                         <th>Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php if (empty($departments)): ?>
                                         <tr>
-                                            <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 32px;">
+                                            <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 32px;">
                                                 No departments found. Click "Add Department" to create one.
                                             </td>
                                         </tr>
@@ -182,13 +251,17 @@ if ($db) {
                                                 <td><?php echo (int)$dept['faculty_count']; ?> Professors</td>
                                                 <td><span class="badge badge-info"><?php echo (int)$dept['students_count']; ?> Students</span></td>
                                                 <td>
-                                                    <form method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this department?');">
-                                                        <input type="hidden" name="action" value="delete">
-                                                        <input type="hidden" name="department_id" value="<?php echo (int)$dept['id']; ?>">
-                                                        <button type="submit" class="btn btn-secondary" style="font-size: 11px; padding: 4px 8px; color: var(--danger);" title="Delete department">
-                                                            <i class="fas fa-trash-alt"></i>
-                                                        </button>
-                                                    </form>
+                                                    <span class="badge badge-<?php echo ($dept['status'] ?? 'active') === 'active' ? 'success' : 'danger'; ?>">
+                                                        <?php echo ucfirst($dept['status'] ?? 'active'); ?>
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 4px 8px; color: var(--primary); margin-right: 4px;" title="Edit department details" onclick='openEditDeptModal(<?php echo htmlspecialchars(json_encode($dept), ENT_QUOTES, "UTF-8"); ?>)'>
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 4px 8px; color: var(--danger);" title="Manage / Deactivate / Delete Department" onclick='openDeleteDeptModal(<?php echo htmlspecialchars(json_encode($dept), ENT_QUOTES, "UTF-8"); ?>)'>
+                                                        <i class="fas fa-trash-alt"></i>
+                                                    </button>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
@@ -244,7 +317,147 @@ if ($db) {
         </div>
     </div>
 
+    <!-- Edit Department Modal -->
+    <div class="modal-backdrop" id="editDeptModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3><i class="fas fa-edit" style="color: var(--primary); margin-right: 8px;"></i> Edit Department</h3>
+                <button type="button" class="modal-close" onclick="closeModal('editDeptModal')">&times;</button>
+            </div>
+            <form method="POST" action="departments.php">
+                <input type="hidden" name="action" value="edit">
+                <input type="hidden" name="department_id" id="editDeptId" value="">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="editDeptName">Department Name *</label>
+                        <input type="text" name="name" id="editDeptName" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editDeptCode">Department Code *</label>
+                        <input type="text" name="code" id="editDeptCode" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editDeptHod">Head of Department (HOD)</label>
+                        <select name="head_id" id="editDeptHod" class="form-control">
+                            <option value="">Select Faculty Head (Optional)</option>
+                            <?php foreach ($facultyList as $fac): ?>
+                                <option value="<?php echo (int)$fac['id']; ?>">
+                                    <?php echo htmlspecialchars($fac['name']); ?> <?php echo !empty($fac['designation']) ? '(' . htmlspecialchars($fac['designation']) . ')' : ''; ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="editDeptStatus">Status *</label>
+                        <select name="status" id="editDeptStatus" class="form-control" required>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="editDeptDesc">Description</label>
+                        <textarea name="description" id="editDeptDesc" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('editDeptModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Update Department in Database</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete / Deactivate Department Modal -->
+    <div class="modal-backdrop" id="deleteDeptModal" style="display: none; align-items: center; justify-content: center; z-index: 1000;">
+        <div class="modal-card" style="max-width: 520px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-xl); box-shadow: 0 24px 60px rgba(0,0,0,0.8); overflow: hidden;">
+            <div class="modal-header" style="background: rgba(239, 68, 68, 0.1); border-bottom: 1px solid rgba(239, 68, 68, 0.2); padding: 18px 24px; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="color: var(--danger); margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-exclamation-triangle"></i> Department Management & Deletion
+                </h3>
+                <button type="button" class="modal-close" onclick="closeModal('deleteDeptModal')">&times;</button>
+            </div>
+            <form method="POST" action="departments.php">
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="department_id" id="delDeptId" value="">
+                
+                <div class="modal-body" style="padding: 24px;">
+                    <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px; margin-bottom: 18px;">
+                        <div style="font-size: 11.5px; text-transform: uppercase; color: var(--text-muted); font-weight: 700; margin-bottom: 4px;">Target Department</div>
+                        <div style="font-size: 15px; font-weight: 700; color: var(--text-primary);" id="delDeptName">Department Name</div>
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">Code: <strong id="delDeptCode">CODE</strong></div>
+                    </div>
+
+                    <div style="background: rgba(14, 165, 233, 0.07); border: 1px solid rgba(14, 165, 233, 0.2); border-radius: var(--radius-md); padding: 14px; margin-bottom: 20px;">
+                        <div style="font-size: 12px; font-weight: 700; color: var(--primary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                            <i class="fas fa-database"></i> Associated Student & Contact Records
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12.5px;">
+                            <div><strong>Enrolled Students:</strong> <span id="delDeptStudents" class="badge badge-primary">0</span></div>
+                            <div><strong>Faculty Staff:</strong> <span id="delDeptFaculty" class="badge badge-info">0</span></div>
+                            <div style="grid-column: span 2;"><strong>Active Sections:</strong> <span id="delDeptSections" style="color: var(--text-primary); font-weight: 600;">None</span></div>
+                            <div style="grid-column: span 2;"><strong>Student Phone Contacts:</strong> <span id="delDeptPhones" class="badge badge-success">0 registered</span></div>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label style="font-weight: 600; margin-bottom: 8px; display: block;">Select Action / Deletion Mode:</label>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <label style="display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid rgba(34, 197, 94, 0.3); border-radius: var(--radius-md); background: rgba(34, 197, 94, 0.05); cursor: pointer;">
+                                <input type="radio" name="delete_mode" value="deactivate" checked style="margin-top: 3px;">
+                                <div>
+                                    <strong style="color: var(--success); font-size: 13px;">Deactivate Department (Recommended)</strong>
+                                    <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">
+                                        Sets department status to Inactive. Safely preserves all student profiles, class sections, and registered phone numbers.
+                                    </div>
+                                </div>
+                            </label>
+
+                            <label style="display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: var(--radius-md); background: rgba(239, 68, 68, 0.05); cursor: pointer;">
+                                <input type="radio" name="delete_mode" value="permanent" style="margin-top: 3px;">
+                                <div>
+                                    <strong style="color: var(--danger); font-size: 13px;">Permanent Delete</strong>
+                                    <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">
+                                        Permanently removes the department record from the database. Allowed only when 0 students and 0 faculty are assigned.
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="modal-footer" style="padding: 16px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px;">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('deleteDeptModal')">Cancel</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-check"></i> Confirm Action
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="../assets/js/utils.js"></script>
     <script src="../assets/js/notifications.js"></script>
+    <script>
+    function openEditDeptModal(dept) {
+        document.getElementById('editDeptId').value = dept.id || '';
+        document.getElementById('editDeptName').value = dept.name || '';
+        document.getElementById('editDeptCode').value = dept.code || '';
+        document.getElementById('editDeptHod').value = dept.head_id || '';
+        document.getElementById('editDeptStatus').value = dept.status || 'active';
+        document.getElementById('editDeptDesc').value = dept.description || '';
+        openModal('editDeptModal');
+    }
+
+    function openDeleteDeptModal(dept) {
+        document.getElementById('delDeptId').value = dept.id || '';
+        document.getElementById('delDeptName').textContent = dept.name || 'Department';
+        document.getElementById('delDeptCode').textContent = dept.code || '';
+        document.getElementById('delDeptStudents').textContent = (dept.students_count || 0) + ' Students';
+        document.getElementById('delDeptFaculty').textContent = (dept.faculty_count || 0) + ' Faculty';
+        document.getElementById('delDeptSections').textContent = dept.sections_list || 'None';
+        document.getElementById('delDeptPhones').textContent = (dept.phones_count || 0) + ' contacts registered';
+        openModal('deleteDeptModal');
+    }
+    </script>
 </body>
 </html>

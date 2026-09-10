@@ -20,16 +20,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'update_profile') {
         $firstName = sanitize($_POST['first_name'] ?? '');
         $lastName = sanitize($_POST['last_name'] ?? '');
+        $phone = sanitize($_POST['phone'] ?? '');
+        $bio = sanitize($_POST['bio'] ?? '');
         
         if (!empty($firstName) && $db) {
-            $uStmt = $db->prepare("UPDATE `users` SET `first_name` = ?, `last_name` = ?, `updated_at` = NOW() WHERE `id` = ?");
+            $uStmt = $db->prepare("UPDATE `users` SET `first_name` = ?, `last_name` = ?, `phone` = ?, `updated_at` = NOW() WHERE `id` = ?");
             if ($uStmt) {
-                $uStmt->bind_param("ssi", $firstName, $lastName, $userId);
+                $uStmt->bind_param("sssi", $firstName, $lastName, $phone, $userId);
                 $uStmt->execute();
+                $uStmt->close();
+            }
+            $spStmt = $db->prepare("UPDATE `student_profiles` SET `phone` = ?, `updated_at` = NOW() WHERE `user_id` = ?");
+            if ($spStmt) {
+                $spStmt->bind_param("si", $phone, $userId);
+                $spStmt->execute();
+                $spStmt->close();
             }
             $_SESSION['user']['first_name'] = $firstName;
             $_SESSION['user']['last_name'] = $lastName;
-            $successMsg = 'Profile updated successfully!';
+            $_SESSION['user']['phone'] = $phone;
+            $successMsg = 'Profile and contact information updated successfully in the database!';
         }
     } elseif ($action === 'change_password') {
         $currentPass = $_POST['current_password'] ?? '';
@@ -66,11 +76,12 @@ $profile = [];
 if ($db) {
     // 1. Fetch user's student profile & department & course
     $stmt = $db->prepare(
-        "SELECT sp.*, d.name AS department_name, d.code AS department_code, c.name AS course_name, c.code AS course_code 
-         FROM student_profiles sp 
+        "SELECT sp.*, u.phone AS user_phone, d.name AS department_name, d.code AS department_code, c.name AS course_name, c.code AS course_code 
+         FROM users u
+         LEFT JOIN student_profiles sp ON sp.user_id = u.id 
          LEFT JOIN departments d ON sp.department_id = d.id 
          LEFT JOIN courses c ON sp.course_id = c.id 
-         WHERE sp.user_id = ?"
+         WHERE u.id = ?"
     );
     if ($stmt) {
         $stmt->bind_param("i", $userId);
@@ -97,21 +108,12 @@ if ($db) {
     }
 }
 
-// Determine 'BCA' or 'BBA' based on the department
-$deptId = (int)($profile['department_id'] ?? 1);
-$deptName = $profile['department_name'] ?? '';
-$deptCode = strtoupper($profile['department_code'] ?? '');
-$courseCode = strtoupper($profile['course_code'] ?? '');
-
-if ($deptId === 4 || stripos($deptName, 'Management') !== false || stripos($deptName, 'Business') !== false || $deptCode === 'MGMT' || $courseCode === 'BBA') {
-    $degreeProgram = 'BBA';
-    $displayDepartment = !empty($deptName) ? $deptName : 'School of Business & Management';
-} else {
-    $degreeProgram = 'BCA';
-    $displayDepartment = !empty($deptName) ? $deptName : 'Department of Computer Applications';
-}
-
+// Dynamically resolve Degree Program and Department directly from the Database
+$degreeProgram = !empty($profile['course_name']) ? $profile['course_name'] : (!empty($profile['course_code']) ? $profile['course_code'] : 'BCA');
+$displayDepartment = !empty($profile['department_name']) ? $profile['department_name'] : 'Department of Computer Applications';
 $user = $_SESSION['user'];
+$studentPhone = !empty($profile['phone']) ? $profile['phone'] : (!empty($profile['user_phone']) ? $profile['user_phone'] : (!empty($user['phone']) ? $user['phone'] : 'Not provided'));
+$section = !empty($profile['section']) ? $profile['section'] : 'A';
 $initials = getInitials(($user['first_name'] ?? 'Alex') . ' ' . ($user['last_name'] ?? 'Johnson'));
 ?>
 <!DOCTYPE html>
@@ -182,8 +184,20 @@ $initials = getInitials(($user['first_name'] ?? 'Alex') . ' ' . ($user['last_nam
                                 <span class="badge badge-primary" style="font-weight: 700; font-size: 13px;"><?php echo htmlspecialchars($degreeProgram); ?></span>
                             </div>
                             <div class="profile-meta-row">
+                                <span style="color: var(--text-muted);">Department:</span>
+                                <strong><?php echo htmlspecialchars($displayDepartment); ?></strong>
+                            </div>
+                            <div class="profile-meta-row">
+                                <span style="color: var(--text-muted);">Class Section:</span>
+                                <span class="badge badge-secondary" style="font-weight: 700;">Section <?php echo htmlspecialchars($section); ?></span>
+                            </div>
+                            <div class="profile-meta-row">
                                 <span style="color: var(--text-muted);">Current Term:</span>
                                 <span class="badge badge-success"><?php echo htmlspecialchars(!empty($profile['semester']) ? (is_numeric($profile['semester']) ? 'Semester ' . $profile['semester'] : $profile['semester']) : 'Semester 1'); ?></span>
+                            </div>
+                            <div class="profile-meta-row">
+                                <span style="color: var(--text-muted);">Phone Number:</span>
+                                <strong style="color: var(--text-primary);"><i class="fas fa-phone" style="font-size: 10px; color: #10B981;"></i> <?php echo htmlspecialchars($studentPhone); ?></strong>
                             </div>
                             <div class="profile-meta-row">
                                 <span style="color: var(--text-muted);">Cumulative CGPA:</span>
@@ -223,7 +237,7 @@ $initials = getInitials(($user['first_name'] ?? 'Alex') . ' ' . ($user['last_nam
 
                             <!-- Tab 1: Overview -->
                             <div id="tab-overview" class="profile-tab-pane">
-                                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 24px;">
+                                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px;">
                                     <div style="background: var(--bg-primary); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
                                         <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Full Legal Name</div>
                                         <div style="font-size: 14px; font-weight: 600; margin-top: 4px;"><?php echo htmlspecialchars(($user['first_name'] ?? 'Alex') . ' ' . ($user['last_name'] ?? 'Johnson')); ?></div>
@@ -233,9 +247,27 @@ $initials = getInitials(($user['first_name'] ?? 'Alex') . ' ' . ($user['last_nam
                                         <div style="font-size: 14px; font-weight: 600; margin-top: 4px;"><?php echo htmlspecialchars($user['email'] ?? 'student@studentos.ai'); ?></div>
                                     </div>
                                     <div style="background: var(--bg-primary); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-                                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Degree</div>
+                                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Degree Program</div>
                                         <div style="font-size: 14px; font-weight: 700; color: var(--primary); margin-top: 4px;">
                                             <span class="badge badge-primary" style="font-size: 13px; font-weight: 700; padding: 4px 10px;"><?php echo htmlspecialchars($degreeProgram); ?></span>
+                                        </div>
+                                    </div>
+                                    <div style="background: var(--bg-primary); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Department</div>
+                                        <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-top: 4px;">
+                                            <i class="fas fa-building" style="color: var(--primary); font-size: 12px;"></i> <?php echo htmlspecialchars($displayDepartment); ?>
+                                        </div>
+                                    </div>
+                                    <div style="background: var(--bg-primary); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Section & Term</div>
+                                        <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-top: 4px;">
+                                            <i class="fas fa-layer-group" style="color: #8B5CF6; font-size: 12px;"></i> Section <span style="color: var(--primary);"><?php echo htmlspecialchars($section); ?></span> &bull; Sem <?php echo htmlspecialchars(!empty($profile['semester']) ? $profile['semester'] : '1'); ?>
+                                        </div>
+                                    </div>
+                                    <div style="background: var(--bg-primary); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Phone Number</div>
+                                        <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-top: 4px;">
+                                            <i class="fas fa-phone" style="color: #10B981; font-size: 12px;"></i> <?php echo htmlspecialchars($studentPhone); ?>
                                         </div>
                                     </div>
                                 </div>
@@ -269,6 +301,16 @@ $initials = getInitials(($user['first_name'] ?? 'Alex') . ' ' . ($user['last_nam
                                         <div class="form-group">
                                             <label for="last_name">Last Name</label>
                                             <input type="text" name="last_name" id="last_name" class="form-control" value="<?php echo htmlspecialchars($user['last_name'] ?? ''); ?>" required>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="phone">Phone Number</label>
+                                        <div class="input-group">
+                                            <span class="input-icon"><i class="fas fa-phone"></i></span>
+                                            <input type="tel" name="phone" id="phone" class="form-control" style="padding-left: 40px;"
+                                                   value="<?php echo htmlspecialchars($profile['phone'] ?? ($user['phone'] ?? '')); ?>"
+                                                   placeholder="+91 98765 43210">
                                         </div>
                                     </div>
 
@@ -326,11 +368,23 @@ $initials = getInitials(($user['first_name'] ?? 'Alex') . ' ' . ($user['last_nam
         const targetPane = document.getElementById('tab-' + tabKey);
         if (targetPane) targetPane.style.display = 'block';
 
-        if (event && event.target) {
-            const btn = event.target.closest('.profile-tab-btn');
+        const activeBtn = document.querySelector(`.profile-tab-btn[onclick*="'${tabKey}'"]`);
+        if (activeBtn) {
+            activeBtn.classList.add('active');
+        } else if (window.event && window.event.target) {
+            const btn = window.event.target.closest('.profile-tab-btn');
             if (btn) btn.classList.add('active');
         }
     }
+
+    // Check if tab is requested in URL query string (e.g. ?tab=security)
+    document.addEventListener('DOMContentLoaded', function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const requestedTab = urlParams.get('tab');
+        if (requestedTab) {
+            switchProfileTab(requestedTab);
+        }
+    });
     </script>
 </body>
 </html>

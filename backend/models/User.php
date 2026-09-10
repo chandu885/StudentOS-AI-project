@@ -15,17 +15,20 @@ class User {
         $isVerified = isset($data['is_verified']) ? (int)$data['is_verified'] : 1;
         $isActive = isset($data['is_active']) ? (int)$data['is_active'] : 1;
         
+        $phone = !empty($data['phone']) ? $data['phone'] : null;
+        
         $stmt = $this->db->prepare(
-            "INSERT INTO users (role_id, email, password_hash, first_name, last_name, is_verified, is_active) 
-             VALUES (?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO users (role_id, email, password_hash, first_name, last_name, phone, is_verified, is_active) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
         );
         $stmt->bind_param(
-            "issssii",
+            "isssssii",
             $data['role_id'],
             $data['email'],
             $passwordHash,
             $data['first_name'],
             $data['last_name'],
+            $phone,
             $isVerified,
             $isActive
         );

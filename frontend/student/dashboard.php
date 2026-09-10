@@ -8,15 +8,81 @@ require_once __DIR__ . '/../includes/helpers.php';
 requireRole('student');
 
 $userId = $_SESSION['user']['id'];
+$successMsg = '';
+$errorMsg = '';
 
-// Fetch live data directly from Database
 $db = getDbConnection();
+
+// Handle Password Change directly from Student Dashboard
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+    if ($action === 'change_password') {
+        $currentPass = $_POST['current_password'] ?? '';
+        $newPass = $_POST['new_password'] ?? '';
+        $confirmPass = $_POST['confirm_password'] ?? '';
+
+        if (empty($currentPass) || empty($newPass) || empty($confirmPass)) {
+            $errorMsg = 'Please fill in all password fields.';
+        } elseif (strlen($newPass) < 8) {
+            $errorMsg = 'New password must be at least 8 characters in length.';
+        } elseif ($newPass !== $confirmPass) {
+            $errorMsg = 'New password and confirmation do not match.';
+        } else {
+            if ($db) {
+                $pStmt = $db->prepare("SELECT password_hash FROM `users` WHERE `id` = ? AND `deleted_at` IS NULL");
+                if ($pStmt) {
+                    $pStmt->bind_param("i", $userId);
+                    $pStmt->execute();
+                    $curRow = $pStmt->get_result()->fetch_assoc();
+                    $pStmt->close();
+
+                    if ($curRow && password_verify($currentPass, $curRow['password_hash'])) {
+                        $newHash = password_hash($newPass, PASSWORD_BCRYPT);
+                        $upStmt = $db->prepare("UPDATE `users` SET `password_hash` = ?, `updated_at` = NOW() WHERE `id` = ?");
+                        if ($upStmt) {
+                            $upStmt->bind_param("si", $newHash, $userId);
+                            if ($upStmt->execute()) {
+                                $successMsg = 'Your password has been successfully changed in the database! Please remember your new password.';
+                            } else {
+                                $errorMsg = 'Failed to update password in database: ' . $db->error;
+                            }
+                            $upStmt->close();
+                        }
+                    } else {
+                        $errorMsg = 'Current password does not match our records. Verification failed.';
+                    }
+                }
+            } else {
+                $errorMsg = 'Database connection error.';
+            }
+        }
+    }
+}
+
 $todayClasses = [];
 $pendingAssignments = [];
 $attendanceSummary = [];
 $upcomingExams = [];
+$studentProfile = null;
 
 if ($db && $userId) {
+    // Fetch student's academic profile details (Department, Course, Section, Phone)
+    $spQuery = $db->prepare(
+        "SELECT sp.*, u.phone AS user_phone, u.first_name, u.last_name, u.email,
+                d.name AS department_name, d.code AS department_code,
+                c.name AS course_name, c.code AS course_code
+         FROM users u
+         LEFT JOIN student_profiles sp ON sp.user_id = u.id
+         LEFT JOIN departments d ON sp.department_id = d.id
+         LEFT JOIN courses c ON sp.course_id = c.id
+         WHERE u.id = ?"
+    );
+    if ($spQuery) {
+        $spQuery->bind_param("i", $userId);
+        $spQuery->execute();
+        $studentProfile = $spQuery->get_result()->fetch_assoc();
+        $spQuery->close();
+    }
     // 1. Classes from database
     $dayOfWeek = date('l');
     $stmt = $db->prepare(
@@ -207,6 +273,20 @@ if (empty($recommendations)) {
             <?php include_once __DIR__ . '/../components/navbar.php'; ?>
             
             <div class="dashboard-content">
+                <?php if (!empty($successMsg)): ?>
+                    <div class="alert alert-success" style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px; background: rgba(34, 197, 94, 0.15); border: 1px solid var(--success); color: var(--success); padding: 14px 18px; border-radius: var(--radius-md);">
+                        <i class="fas fa-check-circle" style="font-size: 18px;"></i>
+                        <div><?php echo htmlspecialchars($successMsg); ?></div>
+                    </div>
+                <?php endif; ?>
+
+                <?php if (!empty($errorMsg)): ?>
+                    <div class="alert alert-error" style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px; background: rgba(239, 68, 68, 0.15); border: 1px solid var(--danger); color: var(--danger); padding: 14px 18px; border-radius: var(--radius-md);">
+                        <i class="fas fa-exclamation-circle" style="font-size: 18px;"></i>
+                        <div><?php echo htmlspecialchars($errorMsg); ?></div>
+                    </div>
+                <?php endif; ?>
+
                 <!-- Welcome Section -->
                 <div class="welcome-section">
                     <div>
@@ -220,6 +300,68 @@ if (empty($recommendations)) {
                         <button class="btn btn-outline" onclick="window.location.href='tasks.php'">
                             <i class="fas fa-plus"></i> Add Task
                         </button>
+                        <button class="btn btn-outline" onclick="openModal('studentPasswordModal')" title="Change Account Password">
+                            <i class="fas fa-key" style="color: #F59E0B;"></i> Change Password
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Student Academic & Profile Details Card (Department, Section, Phone) -->
+                <div class="card" style="margin-bottom: 24px; padding: 18px 22px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg);">
+                    <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px;">
+                        <div style="display: flex; align-items: center; gap: 14px;">
+                            <div style="width: 46px; height: 46px; border-radius: 50%; background: linear-gradient(135deg, var(--primary), var(--primary-hover)); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25);">
+                                <i class="fas fa-user-graduate"></i>
+                            </div>
+                            <div>
+                                <div style="font-weight: 700; font-size: 16px; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                                    <?php echo htmlspecialchars(($studentProfile['first_name'] ?? $_SESSION['user']['first_name']) . ' ' . ($studentProfile['last_name'] ?? $_SESSION['user']['last_name'])); ?>
+                                    <span class="badge badge-primary" style="font-size: 11.5px;"><?php echo htmlspecialchars(!empty($studentProfile['course_name']) ? $studentProfile['course_name'] : (!empty($studentProfile['course_code']) ? $studentProfile['course_code'] : 'BCA')); ?></span>
+                                </div>
+                                <div style="font-size: 13px; color: var(--text-secondary); margin-top: 2px;">
+                                    ID: <strong><?php echo htmlspecialchars($studentProfile['student_id'] ?? ('STU-' . str_pad($userId, 4, '0', STR_PAD_LEFT))); ?></strong>
+                                    <?php if (!empty($studentProfile['roll_number'])): ?>
+                                        &bull; Roll No: <strong><?php echo htmlspecialchars($studentProfile['roll_number']); ?></strong>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px;">
+                            <!-- Department -->
+                            <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 14px; display: flex; align-items: center; gap: 9px;">
+                                <i class="fas fa-building" style="color: var(--primary); font-size: 16px;"></i>
+                                <div>
+                                    <div style="font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Department</div>
+                                    <div style="font-size: 12.5px; font-weight: 600; color: var(--text-primary);"><?php echo htmlspecialchars(!empty($studentProfile['department_name']) ? $studentProfile['department_name'] : 'Computer Science'); ?></div>
+                                </div>
+                            </div>
+
+                            <!-- Section & Semester -->
+                            <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 14px; display: flex; align-items: center; gap: 9px;">
+                                <i class="fas fa-layer-group" style="color: #8B5CF6; font-size: 16px;"></i>
+                                <div>
+                                    <div style="font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Section & Term</div>
+                                    <div style="font-size: 12.5px; font-weight: 600; color: var(--text-primary);">
+                                        Section <span style="color: var(--primary); font-weight: 700;"><?php echo htmlspecialchars(!empty($studentProfile['section']) ? $studentProfile['section'] : 'A'); ?></span> &bull; Sem <?php echo htmlspecialchars(!empty($studentProfile['semester']) ? $studentProfile['semester'] : '1'); ?>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Phone Number -->
+                            <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 14px; display: flex; align-items: center; gap: 9px;">
+                                <i class="fas fa-phone" style="color: #10B981; font-size: 16px;"></i>
+                                <div>
+                                    <div style="font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Phone Number</div>
+                                    <div style="font-size: 12.5px; font-weight: 600; color: var(--text-primary);">
+                                        <?php 
+                                        $stuPhone = !empty($studentProfile['phone']) ? $studentProfile['phone'] : (!empty($studentProfile['user_phone']) ? $studentProfile['user_phone'] : 'Not provided');
+                                        echo htmlspecialchars($stuPhone); 
+                                        ?>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
@@ -390,9 +532,88 @@ if (empty($recommendations)) {
         </main>
     </div>
     
+    <!-- Change Password Modal -->
+    <div class="modal-backdrop" id="studentPasswordModal">
+        <div class="modal-card" style="max-width: 480px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-key" style="color: #F59E0B; margin-right: 8px;"></i> Change Account Password</h3>
+                <button type="button" class="modal-close" onclick="closeModal('studentPasswordModal')">&times;</button>
+            </div>
+            <form method="POST" action="dashboard.php" id="studentPasswordForm">
+                <input type="hidden" name="action" value="change_password">
+                <div class="modal-body" style="padding: var(--spacing-lg);">
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label for="current_password">Current Password <span style="color: var(--danger);">*</span></label>
+                        <div class="input-group">
+                            <span class="input-icon"><i class="fas fa-lock"></i></span>
+                            <input type="password" name="current_password" id="current_password" class="form-control has-toggle" placeholder="Enter current password" required>
+                            <button type="button" class="toggle-password" onclick="togglePassVisibility('current_password', this)" title="Show/Hide Password">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label for="new_password">New Password <span style="color: var(--danger);">*</span></label>
+                        <div class="input-group">
+                            <span class="input-icon"><i class="fas fa-key"></i></span>
+                            <input type="password" name="new_password" id="new_password" class="form-control has-toggle" placeholder="Minimum 8 characters" minlength="8" required>
+                            <button type="button" class="toggle-password" onclick="togglePassVisibility('new_password', this)" title="Show/Hide Password">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                        <small style="color: var(--text-muted); font-size: 11px; margin-top: 4px; display: block;">Must be at least 8 characters long</small>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 8px;">
+                        <label for="confirm_password">Confirm New Password <span style="color: var(--danger);">*</span></label>
+                        <div class="input-group">
+                            <span class="input-icon"><i class="fas fa-shield-alt"></i></span>
+                            <input type="password" name="confirm_password" id="confirm_password" class="form-control has-toggle" placeholder="Re-enter new password" minlength="8" required>
+                            <button type="button" class="toggle-password" onclick="togglePassVisibility('confirm_password', this)" title="Show/Hide Password">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer" style="padding: var(--spacing-lg); border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px;">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('studentPasswordModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Update Password</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="../assets/js/utils.js"></script>
     <script src="../assets/js/notifications.js"></script>
     <script>
+        function togglePassVisibility(inputId, btn) {
+            const input = document.getElementById(inputId);
+            const icon = btn.querySelector('i');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'fas fa-eye-slash';
+            } else {
+                input.type = 'password';
+                icon.className = 'fas fa-eye';
+            }
+        }
+
+        document.getElementById('studentPasswordForm').addEventListener('submit', function(e) {
+            const newP = document.getElementById('new_password').value;
+            const confP = document.getElementById('confirm_password').value;
+            if (newP.length < 8) {
+                e.preventDefault();
+                alert('New password must be at least 8 characters long.');
+                return false;
+            }
+            if (newP !== confP) {
+                e.preventDefault();
+                alert('New password and confirmation do not match.');
+                return false;
+            }
+        });
+
         // Auto-refresh notifications
         setInterval(function() {
             fetchNotifications();
