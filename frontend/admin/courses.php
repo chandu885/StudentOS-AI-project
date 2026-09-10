@@ -16,15 +16,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action']) && $_POST['action'] === 'delete') {
         $delId = (int)($_POST['course_id'] ?? 0);
         if ($delId > 0 && $db) {
-            // Check if students are enrolled
-            $chk = $db->prepare("SELECT COUNT(*) AS cnt FROM student_profiles WHERE course_id = ?");
+            // Check if subjects are associated
+            $chk = $db->prepare("SELECT COUNT(*) AS cnt FROM subjects WHERE course_id = ?");
             $chk->bind_param("i", $delId);
             $chk->execute();
             $cnt = $chk->get_result()->fetch_assoc()['cnt'] ?? 0;
             $chk->close();
 
             if ($cnt > 0) {
-                $errorMsg = "Cannot delete this program because $cnt student(s) are currently enrolled in it.";
+                $errorMsg = "Cannot delete this program because $cnt subject(s) are currently attached to it.";
             } else {
                 $del = $db->prepare("DELETE FROM courses WHERE id = ?");
                 $del->bind_param("i", $delId);
@@ -119,7 +119,7 @@ if ($db) {
 $courses = [];
 if ($db) {
     $q = "SELECT c.*, d.name AS department_name,
-                 (SELECT COUNT(*) FROM student_profiles sp WHERE sp.course_id = c.id) AS enrolled_students
+                 (SELECT COUNT(*) FROM subjects s WHERE s.course_id = c.id) AS total_subjects
           FROM courses c
           LEFT JOIN departments d ON c.department_id = d.id
           ORDER BY c.id DESC";
@@ -190,7 +190,7 @@ if ($db) {
                                         <th>Degree Type</th>
                                         <th>Duration</th>
                                         <th>Semesters</th>
-                                        <th>Enrolled</th>
+                                        <th>Subjects</th>
                                         <th>Status</th>
                                         <th>Action</th>
                                     </tr>
@@ -216,7 +216,7 @@ if ($db) {
                                                 <td><span class="badge badge-primary"><?php echo htmlspecialchars($c['degree_type']); ?></span></td>
                                                 <td><?php echo (int)$c['duration_years']; ?> Years</td>
                                                 <td><?php echo (int)$c['total_semesters']; ?> Sems</td>
-                                                <td><strong><?php echo (int)$c['enrolled_students']; ?></strong> students</td>
+                                                <td><strong><?php echo (int)$c['total_subjects']; ?></strong> subjects</td>
                                                 <td>
                                                     <span class="badge <?php echo ($c['status'] ?? 'active') === 'active' ? 'badge-success' : 'badge-danger'; ?>">
                                                         <?php echo ucfirst($c['status'] ?? 'active'); ?>

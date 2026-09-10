@@ -189,6 +189,9 @@ foreach ($semesters as $s) {
                         <p class="page-subtitle">Super Admin control of academic cohorts, semester sessions, and degree term schedules</p>
                     </div>
                     <div class="header-actions" style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <a href="students.php?promotion_status=opted_in" class="btn btn-outline" style="border-color: rgba(34, 197, 94, 0.4); color: var(--success);">
+                            <i class="fas fa-level-up-alt"></i> Student Promotions
+                        </a>
                         <a href="subjects.php" class="btn btn-secondary">
                             <i class="fas fa-book"></i> View Subjects
                         </a>

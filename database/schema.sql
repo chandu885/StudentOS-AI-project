@@ -45,6 +45,7 @@ DROP TABLE IF EXISTS `assignment_submissions`;
 DROP TABLE IF EXISTS `assignments`;
 DROP TABLE IF EXISTS `class_schedules`;
 DROP TABLE IF EXISTS `student_subjects`;
+DROP TABLE IF EXISTS `semester_promotions`;
 DROP TABLE IF EXISTS `subjects`;
 DROP TABLE IF EXISTS `semesters`;
 DROP TABLE IF EXISTS `courses`;
@@ -100,7 +101,6 @@ CREATE TABLE `users` (
     `password_hash` VARCHAR(255) NOT NULL,
     `first_name` VARCHAR(100) NOT NULL,
     `last_name` VARCHAR(100) NOT NULL,
-    `phone` VARCHAR(25) NULL,
     `avatar` VARCHAR(255) NULL DEFAULT 'default-avatar.png',
     `is_verified` TINYINT(1) NOT NULL DEFAULT 0,
     `is_active` TINYINT(1) NOT NULL DEFAULT 1,
@@ -217,12 +217,18 @@ CREATE TABLE `student_profiles` (
     `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     `user_id` INT UNSIGNED NOT NULL UNIQUE,
     `student_id` VARCHAR(50) NOT NULL UNIQUE,
-    `department_id` INT UNSIGNED NOT NULL,
-    `course_id` INT UNSIGNED NOT NULL,
+    `department` VARCHAR(50) NOT NULL DEFAULT 'BCA',
+    `department_id` INT UNSIGNED NULL,
     `semester` VARCHAR(20) NOT NULL DEFAULT '1',
-    `section` VARCHAR(10) NULL DEFAULT 'A',
+    `promotion_opt_in` TINYINT(1) NOT NULL DEFAULT 0,
+    `promotion_status` ENUM('not_opted', 'opted_in', 'promoted', 'rejected') NOT NULL DEFAULT 'not_opted',
+    `promotion_target_sem` VARCHAR(20) NULL DEFAULT NULL,
+    `promotion_requested_at` DATETIME NULL DEFAULT NULL,
+    `promoted_at` DATETIME NULL DEFAULT NULL,
+    `promoted_by` INT UNSIGNED NULL DEFAULT NULL,
+    `promotion_notes` VARCHAR(255) NULL DEFAULT NULL,
+    `prev_semester` VARCHAR(20) NULL DEFAULT NULL,
     `roll_number` VARCHAR(50) NULL,
-    `phone` VARCHAR(25) NULL,
     `date_of_birth` DATE NULL,
     `address` TEXT NULL,
     `blood_group` VARCHAR(10) NULL,
@@ -230,9 +236,25 @@ CREATE TABLE `student_profiles` (
     `guardian_phone` VARCHAR(25) NULL,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY `idx_sp_dept` (`department_id`),
     CONSTRAINT `fk_sp_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
-    CONSTRAINT `fk_sp_dept` FOREIGN KEY (`department_id`) REFERENCES `departments` (`id`) ON DELETE RESTRICT,
-    CONSTRAINT `fk_sp_course` FOREIGN KEY (`course_id`) REFERENCES `courses` (`id`) ON DELETE RESTRICT
+    CONSTRAINT `fk_sp_dept` FOREIGN KEY (`department_id`) REFERENCES `departments` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `semester_promotions` (
+    `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `student_id` INT UNSIGNED NOT NULL,
+    `from_semester` VARCHAR(20) NOT NULL,
+    `to_semester` VARCHAR(20) NOT NULL,
+    `department` VARCHAR(50) NOT NULL,
+    `academic_year` VARCHAR(30) NOT NULL DEFAULT '2026-2027',
+    `action` ENUM('opt_in', 'opt_out', 'promoted', 'rejected', 'rollback') NOT NULL,
+    `performed_by` INT UNSIGNED NOT NULL,
+    `notes` VARCHAR(255) NULL,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    KEY `idx_sem_prom_student` (`student_id`),
+    KEY `idx_sem_prom_action` (`action`),
+    CONSTRAINT `fk_sem_prom_student` FOREIGN KEY (`student_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `faculty_profiles` (

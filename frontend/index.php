@@ -50,14 +50,13 @@ if ($loggedIn && $currentUser) {
     if ($roleId === 4 && $db) {
         $uId = (int)$currentUser['id'];
         $heroStudent['cohort_badge'] = 'Enrolled Student';
-        $spStmt = $db->prepare("SELECT sp.*, c.name as course_name, c.code as course_code FROM student_profiles sp LEFT JOIN courses c ON sp.course_id = c.id WHERE sp.user_id = ?");
+        $spStmt = $db->prepare("SELECT sp.* FROM student_profiles sp WHERE sp.user_id = ?");
         if ($spStmt) {
             $spStmt->bind_param("i", $uId);
             $spStmt->execute();
             if ($sp = $spStmt->get_result()->fetch_assoc()) {
-                $cCode = $sp['course_code'] ?? 'BCA';
                 $sem = $sp['semester'] ?? '1';
-                $heroStudent['program'] = $cCode . ' • Semester ' . $sem;
+                $heroStudent['program'] = 'Student • Semester ' . $sem;
             }
             $spStmt->close();
         }

@@ -29,25 +29,14 @@ class AuthService {
             $data['student_id'] = strtoupper(trim($data['student_id']));
         }
 
-        // Derive department_id from selected course if missing
-        if (empty($data['department_id']) && !empty($data['course_id'])) {
-            $cStmt = Database::getInstance()->prepare("SELECT department_id FROM courses WHERE id = ?");
-            if ($cStmt) {
-                $cId = (int)$data['course_id'];
-                $cStmt->bind_param("i", $cId);
-                $cStmt->execute();
-                $cRes = $cStmt->get_result()->fetch_assoc();
-                if ($cRes && !empty($cRes['department_id'])) {
-                    $data['department_id'] = (int)$cRes['department_id'];
-                }
-            }
-        }
-        if (empty($data['department_id'])) {
-            $data['department_id'] = ((int)($data['course_id'] ?? 0) === 1) ? 4 : 1;
+        // Normalize Department (BBA / BCA)
+        $department = !empty($data['department']) ? strtoupper(trim($data['department'])) : 'BCA';
+        if (!in_array($department, ['BBA', 'BCA'])) {
+            $department = 'BCA';
         }
 
         // Validate required fields
-        $required = ['first_name', 'last_name', 'email', 'password', 'student_id', 'department_id', 'course_id', 'semester'];
+        $required = ['first_name', 'last_name', 'email', 'password', 'student_id', 'department', 'semester'];
         foreach ($required as $field) {
             if (empty($data[$field])) {
                 return ['success' => false, 'error' => "$field is required"];
@@ -92,7 +81,6 @@ class AuthService {
                 'password' => $data['password'],
                 'first_name' => $data['first_name'],
                 'last_name' => $data['last_name'],
-                'phone' => $data['phone'] ?? null,
                 'is_verified' => 1,
                 'is_active' => 1
             ];
@@ -106,12 +94,9 @@ class AuthService {
             $studentData = [
                 'user_id' => $user['id'],
                 'student_id' => $data['student_id'],
-                'department_id' => $data['department_id'],
-                'course_id' => $data['course_id'],
-                'semester' => $data['semester'],
-                'section' => $data['section'] ?? null,
+                'department' => $department,
+                'semester' => $data['semester'] ?? '1',
                 'roll_number' => $data['roll_number'] ?? null,
-                'phone' => $data['phone'] ?? null,
                 'date_of_birth' => $data['date_of_birth'] ?? null,
                 'address' => $data['address'] ?? null
             ];

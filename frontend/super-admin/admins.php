@@ -99,7 +99,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $firstName = sanitize($_POST['first_name'] ?? '');
         $lastName = sanitize($_POST['last_name'] ?? '');
         $email = sanitize($_POST['email'] ?? '');
-        $phone = sanitize($_POST['phone'] ?? '');
         $roleId = (int)($_POST['role_id'] ?? 2); // 1 = Super Admin, 2 = Admin
         $isActive = isset($_POST['is_active']) ? (int)$_POST['is_active'] : 1;
 
@@ -118,9 +117,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $dup->close();
                 } else {
                     $dup->close();
-                    $up = $conn->prepare("UPDATE users SET first_name = ?, last_name = ?, email = ?, phone = ?, role_id = ?, is_active = ?, updated_at = NOW() WHERE id = ? AND role_id IN (1, 2)");
+                    $up = $conn->prepare("UPDATE users SET first_name = ?, last_name = ?, email = ?, role_id = ?, is_active = ?, updated_at = NOW() WHERE id = ? AND role_id IN (1, 2)");
                     if ($up) {
-                        $up->bind_param("ssssiii", $firstName, $lastName, $email, $phone, $roleId, $isActive, $targetUserId);
+                        $up->bind_param("sssiii", $firstName, $lastName, $email, $roleId, $isActive, $targetUserId);
                         if ($up->execute()) {
                             $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
                             $details = "Super Admin updated details for Administrator #{$targetUserId} ({$email})";
@@ -144,7 +143,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Fetch real administrators
 $adminsList = [];
 if ($conn) {
-    $res = $conn->query("SELECT u.id, u.email, u.first_name, u.last_name, u.phone, u.role_id, r.name as role_name, u.is_active, u.created_at, u.last_login_at 
+    $res = $conn->query("SELECT u.id, u.email, u.first_name, u.last_name, u.role_id, r.name as role_name, u.is_active, u.created_at, u.last_login_at 
                          FROM users u 
                          LEFT JOIN roles r ON u.role_id = r.id 
                          WHERE u.role_id IN (1, 2) AND u.deleted_at IS NULL 
@@ -415,14 +414,9 @@ if ($conn) {
                     </div>
                 </div>
 
-                <div class="form-group" style="margin-bottom: 14px;">
+                <div class="form-group" style="margin-bottom: 20px;">
                     <label for="editAdminEmail">Email Address <span style="color: var(--danger);">*</span></label>
                     <input type="email" name="email" id="editAdminEmail" class="form-control" required>
-                </div>
-
-                <div class="form-group" style="margin-bottom: 14px;">
-                    <label for="editAdminPhone">Phone Number</label>
-                    <input type="text" name="phone" id="editAdminPhone" class="form-control" placeholder="+1 555-0199">
                 </div>
 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px;">
@@ -473,7 +467,6 @@ if ($conn) {
         document.getElementById('editAdminFn').value = adm.first_name || '';
         document.getElementById('editAdminLn').value = adm.last_name || '';
         document.getElementById('editAdminEmail').value = adm.email || '';
-        document.getElementById('editAdminPhone').value = adm.phone || '';
         document.getElementById('editAdminRole').value = adm.role_id || 2;
         document.getElementById('editAdminStatus').value = (adm.is_active !== undefined) ? adm.is_active : 1;
         document.getElementById('editAdminModal').style.display = 'flex';

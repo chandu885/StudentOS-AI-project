@@ -64,7 +64,7 @@ class Academic {
     public function getSemesters($courseId = null, $status = null, $academicYear = null, $search = null) {
         $sql = "SELECT sem.*, c.name AS course_name, c.code AS course_code, d.name AS department_name, d.id AS department_id,
                        (SELECT COUNT(*) FROM subjects sub WHERE sub.course_id = sem.course_id AND (sub.semester = sem.semester_number OR sub.semester = CONCAT('Sem ', sem.semester_number) OR sub.semester = CONCAT('Semester ', sem.semester_number))) AS subject_count,
-                       (SELECT COUNT(*) FROM student_profiles sp WHERE sp.course_id = sem.course_id AND (sp.semester = sem.semester_number OR sp.semester = CONCAT('Sem ', sem.semester_number) OR sp.semester = CONCAT('Semester ', sem.semester_number))) AS student_count
+                       (SELECT COUNT(*) FROM student_profiles sp WHERE (sp.semester = sem.semester_number OR sp.semester = CONCAT('Sem ', sem.semester_number) OR sp.semester = CONCAT('Semester ', sem.semester_number))) AS student_count
                 FROM semesters sem
                 JOIN courses c ON sem.course_id = c.id
                 JOIN departments d ON c.department_id = d.id

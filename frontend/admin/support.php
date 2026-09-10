@@ -71,11 +71,10 @@ if ($db) {
                  CONCAT(u.first_name, ' ', u.last_name) AS requester_name,
                  u.email AS requester_email,
                  COALESCE(sp.roll_number, sp.student_id, CONCAT('ID-', u.id)) AS roll,
-                 COALESCE(d.name, 'General') AS dept_name
+                 'General' AS dept_name
           FROM support_tickets st
           JOIN users u ON st.user_id = u.id
           LEFT JOIN student_profiles sp ON sp.user_id = u.id
-          LEFT JOIN departments d ON sp.department_id = d.id
           $where
           ORDER BY FIELD(st.status, 'open', 'in_progress', 'resolved', 'closed'), st.id DESC";
     $res = $db->query($q);

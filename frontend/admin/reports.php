@@ -18,17 +18,16 @@ if (isset($_GET['export']) && $db) {
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="institutional_attendance_report_' . date('Y-m-d') . '.csv"');
         $out = fopen('php://output', 'w');
-        fputcsv($out, ['Record ID', 'Roll Number', 'Student Name', 'Department', 'Subject Code', 'Subject Name', 'Date', 'Status', 'Remarks']);
+        fputcsv($out, ['Record ID', 'Roll Number', 'Student Name', 'Semester', 'Subject Code', 'Subject Name', 'Date', 'Status', 'Remarks']);
 
         $q = "SELECT att.id, COALESCE(sp.student_id, sp.roll_number, CONCAT('STU-', u.id)) AS roll,
                      CONCAT(u.first_name, ' ', u.last_name) AS student_name,
-                     COALESCE(d.name, 'General') AS dept_name,
+                     COALESCE(sp.semester, '1') AS semester,
                      s.code AS subject_code, s.name AS subject_name,
                      att.date, att.status, att.remarks
               FROM attendance att
               JOIN users u ON att.student_id = u.id
               LEFT JOIN student_profiles sp ON sp.user_id = u.id
-              LEFT JOIN departments d ON sp.department_id = d.id
               JOIN subjects s ON att.subject_id = s.id
               ORDER BY att.date DESC, student_name ASC";
         $res = $db->query($q);
@@ -38,7 +37,7 @@ if (isset($_GET['export']) && $db) {
                     $row['id'],
                     $row['roll'],
                     $row['student_name'],
-                    $row['dept_name'],
+                    $row['semester'],
                     $row['subject_code'],
                     $row['subject_name'],
                     $row['date'],
@@ -53,18 +52,17 @@ if (isset($_GET['export']) && $db) {
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="semester_grades_distribution_' . date('Y-m-d') . '.csv"');
         $out = fopen('php://output', 'w');
-        fputcsv($out, ['Result ID', 'Roll Number', 'Student Name', 'Department', 'Exam Title', 'Subject Code', 'Subject Name', 'Marks Obtained', 'Total Marks', 'Grade', 'Remarks']);
+        fputcsv($out, ['Result ID', 'Roll Number', 'Student Name', 'Semester', 'Exam Title', 'Subject Code', 'Subject Name', 'Marks Obtained', 'Total Marks', 'Grade', 'Remarks']);
 
         $q = "SELECT r.id, COALESCE(sp.student_id, sp.roll_number, CONCAT('STU-', u.id)) AS roll,
                      CONCAT(u.first_name, ' ', u.last_name) AS student_name,
-                     COALESCE(d.name, 'General') AS dept_name,
+                     COALESCE(sp.semester, '1') AS semester,
                      COALESCE(e.title, 'Examination') AS exam_title,
                      s.code AS subject_code, s.name AS subject_name,
                      r.marks_obtained, r.total_marks, r.grade, r.remarks
               FROM results r
               JOIN users u ON r.student_id = u.id
               LEFT JOIN student_profiles sp ON sp.user_id = u.id
-              LEFT JOIN departments d ON sp.department_id = d.id
               LEFT JOIN exams e ON r.exam_id = e.id
               JOIN subjects s ON r.subject_id = s.id
               ORDER BY r.id DESC";
@@ -75,7 +73,7 @@ if (isset($_GET['export']) && $db) {
                     $row['id'],
                     $row['roll'],
                     $row['student_name'],
-                    $row['dept_name'],
+                    $row['semester'],
                     $row['exam_title'],
                     $row['subject_code'],
                     $row['subject_name'],
@@ -92,19 +90,14 @@ if (isset($_GET['export']) && $db) {
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="student_master_enrollment_' . date('Y-m-d') . '.csv"');
         $out = fopen('php://output', 'w');
-        fputcsv($out, ['User ID', 'Student Roll', 'First Name', 'Last Name', 'Email', 'Phone', 'Department', 'Degree Program', 'Semester', 'Section', 'Status', 'Registered Date']);
+        fputcsv($out, ['User ID', 'Student Roll', 'First Name', 'Last Name', 'Email', 'Semester', 'Status', 'Registered Date']);
 
         $q = "SELECT u.id, COALESCE(sp.student_id, sp.roll_number, CONCAT('STU-', u.id)) AS roll,
-                     u.first_name, u.last_name, u.email, u.phone,
-                     COALESCE(d.name, 'Unassigned') AS dept_name,
-                     COALESCE(c.name, 'General') AS course_name,
+                     u.first_name, u.last_name, u.email,
                      COALESCE(sp.semester, '1') AS semester,
-                     COALESCE(sp.section, 'A') AS section,
                      IF(u.is_active = 1, 'Active', 'Inactive') AS status, u.created_at
               FROM users u
               LEFT JOIN student_profiles sp ON sp.user_id = u.id
-              LEFT JOIN departments d ON sp.department_id = d.id
-              LEFT JOIN courses c ON sp.course_id = c.id
               WHERE u.role_id = 4 AND u.deleted_at IS NULL
               ORDER BY u.id ASC";
         $res = $db->query($q);
@@ -116,11 +109,7 @@ if (isset($_GET['export']) && $db) {
                     $row['first_name'],
                     $row['last_name'],
                     $row['email'],
-                    $row['phone'] ?? '',
-                    $row['dept_name'],
-                    $row['course_name'],
                     $row['semester'],
-                    $row['section'],
                     ucfirst($row['status']),
                     $row['created_at']
                 ]);
@@ -132,10 +121,10 @@ if (isset($_GET['export']) && $db) {
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="faculty_staff_roster_' . date('Y-m-d') . '.csv"');
         $out = fopen('php://output', 'w');
-        fputcsv($out, ['User ID', 'Employee ID', 'Name', 'Email', 'Phone', 'Department', 'Designation', 'Office Room', 'Status']);
+        fputcsv($out, ['User ID', 'Employee ID', 'Name', 'Email', 'Department', 'Designation', 'Office Room', 'Status']);
 
         $q = "SELECT u.id, fp.employee_id, CONCAT(u.first_name, ' ', u.last_name) AS full_name,
-                     u.email, u.phone, COALESCE(d.name, 'General') AS dept_name,
+                     u.email, COALESCE(d.name, 'General') AS dept_name,
                      fp.designation, fp.office_location, IF(u.is_active = 1, 'Active', 'Inactive') AS status
               FROM users u
               LEFT JOIN faculty_profiles fp ON fp.user_id = u.id

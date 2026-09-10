@@ -50,9 +50,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $chk->close();
                 $pwdHash = password_hash('Faculty@123', PASSWORD_DEFAULT);
-                $insUser = $db->prepare("INSERT INTO users (role_id, first_name, last_name, email, password_hash, phone, is_active, created_at, updated_at) VALUES (3, ?, ?, ?, ?, ?, 1, NOW(), NOW())");
+                $insUser = $db->prepare("INSERT INTO users (role_id, first_name, last_name, email, password_hash, is_active, created_at, updated_at) VALUES (3, ?, ?, ?, ?, 1, NOW(), NOW())");
                 if ($insUser) {
-                    $insUser->bind_param("sssss", $firstName, $lastName, $email, $pwdHash, $phone);
+                    $insUser->bind_param("ssss", $firstName, $lastName, $email, $pwdHash);
                     if ($insUser->execute()) {
                         $newId = $db->insert_id;
                         $insUser->close();
@@ -85,7 +85,7 @@ if ($db) {
 // Fetch faculty list
 $facultyList = [];
 if ($db) {
-    $q = "SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.is_active,
+    $q = "SELECT u.id, u.first_name, u.last_name, u.email, fp.phone, u.is_active,
                  fp.employee_id, fp.designation, fp.office_location,
                  COALESCE(d.name, 'General') AS dept,
                  (SELECT COUNT(*) FROM subjects s WHERE s.faculty_id = u.id) AS courses

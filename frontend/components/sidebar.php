@@ -63,6 +63,7 @@ elseif ($userRole == 1) {
         ['label' => 'Dashboard', 'icon' => 'fa-home', 'url' => '/super-admin/dashboard.php'],
         ['label' => 'Profile', 'icon' => 'fa-user', 'url' => '/super-admin/profile.php'],
         ['label' => 'Admins', 'icon' => 'fa-user-shield', 'url' => '/super-admin/admins.php'],
+        ['label' => 'Students', 'icon' => 'fa-user-graduate', 'url' => '/super-admin/students.php'],
         ['label' => 'Users', 'icon' => 'fa-users', 'url' => '/super-admin/users.php'],
         ['label' => 'Semesters', 'icon' => 'fa-calendar-alt', 'url' => '/super-admin/semesters.php'],
         ['label' => 'Subjects', 'icon' => 'fa-book', 'url' => '/super-admin/subjects.php'],

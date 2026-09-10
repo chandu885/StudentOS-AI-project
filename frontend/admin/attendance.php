@@ -46,15 +46,14 @@ if ($db) {
                 ROUND((COUNT(CASE WHEN att.status = 'present' THEN 1 END) * 100.0 / COUNT(*)), 1) AS pct,
                 u.id AS user_id, CONCAT(u.first_name, ' ', u.last_name) AS name,
                 COALESCE(sp.student_id, sp.roll_number, CONCAT('STU-', u.id)) AS roll,
-                COALESCE(d.name, 'Computer Science') AS dept,
+                COALESCE(sp.semester, '1') AS semester,
                 s.name AS subject
          FROM attendance att
          JOIN users u ON att.student_id = u.id
          LEFT JOIN student_profiles sp ON sp.user_id = u.id
-         LEFT JOIN departments d ON sp.department_id = d.id
          JOIN subjects s ON att.subject_id = s.id
          WHERE u.deleted_at IS NULL
-         GROUP BY att.student_id, att.subject_id, u.id, u.first_name, u.last_name, sp.student_id, sp.roll_number, d.name, s.name
+         GROUP BY att.student_id, att.subject_id, u.id, u.first_name, u.last_name, sp.student_id, sp.roll_number, sp.semester, s.name
          HAVING pct <= 80.0
          ORDER BY pct ASC"
     );
@@ -135,7 +134,7 @@ if ($db) {
                                     <tr>
                                         <th>Roll Number</th>
                                         <th>Student Name</th>
-                                        <th>Department</th>
+                                        <th>Semester</th>
                                         <th>Subject Deficit</th>
                                         <th>Attendance %</th>
                                         <th>Action</th>
@@ -154,7 +153,7 @@ if ($db) {
                                             <tr>
                                                 <td><span class="badge badge-secondary"><?php echo htmlspecialchars($stu['roll']); ?></span></td>
                                                 <td><strong><?php echo htmlspecialchars($stu['name']); ?></strong></td>
-                                                <td><?php echo htmlspecialchars($stu['dept']); ?></td>
+                                                <td><span class="badge badge-info">Sem <?php echo htmlspecialchars($stu['semester']); ?></span></td>
                                                 <td><?php echo htmlspecialchars($stu['subject']); ?></td>
                                                 <td><strong style="color: var(--danger);"><?php echo $stu['pct']; ?>%</strong></td>
                                                 <td>

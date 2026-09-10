@@ -35,13 +35,11 @@ if ($db) {
 
     // Recent Students
     $res = $db->query(
-        "SELECT u.id, CONCAT(u.first_name, ' ', u.last_name) AS name, IF(u.is_active = 1, 'active', 'inactive') AS status, u.created_at,
+        "SELECT u.id, u.email, CONCAT(u.first_name, ' ', u.last_name) AS name, IF(u.is_active = 1, 'active', 'inactive') AS status, u.created_at,
                 COALESCE(sp.student_id, sp.roll_number, CONCAT('STU-', u.id)) AS roll,
-                COALESCE(d.name, 'General Academics') AS dept,
                 COALESCE(CONCAT('Semester ', sp.semester), 'Semester 1') AS sem
          FROM users u
          LEFT JOIN student_profiles sp ON sp.user_id = u.id
-         LEFT JOIN departments d ON sp.department_id = d.id
          WHERE u.role_id = 4 AND u.deleted_at IS NULL
          ORDER BY u.id DESC
          LIMIT 8"
@@ -123,7 +121,7 @@ if ($db) {
                                     <tr>
                                         <th>Roll Number</th>
                                         <th>Full Name</th>
-                                        <th>Department</th>
+                                        <th>Email</th>
                                         <th>Current Semester</th>
                                         <th>Status</th>
                                     </tr>
@@ -131,7 +129,7 @@ if ($db) {
                                 <tbody>
                                     <?php if (empty($recentStudents)): ?>
                                         <tr>
-                                            <td colspan="5" style="text-align: center; padding: 24px; color: var(--text-muted);">
+                                            <td colspan="5" style="text-align: center; padding: 24px; color: var(--text-muted); ">
                                                 <i class="fas fa-users"></i> No registered students found.
                                             </td>
                                         </tr>
@@ -143,7 +141,7 @@ if ($db) {
                                             <tr>
                                                 <td><span class="badge badge-secondary"><?php echo htmlspecialchars($stu['roll']); ?></span></td>
                                                 <td><strong><?php echo htmlspecialchars($stu['name']); ?></strong></td>
-                                                <td><?php echo htmlspecialchars($stu['dept']); ?></td>
+                                                <td><code><?php echo htmlspecialchars($stu['email']); ?></code></td>
                                                 <td><?php echo htmlspecialchars($stu['sem']); ?></td>
                                                 <td><span class="badge <?php echo $stBadge; ?>"><?php echo ucfirst($st); ?></span></td>
                                             </tr>

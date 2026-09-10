@@ -18,26 +18,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $deleteMode = sanitize($_POST['delete_mode'] ?? 'deactivate'); // 'deactivate' or 'permanent'
 
         if ($delId > 0 && $db) {
-            // Check student & faculty dependencies, including section and phone numbers
+            // Check faculty and courses dependencies
             $depInfoStmt = $db->prepare("SELECT d.name, d.code,
-                                                COUNT(DISTINCT sp.id) AS stu_count,
-                                                GROUP_CONCAT(DISTINCT sp.section ORDER BY sp.section SEPARATOR ', ') AS sections,
-                                                COUNT(DISTINCT NULLIF(COALESCE(sp.phone, su.phone), '')) AS phone_count,
-                                                (SELECT COUNT(*) FROM faculty_profiles fp JOIN users fu ON fp.user_id = fu.id WHERE fp.department_id = ? AND fu.deleted_at IS NULL) AS fac_count
+                                                (SELECT COUNT(*) FROM faculty_profiles fp JOIN users fu ON fp.user_id = fu.id WHERE fp.department_id = ? AND fu.deleted_at IS NULL) AS fac_count,
+                                                (SELECT COUNT(*) FROM courses c WHERE c.department_id = ? AND c.status = 'active') AS courses_count
                                          FROM departments d
-                                         LEFT JOIN student_profiles sp ON sp.department_id = d.id
-                                         LEFT JOIN users su ON sp.user_id = su.id AND su.deleted_at IS NULL
-                                         WHERE d.id = ?
-                                         GROUP BY d.id");
-            $depInfoStmt->bind_param("ii", $delId, $delId);
+                                         WHERE d.id = ?");
+            $depInfoStmt->bind_param("iii", $delId, $delId, $delId);
             $depInfoStmt->execute();
             $depInfo = $depInfoStmt->get_result()->fetch_assoc();
             $depInfoStmt->close();
 
             $deptName = $depInfo['name'] ?? 'Department';
-            $stuCount = (int)($depInfo['stu_count'] ?? 0);
+            $stuCount = 0;
             $facCount = (int)($depInfo['fac_count'] ?? 0);
-            $sections = !empty($depInfo['sections']) ? $depInfo['sections'] : 'None';
+            $coursesCount = (int)($depInfo['courses_count'] ?? 0);
             $phoneCount = (int)($depInfo['phone_count'] ?? 0);
 
             if ($deleteMode === 'deactivate') {
@@ -148,9 +143,7 @@ if ($db) {
     $q = "SELECT d.*, 
                  CONCAT(u.first_name, ' ', u.last_name) AS hod_name,
                  (SELECT COUNT(*) FROM faculty_profiles fp JOIN users fu ON fp.user_id = fu.id WHERE fp.department_id = d.id AND fu.deleted_at IS NULL) AS faculty_count,
-                 (SELECT COUNT(*) FROM student_profiles sp JOIN users su ON sp.user_id = su.id WHERE sp.department_id = d.id AND su.deleted_at IS NULL) AS students_count,
-                 (SELECT GROUP_CONCAT(DISTINCT sp.section ORDER BY sp.section SEPARATOR ', ') FROM student_profiles sp JOIN users su ON sp.user_id = su.id WHERE sp.department_id = d.id AND su.deleted_at IS NULL AND sp.section IS NOT NULL AND sp.section != '') AS sections_list,
-                 (SELECT COUNT(DISTINCT NULLIF(COALESCE(sp.phone, su.phone), '')) FROM student_profiles sp JOIN users su ON sp.user_id = su.id WHERE sp.department_id = d.id AND su.deleted_at IS NULL) AS phones_count
+                 (SELECT COUNT(*) FROM courses c WHERE c.department_id = d.id AND c.status = 'active') AS courses_count
           FROM departments d
           LEFT JOIN users u ON d.head_id = u.id
           ORDER BY d.id ASC";
@@ -219,7 +212,7 @@ if ($db) {
                                         <th>Department Name</th>
                                         <th>Head of Department (HOD)</th>
                                         <th>Faculty Staff</th>
-                                        <th>Enrolled Students</th>
+                                        <th>Degree Programs</th>
                                         <th>Status</th>
                                         <th>Action</th>
                                     </tr>
@@ -243,13 +236,13 @@ if ($db) {
                                                 </td>
                                                 <td>
                                                     <?php if (!empty($dept['hod_name'])): ?>
-                                                        <i class="fas fa-user-tie" style="color: var(--primary); margin-right: 4px;"></i> <?php echo htmlspecialchars($dept['hod_name']); ?>
+                                                        <strong><?php echo htmlspecialchars($dept['hod_name']); ?></strong>
                                                     <?php else: ?>
                                                         <span style="color: var(--text-muted); font-style: italic;">Not Appointed</span>
                                                     <?php endif; ?>
                                                 </td>
                                                 <td><?php echo (int)$dept['faculty_count']; ?> Professors</td>
-                                                <td><span class="badge badge-info"><?php echo (int)$dept['students_count']; ?> Students</span></td>
+                                                <td><span class="badge badge-info"><?php echo (int)($dept['courses_count'] ?? 0); ?> Programs</span></td>
                                                 <td>
                                                     <span class="badge badge-<?php echo ($dept['status'] ?? 'active') === 'active' ? 'success' : 'danger'; ?>">
                                                         <?php echo ucfirst($dept['status'] ?? 'active'); ?>
@@ -389,13 +382,11 @@ if ($db) {
 
                     <div style="background: rgba(14, 165, 233, 0.07); border: 1px solid rgba(14, 165, 233, 0.2); border-radius: var(--radius-md); padding: 14px; margin-bottom: 20px;">
                         <div style="font-size: 12px; font-weight: 700; color: var(--primary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
-                            <i class="fas fa-database"></i> Associated Student & Contact Records
+                            <i class="fas fa-database"></i> Associated Academic Records
                         </div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12.5px;">
-                            <div><strong>Enrolled Students:</strong> <span id="delDeptStudents" class="badge badge-primary">0</span></div>
+                            <div><strong>Degree Programs:</strong> <span id="delDeptCourses" class="badge badge-primary">0</span></div>
                             <div><strong>Faculty Staff:</strong> <span id="delDeptFaculty" class="badge badge-info">0</span></div>
-                            <div style="grid-column: span 2;"><strong>Active Sections:</strong> <span id="delDeptSections" style="color: var(--text-primary); font-weight: 600;">None</span></div>
-                            <div style="grid-column: span 2;"><strong>Student Phone Contacts:</strong> <span id="delDeptPhones" class="badge badge-success">0 registered</span></div>
                         </div>
                     </div>
 
@@ -407,7 +398,7 @@ if ($db) {
                                 <div>
                                     <strong style="color: var(--success); font-size: 13px;">Deactivate Department (Recommended)</strong>
                                     <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">
-                                        Sets department status to Inactive. Safely preserves all student profiles, class sections, and registered phone numbers.
+                                        Sets department status to Inactive. Safely preserves all associated records.
                                     </div>
                                 </div>
                             </label>
@@ -417,7 +408,7 @@ if ($db) {
                                 <div>
                                     <strong style="color: var(--danger); font-size: 13px;">Permanent Delete</strong>
                                     <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">
-                                        Permanently removes the department record from the database. Allowed only when 0 students and 0 faculty are assigned.
+                                        Permanently removes the department record from the database. Allowed only when 0 faculty and 0 degree programs are assigned.
                                     </div>
                                 </div>
                             </label>
@@ -452,10 +443,8 @@ if ($db) {
         document.getElementById('delDeptId').value = dept.id || '';
         document.getElementById('delDeptName').textContent = dept.name || 'Department';
         document.getElementById('delDeptCode').textContent = dept.code || '';
-        document.getElementById('delDeptStudents').textContent = (dept.students_count || 0) + ' Students';
+        document.getElementById('delDeptCourses').textContent = (dept.courses_count || 0) + ' Programs';
         document.getElementById('delDeptFaculty').textContent = (dept.faculty_count || 0) + ' Faculty';
-        document.getElementById('delDeptSections').textContent = dept.sections_list || 'None';
-        document.getElementById('delDeptPhones').textContent = (dept.phones_count || 0) + ' contacts registered';
         openModal('deleteDeptModal');
     }
     </script>

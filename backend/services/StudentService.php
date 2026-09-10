@@ -38,7 +38,7 @@ class StudentService {
         // Today's classes
         $allSchedule = [];
         if ($profile) {
-            $allSchedule = $this->academicModel->getSchedules($profile['course_id'], $profile['semester'], $profile['section']);
+            $allSchedule = $this->academicModel->getSchedules(null, $profile['semester'] ?? null, null);
         }
         $todayClasses = array_values(array_filter($allSchedule, function($s) use ($dayOfWeek) {
             return strcasecmp($s['day_of_week'], $dayOfWeek) === 0;

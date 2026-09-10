@@ -56,6 +56,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $errorMsg = 'Database connection error.';
             }
         }
+    } elseif ($action === 'opt_in_promotion') {
+        require_once __DIR__ . '/../../backend/models/Student.php';
+        $stuObj = new Student();
+        $notes = sanitize($_POST['notes'] ?? '');
+        $res = $stuObj->optInPromotion($userId, null, $notes);
+        if ($res['success']) {
+            $successMsg = $res['message'];
+        } else {
+            $errorMsg = $res['error'];
+        }
+    } elseif ($action === 'opt_out_promotion') {
+        require_once __DIR__ . '/../../backend/models/Student.php';
+        $stuObj = new Student();
+        $notes = sanitize($_POST['notes'] ?? '');
+        $res = $stuObj->optOutPromotion($userId, $notes);
+        if ($res['success']) {
+            $successMsg = $res['message'];
+        } else {
+            $errorMsg = $res['error'];
+        }
     }
 }
 
@@ -66,15 +86,11 @@ $upcomingExams = [];
 $studentProfile = null;
 
 if ($db && $userId) {
-    // Fetch student's academic profile details (Department, Course, Section, Phone)
+    // Fetch student's academic profile details
     $spQuery = $db->prepare(
-        "SELECT sp.*, u.phone AS user_phone, u.first_name, u.last_name, u.email,
-                d.name AS department_name, d.code AS department_code,
-                c.name AS course_name, c.code AS course_code
+        "SELECT sp.*, u.first_name, u.last_name, u.email
          FROM users u
          LEFT JOIN student_profiles sp ON sp.user_id = u.id
-         LEFT JOIN departments d ON sp.department_id = d.id
-         LEFT JOIN courses c ON sp.course_id = c.id
          WHERE u.id = ?"
     );
     if ($spQuery) {
@@ -314,9 +330,15 @@ if (empty($recommendations)) {
                                 <i class="fas fa-user-graduate"></i>
                             </div>
                             <div>
+                                <?php 
+                                $stuDept = !empty($studentProfile['department']) ? $studentProfile['department'] : 'BCA';
+                                $isBBA = ($stuDept === 'BBA');
+                                ?>
                                 <div style="font-weight: 700; font-size: 16px; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
                                     <?php echo htmlspecialchars(($studentProfile['first_name'] ?? $_SESSION['user']['first_name']) . ' ' . ($studentProfile['last_name'] ?? $_SESSION['user']['last_name'])); ?>
-                                    <span class="badge badge-primary" style="font-size: 11.5px;"><?php echo htmlspecialchars(!empty($studentProfile['course_name']) ? $studentProfile['course_name'] : (!empty($studentProfile['course_code']) ? $studentProfile['course_code'] : 'BCA')); ?></span>
+                                    <span class="badge" style="font-size: 11.5px; font-weight: 700; <?php echo $isBBA ? 'background: rgba(245, 158, 11, 0.15); color: #F59E0B; border: 1px solid rgba(245, 158, 11, 0.3);' : 'background: rgba(37, 99, 235, 0.15); color: var(--primary); border: 1px solid rgba(37, 99, 235, 0.3);'; ?>">
+                                        <?php echo htmlspecialchars($stuDept); ?>
+                                    </span>
                                 </div>
                                 <div style="font-size: 13px; color: var(--text-secondary); margin-top: 2px;">
                                     ID: <strong><?php echo htmlspecialchars($studentProfile['student_id'] ?? ('STU-' . str_pad($userId, 4, '0', STR_PAD_LEFT))); ?></strong>
@@ -328,38 +350,153 @@ if (empty($recommendations)) {
                         </div>
 
                         <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px;">
-                            <!-- Department -->
+                            <!-- Department Widget -->
                             <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 14px; display: flex; align-items: center; gap: 9px;">
                                 <i class="fas fa-building" style="color: var(--primary); font-size: 16px;"></i>
                                 <div>
                                     <div style="font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Department</div>
-                                    <div style="font-size: 12.5px; font-weight: 600; color: var(--text-primary);"><?php echo htmlspecialchars(!empty($studentProfile['department_name']) ? $studentProfile['department_name'] : 'Computer Science'); ?></div>
-                                </div>
-                            </div>
-
-                            <!-- Section & Semester -->
-                            <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 14px; display: flex; align-items: center; gap: 9px;">
-                                <i class="fas fa-layer-group" style="color: #8B5CF6; font-size: 16px;"></i>
-                                <div>
-                                    <div style="font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Section & Term</div>
-                                    <div style="font-size: 12.5px; font-weight: 600; color: var(--text-primary);">
-                                        Section <span style="color: var(--primary); font-weight: 700;"><?php echo htmlspecialchars(!empty($studentProfile['section']) ? $studentProfile['section'] : 'A'); ?></span> &bull; Sem <?php echo htmlspecialchars(!empty($studentProfile['semester']) ? $studentProfile['semester'] : '1'); ?>
+                                    <div style="font-size: 12.5px; font-weight: 700; color: var(--text-primary);">
+                                        <?php echo htmlspecialchars($stuDept); ?>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Phone Number -->
+                            <!-- Semester -->
                             <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 14px; display: flex; align-items: center; gap: 9px;">
-                                <i class="fas fa-phone" style="color: #10B981; font-size: 16px;"></i>
+                                <i class="fas fa-graduation-cap" style="color: var(--primary); font-size: 16px;"></i>
                                 <div>
-                                    <div style="font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Phone Number</div>
+                                    <div style="font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Current Term</div>
                                     <div style="font-size: 12.5px; font-weight: 600; color: var(--text-primary);">
-                                        <?php 
-                                        $stuPhone = !empty($studentProfile['phone']) ? $studentProfile['phone'] : (!empty($studentProfile['user_phone']) ? $studentProfile['user_phone'] : 'Not provided');
-                                        echo htmlspecialchars($stuPhone); 
-                                        ?>
+                                        Semester <span style="color: var(--primary); font-weight: 700;"><?php echo htmlspecialchars(!empty($studentProfile['semester']) ? $studentProfile['semester'] : '1'); ?></span>
                                     </div>
                                 </div>
+                            </div>
+
+                            <!-- Email -->
+                            <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 14px; display: flex; align-items: center; gap: 9px;">
+                                <i class="fas fa-envelope" style="color: #10B981; font-size: 16px;"></i>
+                                <div>
+                                    <div style="font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Student Email</div>
+                                    <div style="font-size: 12.5px; font-weight: 600; color: var(--text-primary);">
+                                        <?php echo htmlspecialchars($studentProfile['email'] ?? ($user['email'] ?? '')); ?>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <?php
+                // Fetch promotion settings and status
+                $promStatus = $studentProfile['promotion_status'] ?? 'not_opted';
+                $promOptIn = !empty($studentProfile['promotion_opt_in']);
+                $currentSemNum = !empty($studentProfile['semester']) ? $studentProfile['semester'] : '1';
+                $targetSemNum = !empty($studentProfile['promotion_target_sem']) ? $studentProfile['promotion_target_sem'] : (is_numeric($currentSemNum) ? (string)((int)$currentSemNum + 1) : '2');
+
+                $promWindowOpen = true;
+                $promYear = '2026-2027';
+                if ($db) {
+                    $setRes = $db->query("SELECT `key`, `value` FROM `system_settings` WHERE `key` IN ('semester_promotion_open', 'semester_promotion_academic_year')");
+                    if ($setRes) {
+                        while ($sRow = $setRes->fetch_assoc()) {
+                            if ($sRow['key'] === 'semester_promotion_open' && $sRow['value'] === '0') {
+                                $promWindowOpen = false;
+                            }
+                            if ($sRow['key'] === 'semester_promotion_academic_year') {
+                                $promYear = $sRow['value'];
+                            }
+                        }
+                    }
+                }
+                ?>
+
+                <!-- Semester Promotion Opt-In Feature Card -->
+                <div class="card" style="margin-bottom: 24px; border-left: 4px solid <?php echo $promStatus === 'promoted' ? 'var(--purple, #8B5CF6)' : ($promStatus === 'opted_in' ? 'var(--success)' : ($promWindowOpen ? 'var(--primary)' : 'var(--border-color)')); ?>;">
+                    <div class="card-body" style="padding: 20px 24px;">
+                        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px;">
+                            <div style="display: flex; align-items: flex-start; gap: 16px; max-width: 680px;">
+                                <div style="width: 48px; height: 48px; border-radius: 12px; background: <?php echo $promStatus === 'promoted' ? 'rgba(139, 92, 246, 0.15)' : ($promStatus === 'opted_in' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(37, 99, 235, 0.12)'); ?>; color: <?php echo $promStatus === 'promoted' ? '#8B5CF6' : ($promStatus === 'opted_in' ? 'var(--success)' : 'var(--primary)'); ?>; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0;">
+                                    <?php if ($promStatus === 'promoted'): ?>
+                                        <i class="fas fa-trophy"></i>
+                                    <?php elseif ($promStatus === 'opted_in'): ?>
+                                        <i class="fas fa-user-check"></i>
+                                    <?php else: ?>
+                                        <i class="fas fa-level-up-alt"></i>
+                                    <?php endif; ?>
+                                </div>
+                                <div>
+                                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px;">
+                                        <h3 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin: 0;">Semester Promotion (Academic Progression)</h3>
+                                        <?php if ($promStatus === 'promoted'): ?>
+                                            <span class="badge badge-purple" style="font-weight: 700;"><i class="fas fa-check-double"></i> Promoted to Semester <?php echo htmlspecialchars($currentSemNum); ?></span>
+                                        <?php elseif ($promStatus === 'opted_in'): ?>
+                                            <span class="badge badge-success" style="font-weight: 700;"><i class="fas fa-check-circle"></i> Opt-In Active (Semester <?php echo htmlspecialchars($currentSemNum); ?> &rarr; <?php echo htmlspecialchars($targetSemNum); ?>)</span>
+                                        <?php elseif ($promStatus === 'rejected'): ?>
+                                            <span class="badge badge-danger" style="font-weight: 700;"><i class="fas fa-exclamation-triangle"></i> Promotion Deferred</span>
+                                        <?php else: ?>
+                                            <span class="badge badge-secondary" style="font-weight: 600;"><i class="fas fa-clock"></i> Not Opted In</span>
+                                        <?php endif; ?>
+
+                                        <?php if ($promWindowOpen): ?>
+                                            <span class="badge" style="background: rgba(16, 185, 129, 0.12); color: #10B981; font-size: 11px; font-weight: 600;">
+                                                <i class="fas fa-calendar-check"></i> Promotion Window Open (<?php echo htmlspecialchars($promYear); ?>)
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="badge" style="background: rgba(239, 68, 68, 0.12); color: var(--danger); font-size: 11px; font-weight: 600;">
+                                                <i class="fas fa-lock"></i> Promotion Window Closed
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <p style="font-size: 13.5px; color: var(--text-secondary); margin: 0; line-height: 1.5;">
+                                        <?php if ($promStatus === 'promoted'): ?>
+                                            Congratulations! Your academic progression to <strong>Semester <?php echo htmlspecialchars($currentSemNum); ?> (<?php echo htmlspecialchars($stuDept); ?>)</strong> has been finalized by the administration.
+                                            <?php if (!empty($studentProfile['promoted_at'])): ?>
+                                                <span style="display: block; font-size: 12px; color: var(--text-muted); margin-top: 3px;">
+                                                    <i class="fas fa-calendar-alt"></i> Promoted on <?php echo date('M d, Y h:i A', strtotime($studentProfile['promoted_at'])); ?>
+                                                </span>
+                                            <?php endif; ?>
+                                        <?php elseif ($promStatus === 'opted_in'): ?>
+                                            You have officially <strong>opted in</strong> for promotion from <strong>Semester <?php echo htmlspecialchars($currentSemNum); ?></strong> to <strong>Semester <?php echo htmlspecialchars($targetSemNum); ?></strong>. Your application is in the queue for Admin review and semester batch processing.
+                                            <?php if (!empty($studentProfile['promotion_requested_at'])): ?>
+                                                <span style="display: block; font-size: 12px; color: var(--text-muted); margin-top: 3px;">
+                                                    <i class="fas fa-clock"></i> Opt-in submitted on <?php echo date('M d, Y h:i A', strtotime($studentProfile['promotion_requested_at'])); ?>
+                                                </span>
+                                            <?php endif; ?>
+                                        <?php elseif ($promStatus === 'rejected'): ?>
+                                            Your promotion request was deferred or rejected. Reason: <em><?php echo htmlspecialchars($studentProfile['promotion_notes'] ?? 'Pending administrative verification'); ?></em>. You may re-submit your opt-in if resolved.
+                                        <?php else: ?>
+                                            Are you completing Semester <?php echo htmlspecialchars($currentSemNum); ?>? Opt in below to register your academic intent for advancement to <strong>Semester <?php echo htmlspecialchars($targetSemNum); ?> (<?php echo htmlspecialchars($stuDept); ?>)</strong>.
+                                        <?php endif; ?>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <?php if ($promStatus === 'opted_in'): ?>
+                                    <form method="POST" action="dashboard.php" onsubmit="return confirm('Are you sure you want to withdraw your semester promotion opt-in request?');">
+                                        <input type="hidden" name="action" value="opt_out_promotion">
+                                        <button type="submit" class="btn btn-outline" style="color: var(--danger); border-color: rgba(239, 68, 68, 0.4); font-size: 13px;">
+                                            <i class="fas fa-undo"></i> Withdraw / Opt-Out
+                                        </button>
+                                    </form>
+                                <?php elseif ($promStatus === 'not_opted' || $promStatus === 'rejected'): ?>
+                                    <?php if ($promWindowOpen): ?>
+                                        <form method="POST" action="dashboard.php">
+                                            <input type="hidden" name="action" value="opt_in_promotion">
+                                            <button type="submit" class="btn btn-primary" style="font-size: 13px; font-weight: 600;">
+                                                <i class="fas fa-arrow-circle-up"></i> Opt-In for Semester Promotion
+                                            </button>
+                                        </form>
+                                    <?php else: ?>
+                                        <button type="button" class="btn btn-secondary" disabled style="font-size: 13px; opacity: 0.65;">
+                                            <i class="fas fa-lock"></i> Opt-In Window Closed
+                                        </button>
+                                    <?php endif; ?>
+                                <?php elseif ($promStatus === 'promoted'): ?>
+                                    <span style="font-size: 13px; font-weight: 700; color: var(--success); display: inline-flex; align-items: center; gap: 6px;">
+                                        <i class="fas fa-check-circle"></i> Enrollment Updated
+                                    </span>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>

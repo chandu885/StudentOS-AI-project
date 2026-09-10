@@ -75,7 +75,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $firstName = sanitize($_POST['first_name'] ?? '');
         $lastName = sanitize($_POST['last_name'] ?? '');
         $email = sanitize($_POST['email'] ?? '');
-        $phone = sanitize($_POST['phone'] ?? '');
         $roleId = (int)($_POST['role_id'] ?? 4);
         $isActive = isset($_POST['is_active']) ? (int)$_POST['is_active'] : 1;
 
@@ -93,9 +92,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $dup->close();
                 } else {
                     $dup->close();
-                    $up = $conn->prepare("UPDATE users SET first_name = ?, last_name = ?, email = ?, phone = ?, role_id = ?, is_active = ?, updated_at = NOW() WHERE id = ?");
+                    $up = $conn->prepare("UPDATE users SET first_name = ?, last_name = ?, email = ?, role_id = ?, is_active = ?, updated_at = NOW() WHERE id = ?");
                     if ($up) {
-                        $up->bind_param("ssssiii", $firstName, $lastName, $email, $phone, $roleId, $isActive, $targetUserId);
+                        $up->bind_param("sssiii", $firstName, $lastName, $email, $roleId, $isActive, $targetUserId);
                         if ($up->execute()) {
                             $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
                             $details = "Super Admin updated user #{$targetUserId} ({$email}, Role: {$roleId})";
@@ -122,15 +121,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($targetUserId === $currentUserId) {
             $errorMsg = 'You cannot delete your own Super Administrator account.';
         } elseif ($conn) {
-            // Retrieve user and profile data (phone, department, section) before delete
             $uStmt = $conn->prepare("SELECT u.id, u.first_name, u.last_name, u.email, u.role_id, r.name AS role_name,
-                                            COALESCE(sp.phone, u.phone) AS phone,
-                                            sp.section, sp.student_id,
-                                            d.name AS department_name, d.code AS dept_code
+                                            sp.student_id, sp.roll_number, sp.semester
                                      FROM users u
                                      LEFT JOIN roles r ON u.role_id = r.id
                                      LEFT JOIN student_profiles sp ON sp.user_id = u.id
-                                     LEFT JOIN departments d ON sp.department_id = d.id
                                      WHERE u.id = ?");
             $uStmt->bind_param("i", $targetUserId);
             $uStmt->execute();
@@ -143,33 +138,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $userName = $targetUser['first_name'] . ' ' . $targetUser['last_name'];
                 $userEmail = $targetUser['email'];
                 $roleName = $targetUser['role_name'] ?? 'User';
-                $phone = !empty($targetUser['phone']) ? $targetUser['phone'] : 'N/A';
-                $dept = !empty($targetUser['dept_code']) ? $targetUser['dept_code'] : (!empty($targetUser['department_name']) ? $targetUser['department_name'] : 'N/A');
-                $section = !empty($targetUser['section']) ? $targetUser['section'] : 'N/A';
 
                 if ($deleteMode === 'soft') {
-                    // Soft delete: deactivates and marks deleted_at timestamp, preserving phone, department, section
                     $up = $conn->prepare("UPDATE users SET is_active = 0, deleted_at = NOW(), updated_at = NOW() WHERE id = ?");
                     $up->bind_param("i", $targetUserId);
                     if ($up->execute()) {
-                        // Audit log
                         $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
-                        $details = "Super Admin soft-deleted user #{$targetUserId} ({$userName}, Role: {$roleName}, Phone: {$phone}, Dept: {$dept}, Sec: {$section})";
+                        $details = "Super Admin soft-deleted user #{$targetUserId} ({$userName}, Role: {$roleName})";
                         $aud = $conn->prepare("INSERT INTO audit_logs (user_id, action, resource, resource_id, details, ip_address) VALUES (?, 'USER_SOFT_DELETED', 'users', ?, ?, ?)");
                         if ($aud) {
                             $aud->bind_param("iiss", $currentUserId, $targetUserId, $details, $ip);
                             $aud->execute();
                         }
-                        $successMsg = "User {$userName} ({$userEmail}) deactivated (soft-deleted). Phone ({$phone}), Department ({$dept}), and Section ({$section}) records are safely archived.";
+                        $successMsg = "User {$userName} ({$userEmail}) deactivated (soft-deleted).";
                     } else {
                         $errorMsg = 'Failed to deactivate user: ' . $conn->error;
                     }
                     $up->close();
                 } elseif ($deleteMode === 'permanent') {
-                    // Permanent delete: clean cascade inside a transaction
                     $conn->begin_transaction();
                     try {
-                        // Clean up child tables
                         $conn->query("DELETE FROM user_sessions WHERE user_id = $targetUserId");
                         $conn->query("DELETE FROM notifications WHERE user_id = $targetUserId");
                         $conn->query("DELETE FROM tasks WHERE user_id = $targetUserId");
@@ -184,16 +172,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         $conn->commit();
 
-                        // Audit log
                         $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
-                        $details = "Super Admin permanently deleted user #{$targetUserId} ({$userName}, Email: {$userEmail}, Role: {$roleName}, Phone: {$phone}, Dept: {$dept}, Sec: {$section})";
+                        $details = "Super Admin permanently deleted user #{$targetUserId} ({$userName}, Email: {$userEmail}, Role: {$roleName})";
                         $aud = $conn->prepare("INSERT INTO audit_logs (user_id, action, resource, resource_id, details, ip_address) VALUES (?, 'USER_PERMANENTLY_DELETED', 'users', ?, ?, ?)");
                         if ($aud) {
                             $aud->bind_param("iiss", $currentUserId, $targetUserId, $details, $ip);
                             $aud->execute();
                         }
 
-                        $successMsg = "User {$userName} ({$userEmail}) and all associated records (Phone: {$phone}, Department: {$dept}, Section: {$section}) have been permanently deleted from the database.";
+                        $successMsg = "User {$userName} ({$userEmail}) and all associated records have been permanently deleted.";
                     } catch (\Exception $e) {
                         $conn->rollback();
                         $errorMsg = 'Failed to permanently delete user: ' . $e->getMessage();
@@ -210,14 +197,11 @@ $roleFilter = $_GET['role'] ?? 'all';
 
 if ($conn) {
     $sql = "SELECT u.id, u.email, u.first_name, u.last_name, 
-                   COALESCE(sp.phone, u.phone) AS phone, 
                    u.role_id, r.name as role_name, u.is_active, u.created_at, u.last_login_at,
-                   sp.student_id, sp.section, sp.semester, sp.roll_number,
-                   d.name as department_name, d.code as dept_code
+                   sp.student_id, sp.semester, sp.roll_number
             FROM users u 
             LEFT JOIN roles r ON u.role_id = r.id 
             LEFT JOIN student_profiles sp ON sp.user_id = u.id
-            LEFT JOIN departments d ON sp.department_id = d.id
             WHERE u.deleted_at IS NULL ";
     
     if ($roleFilter === 'faculty') {
@@ -348,19 +332,12 @@ $totalUsers = count($usersList);
                                                     </div>
                                                     <?php if ($roleId === 4): ?>
                                                         <div style="font-size: 11px; color: var(--text-muted); margin-top: 3px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
-                                                            <?php if (!empty($u['dept_code'])): ?>
-                                                                <span class="badge badge-primary" style="font-size: 9.5px; padding: 1px 6px;" title="Department"><?php echo htmlspecialchars($u['dept_code']); ?></span>
+                                                            <?php if (!empty($u['roll_number'])): ?>
+                                                                <span class="badge badge-primary" style="font-size: 9.5px; padding: 1px 6px;" title="Roll Number">Roll: <?php echo htmlspecialchars($u['roll_number']); ?></span>
                                                             <?php endif; ?>
-                                                            <?php if (!empty($u['section'])): ?>
-                                                                <span class="badge badge-info" style="font-size: 9.5px; padding: 1px 6px;" title="Class Section">Sec <?php echo htmlspecialchars($u['section']); ?></span>
+                                                            <?php if (!empty($u['semester'])): ?>
+                                                                <span class="badge badge-info" style="font-size: 9.5px; padding: 1px 6px;" title="Semester">Sem <?php echo htmlspecialchars($u['semester']); ?></span>
                                                             <?php endif; ?>
-                                                            <?php if (!empty($u['phone'])): ?>
-                                                                <span style="color: var(--text-secondary); font-size: 10.5px;" title="Phone Contact"><i class="fas fa-phone-alt" style="font-size: 9px; color: var(--primary);"></i> <?php echo htmlspecialchars($u['phone']); ?></span>
-                                                            <?php endif; ?>
-                                                        </div>
-                                                    <?php elseif (!empty($u['phone'])): ?>
-                                                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">
-                                                            <i class="fas fa-phone-alt" style="font-size: 9px; color: var(--primary);"></i> <?php echo htmlspecialchars($u['phone']); ?>
                                                         </div>
                                                     <?php endif; ?>
                                                 </td>
@@ -519,10 +496,7 @@ $totalUsers = count($usersList);
                     <input type="email" name="email" id="editUserEmail" class="form-control" required>
                 </div>
 
-                <div class="form-group" style="margin-bottom: 14px;">
-                    <label for="editUserPhone">Phone Number</label>
-                    <input type="text" name="phone" id="editUserPhone" class="form-control" placeholder="+1 555-0182">
-                </div>
+
 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px;">
                     <div class="form-group">
@@ -588,8 +562,8 @@ $totalUsers = count($usersList);
                         <span id="vStatus" class="badge badge-success">Active</span>
                     </div>
                     <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px 12px; grid-column: span 2;">
-                        <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 600; display: block;">Phone Number</span>
-                        <strong id="vPhone" style="color: var(--primary);">Not Provided</strong>
+                        <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 600; display: block;">Registered Email</span>
+                        <strong id="vEmailText" style="color: var(--primary);">N/A</strong>
                     </div>
                 </div>
 
@@ -598,10 +572,9 @@ $totalUsers = count($usersList);
                         <i class="fas fa-graduation-cap"></i> Academic Enrollment Details
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12.5px;">
-                        <div><strong style="color: var(--text-muted);">Department:</strong> <span id="vDept" style="color: var(--text-primary); font-weight: 600;">N/A</span></div>
-                        <div><strong style="color: var(--text-muted);">Section:</strong> <span id="vClassSection" class="badge badge-info">Sec A</span></div>
                         <div><strong style="color: var(--text-muted);">Student ID:</strong> <span id="vStudentId" style="color: var(--text-primary);">N/A</span></div>
                         <div><strong style="color: var(--text-muted);">Roll Number:</strong> <span id="vRollNumber" style="color: var(--text-primary);">N/A</span></div>
+                        <div><strong style="color: var(--text-muted);">Current Semester:</strong> <span id="vSemester" class="badge badge-info">Sem 1</span></div>
                     </div>
                 </div>
 
@@ -642,12 +615,11 @@ $totalUsers = count($usersList);
 
                 <div id="delStudentInfoBox" style="background: rgba(14, 165, 233, 0.07); border: 1px solid rgba(14, 165, 233, 0.2); border-radius: var(--radius-md); padding: 14px; margin-bottom: 18px; display: none;">
                     <div style="font-size: 12px; font-weight: 700; color: var(--primary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
-                        <i class="fas fa-database"></i> Student Profile & Contact Linkages
+                        <i class="fas fa-database"></i> Student Profile Linkages
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12.5px;">
-                        <div><strong>Phone:</strong> <span id="delUserPhone" style="color: var(--text-primary);">N/A</span></div>
-                        <div><strong>Section:</strong> <span id="delUserSection" class="badge badge-info">Sec A</span></div>
-                        <div style="grid-column: span 2;"><strong>Department:</strong> <span id="delUserDept" style="color: var(--text-primary); font-weight: 600;">N/A</span></div>
+                        <div><strong>Student ID:</strong> <span id="delUserStudentId" style="color: var(--text-primary);">N/A</span></div>
+                        <div><strong>Roll Number:</strong> <span id="delUserRoll" class="badge badge-info">N/A</span></div>
                     </div>
                 </div>
 
@@ -659,7 +631,7 @@ $totalUsers = count($usersList);
                             <div>
                                 <strong style="color: var(--success); font-size: 13px;">Deactivate Account (Soft Delete - Recommended)</strong>
                                 <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">
-                                    Disables user login immediately. Safely preserves phone number, department affiliation, section, and all historical academic data.
+                                    Disables user login immediately. Safely preserves academic records and student history.
                                 </div>
                             </div>
                         </label>
@@ -669,7 +641,7 @@ $totalUsers = count($usersList);
                             <div>
                                 <strong style="color: var(--danger); font-size: 13px;">Permanent Delete (Cascade Cleanup)</strong>
                                 <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">
-                                    Permanently purges student profile (releasing phone, department, section), attendance, marks, tasks, and user credentials.
+                                    Permanently purges student profile, attendance, marks, tasks, and user credentials.
                                 </div>
                             </div>
                         </label>
@@ -709,7 +681,6 @@ $totalUsers = count($usersList);
         document.getElementById('editUserFn').value = u.first_name || '';
         document.getElementById('editUserLn').value = u.last_name || '';
         document.getElementById('editUserEmail').value = u.email || '';
-        document.getElementById('editUserPhone').value = u.phone || '';
         document.getElementById('editUserRole').value = u.role_id || 4;
         document.getElementById('editUserStatus').value = (u.is_active !== undefined) ? u.is_active : 1;
         document.getElementById('editUserModal').style.display = 'flex';
@@ -727,17 +698,16 @@ $totalUsers = count($usersList);
         document.getElementById('vRoleBadge').textContent = u.role_name || 'User';
         document.getElementById('vStatus').textContent = (u.is_active == 1) ? 'Active' : 'Deactivated';
         document.getElementById('vStatus').className = (u.is_active == 1) ? 'badge badge-success' : 'badge badge-danger';
-        document.getElementById('vPhone').textContent = u.phone ? u.phone : 'Not Provided';
+        document.getElementById('vEmailText').textContent = u.email || 'N/A';
         document.getElementById('vCreatedAt').textContent = u.created_at ? u.created_at.substring(0, 10) : 'N/A';
         document.getElementById('vLastLogin').textContent = u.last_login_at ? u.last_login_at : 'Never';
 
         const stuSec = document.getElementById('vStudentSection');
         if (u.role_id == 4) {
             stuSec.style.display = 'block';
-            document.getElementById('vDept').textContent = (u.dept_code ? u.dept_code + ' - ' : '') + (u.department_name || 'Not Assigned');
-            document.getElementById('vClassSection').textContent = 'Sec ' + (u.section || 'A');
             document.getElementById('vStudentId').textContent = u.student_id || 'N/A';
             document.getElementById('vRollNumber').textContent = u.roll_number || 'N/A';
+            document.getElementById('vSemester').textContent = 'Sem ' + (u.semester || '1');
         } else {
             stuSec.style.display = 'none';
         }
@@ -757,18 +727,10 @@ $totalUsers = count($usersList);
         const box = document.getElementById('delStudentInfoBox');
         if (u.role_id == 4) {
             box.style.display = 'block';
-            document.getElementById('delUserPhone').textContent = u.phone || 'Not Registered';
-            document.getElementById('delUserSection').textContent = 'Sec ' + (u.section || 'A');
-            document.getElementById('delUserDept').textContent = (u.dept_code ? u.dept_code + ' - ' : '') + (u.department_name || 'Not Assigned');
+            document.getElementById('delUserStudentId').textContent = u.student_id || 'N/A';
+            document.getElementById('delUserRoll').textContent = u.roll_number || 'N/A';
         } else {
-            if (u.phone) {
-                box.style.display = 'block';
-                document.getElementById('delUserPhone').textContent = u.phone;
-                document.getElementById('delUserSection').textContent = 'N/A';
-                document.getElementById('delUserDept').textContent = 'N/A';
-            } else {
-                box.style.display = 'none';
-            }
+            box.style.display = 'none';
         }
         document.getElementById('deleteUserModal').style.display = 'flex';
     }

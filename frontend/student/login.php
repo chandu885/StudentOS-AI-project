@@ -64,9 +64,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$loginSuccess) {
             $db = getDbConnection();
             if ($db) {
-                $stmt = $db->prepare("SELECT u.*, r.display_name as role_name, LOWER(r.name) as role_slug FROM users u JOIN roles r ON u.role_id = r.id WHERE (u.email = ? OR u.phone = ?) AND u.is_active = 1 AND u.deleted_at IS NULL LIMIT 1");
+                $stmt = $db->prepare("SELECT u.*, r.display_name as role_name, LOWER(r.name) as role_slug FROM users u JOIN roles r ON u.role_id = r.id WHERE u.email = ? AND u.is_active = 1 AND u.deleted_at IS NULL LIMIT 1");
                 if ($stmt) {
-                    $stmt->bind_param("ss", $email, $email);
+                    $stmt->bind_param("s", $email);
                     $stmt->execute();
                     $dbUser = $stmt->get_result()->fetch_assoc();
                     $stmt->close();

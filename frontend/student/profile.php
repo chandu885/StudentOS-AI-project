@@ -20,26 +20,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'update_profile') {
         $firstName = sanitize($_POST['first_name'] ?? '');
         $lastName = sanitize($_POST['last_name'] ?? '');
-        $phone = sanitize($_POST['phone'] ?? '');
         $bio = sanitize($_POST['bio'] ?? '');
         
         if (!empty($firstName) && $db) {
-            $uStmt = $db->prepare("UPDATE `users` SET `first_name` = ?, `last_name` = ?, `phone` = ?, `updated_at` = NOW() WHERE `id` = ?");
+            $uStmt = $db->prepare("UPDATE `users` SET `first_name` = ?, `last_name` = ?, `updated_at` = NOW() WHERE `id` = ?");
             if ($uStmt) {
-                $uStmt->bind_param("sssi", $firstName, $lastName, $phone, $userId);
+                $uStmt->bind_param("ssi", $firstName, $lastName, $userId);
                 $uStmt->execute();
                 $uStmt->close();
             }
-            $spStmt = $db->prepare("UPDATE `student_profiles` SET `phone` = ?, `updated_at` = NOW() WHERE `user_id` = ?");
-            if ($spStmt) {
-                $spStmt->bind_param("si", $phone, $userId);
-                $spStmt->execute();
-                $spStmt->close();
-            }
             $_SESSION['user']['first_name'] = $firstName;
             $_SESSION['user']['last_name'] = $lastName;
-            $_SESSION['user']['phone'] = $phone;
-            $successMsg = 'Profile and contact information updated successfully in the database!';
+            $successMsg = 'Profile updated successfully!';
         }
     } elseif ($action === 'change_password') {
         $currentPass = $_POST['current_password'] ?? '';
@@ -69,18 +61,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
+    } elseif ($action === 'opt_in_promotion') {
+        require_once __DIR__ . '/../../backend/models/Student.php';
+        $stuObj = new Student();
+        $notes = sanitize($_POST['notes'] ?? '');
+        $res = $stuObj->optInPromotion($userId, null, $notes);
+        if ($res['success']) {
+            $successMsg = $res['message'];
+        } else {
+            $errorMsg = $res['error'];
+        }
+    } elseif ($action === 'opt_out_promotion') {
+        require_once __DIR__ . '/../../backend/models/Student.php';
+        $stuObj = new Student();
+        $notes = sanitize($_POST['notes'] ?? '');
+        $res = $stuObj->optOutPromotion($userId, $notes);
+        if ($res['success']) {
+            $successMsg = $res['message'];
+        } else {
+            $errorMsg = $res['error'];
+        }
     }
 }
 
 $profile = [];
 if ($db) {
-    // 1. Fetch user's student profile & department & course
+    // 1. Fetch user's student profile
     $stmt = $db->prepare(
-        "SELECT sp.*, u.phone AS user_phone, d.name AS department_name, d.code AS department_code, c.name AS course_name, c.code AS course_code 
+        "SELECT sp.*, u.first_name, u.last_name, u.email 
          FROM users u
          LEFT JOIN student_profiles sp ON sp.user_id = u.id 
-         LEFT JOIN departments d ON sp.department_id = d.id 
-         LEFT JOIN courses c ON sp.course_id = c.id 
          WHERE u.id = ?"
     );
     if ($stmt) {
@@ -90,6 +100,7 @@ if ($db) {
         if ($dbProf) {
             $profile = $dbProf;
         }
+        $stmt->close();
     }
 
     // 2. Fetch latest performance metrics (CGPA, credits)
@@ -105,15 +116,11 @@ if ($db) {
                 $profile['semester'] = $perfRow['semester'];
             }
         }
+        $perfStmt->close();
     }
 }
 
-// Dynamically resolve Degree Program and Department directly from the Database
-$degreeProgram = !empty($profile['course_name']) ? $profile['course_name'] : (!empty($profile['course_code']) ? $profile['course_code'] : 'BCA');
-$displayDepartment = !empty($profile['department_name']) ? $profile['department_name'] : 'Department of Computer Applications';
 $user = $_SESSION['user'];
-$studentPhone = !empty($profile['phone']) ? $profile['phone'] : (!empty($profile['user_phone']) ? $profile['user_phone'] : (!empty($user['phone']) ? $user['phone'] : 'Not provided'));
-$section = !empty($profile['section']) ? $profile['section'] : 'A';
 $initials = getInitials(($user['first_name'] ?? 'Alex') . ' ' . ($user['last_name'] ?? 'Johnson'));
 ?>
 <!DOCTYPE html>
@@ -171,33 +178,43 @@ $initials = getInitials(($user['first_name'] ?? 'Alex') . ' ' . ($user['last_nam
                         </h3>
                         <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;"><?php echo htmlspecialchars($user['email'] ?? 'student@studentos.ai'); ?></p>
                         <span class="badge badge-primary" style="font-weight: 700; font-size: 13px; padding: 4px 12px; margin-bottom: 12px;">
-                            <i class="fas fa-graduation-cap"></i> <?php echo htmlspecialchars($degreeProgram); ?> Student
+                            <i class="fas fa-user-graduate"></i> Student Profile
                         </span>
 
                         <div class="profile-meta-list">
                             <div class="profile-meta-row">
-                                <span style="color: var(--text-muted);">Roll Number:</span>
-                                <strong><?php echo htmlspecialchars($profile['roll_number'] ?? $profile['student_id'] ?? ('STU' . str_pad($userId, 4, '0', STR_PAD_LEFT))); ?></strong>
-                            </div>
-                            <div class="profile-meta-row">
-                                <span style="color: var(--text-muted);">Degree:</span>
-                                <span class="badge badge-primary" style="font-weight: 700; font-size: 13px;"><?php echo htmlspecialchars($degreeProgram); ?></span>
+                                <span style="color: var(--text-muted);">Student ID:</span>
+                                <strong style="color: var(--primary);"><?php echo htmlspecialchars($profile['student_id'] ?? ('STU' . str_pad($userId, 4, '0', STR_PAD_LEFT))); ?></strong>
                             </div>
                             <div class="profile-meta-row">
                                 <span style="color: var(--text-muted);">Department:</span>
-                                <strong><?php echo htmlspecialchars($displayDepartment); ?></strong>
+                                <span class="badge <?php echo (($profile['department'] ?? '') === 'BBA') ? 'badge-purple' : 'badge-primary'; ?>" style="font-weight: 700; font-size: 11px;">
+                                    <i class="fas fa-building-columns"></i> <?php echo htmlspecialchars($profile['department'] ?? 'BCA'); ?>
+                                </span>
                             </div>
                             <div class="profile-meta-row">
-                                <span style="color: var(--text-muted);">Class Section:</span>
-                                <span class="badge badge-secondary" style="font-weight: 700;">Section <?php echo htmlspecialchars($section); ?></span>
+                                <span style="color: var(--text-muted);">Roll Number:</span>
+                                <strong><?php echo htmlspecialchars($profile['roll_number'] ?? 'N/A'); ?></strong>
                             </div>
                             <div class="profile-meta-row">
                                 <span style="color: var(--text-muted);">Current Term:</span>
                                 <span class="badge badge-success"><?php echo htmlspecialchars(!empty($profile['semester']) ? (is_numeric($profile['semester']) ? 'Semester ' . $profile['semester'] : $profile['semester']) : 'Semester 1'); ?></span>
                             </div>
                             <div class="profile-meta-row">
-                                <span style="color: var(--text-muted);">Phone Number:</span>
-                                <strong style="color: var(--text-primary);"><i class="fas fa-phone" style="font-size: 10px; color: #10B981;"></i> <?php echo htmlspecialchars($studentPhone); ?></strong>
+                                <span style="color: var(--text-muted);">Promotion Status:</span>
+                                <?php if (($profile['promotion_status'] ?? '') === 'promoted'): ?>
+                                    <span class="badge badge-purple" style="font-weight: 700; font-size: 11px;"><i class="fas fa-check-double"></i> Promoted</span>
+                                <?php elseif (($profile['promotion_status'] ?? '') === 'opted_in'): ?>
+                                    <span class="badge badge-success" style="font-weight: 700; font-size: 11px;"><i class="fas fa-check-circle"></i> Opted-In</span>
+                                <?php elseif (($profile['promotion_status'] ?? '') === 'rejected'): ?>
+                                    <span class="badge badge-danger" style="font-weight: 700; font-size: 11px;"><i class="fas fa-times-circle"></i> Deferred</span>
+                                <?php else: ?>
+                                    <span class="badge badge-secondary" style="font-weight: 600; font-size: 11px;">Not Opted</span>
+                                <?php endif; ?>
+                            </div>
+                            <div class="profile-meta-row">
+                                <span style="color: var(--text-muted);">Email:</span>
+                                <strong style="color: var(--text-primary); font-size: 12px;"><?php echo htmlspecialchars($user['email'] ?? 'student@studentos.ai'); ?></strong>
                             </div>
                             <div class="profile-meta-row">
                                 <span style="color: var(--text-muted);">Cumulative CGPA:</span>
@@ -247,27 +264,101 @@ $initials = getInitials(($user['first_name'] ?? 'Alex') . ' ' . ($user['last_nam
                                         <div style="font-size: 14px; font-weight: 600; margin-top: 4px;"><?php echo htmlspecialchars($user['email'] ?? 'student@studentos.ai'); ?></div>
                                     </div>
                                     <div style="background: var(--bg-primary); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-                                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Degree Program</div>
+                                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Student ID</div>
                                         <div style="font-size: 14px; font-weight: 700; color: var(--primary); margin-top: 4px;">
-                                            <span class="badge badge-primary" style="font-size: 13px; font-weight: 700; padding: 4px 10px;"><?php echo htmlspecialchars($degreeProgram); ?></span>
+                                            <?php echo htmlspecialchars($profile['student_id'] ?? ('STU' . str_pad($userId, 4, '0', STR_PAD_LEFT))); ?>
                                         </div>
                                     </div>
                                     <div style="background: var(--bg-primary); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-                                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Department</div>
+                                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Class Roll Number</div>
                                         <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-top: 4px;">
-                                            <i class="fas fa-building" style="color: var(--primary); font-size: 12px;"></i> <?php echo htmlspecialchars($displayDepartment); ?>
+                                            <?php echo htmlspecialchars($profile['roll_number'] ?? 'N/A'); ?>
                                         </div>
                                     </div>
                                     <div style="background: var(--bg-primary); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-                                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Section & Term</div>
-                                        <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-top: 4px;">
-                                            <i class="fas fa-layer-group" style="color: #8B5CF6; font-size: 12px;"></i> Section <span style="color: var(--primary);"><?php echo htmlspecialchars($section); ?></span> &bull; Sem <?php echo htmlspecialchars(!empty($profile['semester']) ? $profile['semester'] : '1'); ?>
+                                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Academic Department</div>
+                                        <div style="font-size: 14px; font-weight: 700; color: var(--text-primary); margin-top: 4px; display: flex; align-items: center; gap: 8px;">
+                                            <i class="fas fa-building-columns" style="color: var(--primary);"></i>
+                                            <span class="badge <?php echo (($profile['department'] ?? '') === 'BBA') ? 'badge-purple' : 'badge-primary'; ?>" style="font-size: 12px; font-weight: 700;">
+                                                <?php echo htmlspecialchars($profile['department'] ?? 'BCA'); ?>
+                                            </span>
+                                            <span style="font-size: 12px; color: var(--text-muted); font-weight: 400;">
+                                                (<?php echo (($profile['department'] ?? '') === 'BBA') ? 'Bachelor of Business Administration' : 'Bachelor of Computer Applications'; ?>)
+                                            </span>
                                         </div>
                                     </div>
                                     <div style="background: var(--bg-primary); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-                                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Phone Number</div>
+                                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Current Academic Term</div>
                                         <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-top: 4px;">
-                                            <i class="fas fa-phone" style="color: #10B981; font-size: 12px;"></i> <?php echo htmlspecialchars($studentPhone); ?>
+                                            <i class="fas fa-graduation-cap" style="color: var(--primary); font-size: 13px;"></i> <?php echo htmlspecialchars(!empty($profile['semester']) ? (is_numeric($profile['semester']) ? 'Semester ' . $profile['semester'] : $profile['semester']) : 'Semester 1'); ?>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <?php
+                                $profPromStatus = $profile['promotion_status'] ?? 'not_opted';
+                                $profCurrentSem = !empty($profile['semester']) ? $profile['semester'] : '1';
+                                $profTargetSem = !empty($profile['promotion_target_sem']) ? $profile['promotion_target_sem'] : (is_numeric($profCurrentSem) ? (string)((int)$profCurrentSem + 1) : '2');
+                                
+                                $promWindowOpen = true;
+                                if ($db) {
+                                    $wRes = $db->query("SELECT value FROM system_settings WHERE `key` = 'semester_promotion_open' LIMIT 1");
+                                    if ($wRes && $wRow = $wRes->fetch_assoc()) {
+                                        if ($wRow['value'] === '0') $promWindowOpen = false;
+                                    }
+                                }
+                                ?>
+                                <div style="background: var(--bg-primary); padding: 18px 20px; border-radius: var(--radius-md); border: 1px solid var(--border-color); border-left: 4px solid <?php echo $profPromStatus === 'promoted' ? 'var(--purple, #8B5CF6)' : ($profPromStatus === 'opted_in' ? 'var(--success)' : ($promWindowOpen ? 'var(--primary)' : 'var(--border-color)')); ?>; margin-bottom: 24px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+                                        <div>
+                                            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Semester Promotion Status</div>
+                                            <div style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin-top: 4px; display: flex; align-items: center; gap: 8px;">
+                                                <i class="fas fa-level-up-alt" style="color: var(--primary);"></i>
+                                                <?php if ($profPromStatus === 'promoted'): ?>
+                                                    <span class="badge badge-purple" style="font-weight: 700;">Promoted to Semester <?php echo htmlspecialchars($profCurrentSem); ?></span>
+                                                <?php elseif ($profPromStatus === 'opted_in'): ?>
+                                                    <span class="badge badge-success" style="font-weight: 700;">Opted-In (Semester <?php echo htmlspecialchars($profCurrentSem); ?> &rarr; <?php echo htmlspecialchars($profTargetSem); ?>)</span>
+                                                <?php elseif ($profPromStatus === 'rejected'): ?>
+                                                    <span class="badge badge-danger" style="font-weight: 700;">Promotion Deferred</span>
+                                                <?php else: ?>
+                                                    <span class="badge badge-secondary" style="font-weight: 600;">Not Opted In</span>
+                                                <?php endif; ?>
+
+                                                <span style="font-size: 12px; font-weight: normal; color: var(--text-muted);">
+                                                    (Window: <?php echo $promWindowOpen ? '<strong style="color:var(--success);">Open</strong>' : '<strong style="color:var(--danger);">Closed</strong>'; ?>)
+                                                </span>
+                                            </div>
+                                            <p style="font-size: 13px; color: var(--text-secondary); margin: 6px 0 0 0;">
+                                                <?php if ($profPromStatus === 'promoted'): ?>
+                                                    Your enrollment advancement has been approved and finalized by Academic Administration.
+                                                <?php elseif ($profPromStatus === 'opted_in'): ?>
+                                                    Opt-in submitted. Waiting for administrative approval.
+                                                <?php elseif ($profPromStatus === 'rejected'): ?>
+                                                    Notes: <?php echo htmlspecialchars($profile['promotion_notes'] ?? 'Pending review'); ?>.
+                                                <?php else: ?>
+                                                    Eligible for next semester progression upon opting in.
+                                                <?php endif; ?>
+                                            </p>
+                                        </div>
+
+                                        <div>
+                                            <?php if ($profPromStatus === 'opted_in'): ?>
+                                                <form method="POST" action="profile.php" onsubmit="return confirm('Withdraw your promotion opt-in request?');">
+                                                    <input type="hidden" name="action" value="opt_out_promotion">
+                                                    <button type="submit" class="btn btn-outline" style="color: var(--danger); border-color: rgba(239, 68, 68, 0.4); font-size: 12px; padding: 6px 12px;">
+                                                        <i class="fas fa-undo"></i> Withdraw Opt-In
+                                                    </button>
+                                                </form>
+                                            <?php elseif ($profPromStatus === 'not_opted' || $profPromStatus === 'rejected'): ?>
+                                                <?php if ($promWindowOpen): ?>
+                                                    <form method="POST" action="profile.php">
+                                                        <input type="hidden" name="action" value="opt_in_promotion">
+                                                        <button type="submit" class="btn btn-primary" style="font-size: 12px; padding: 6px 14px; font-weight: 600;">
+                                                            <i class="fas fa-arrow-circle-up"></i> Opt-In for Promotion
+                                                        </button>
+                                                    </form>
+                                                <?php endif; ?>
+                                            <?php endif; ?>
                                         </div>
                                     </div>
                                 </div>
@@ -305,16 +396,6 @@ $initials = getInitials(($user['first_name'] ?? 'Alex') . ' ' . ($user['last_nam
                                     </div>
 
                                     <div class="form-group">
-                                        <label for="phone">Phone Number</label>
-                                        <div class="input-group">
-                                            <span class="input-icon"><i class="fas fa-phone"></i></span>
-                                            <input type="tel" name="phone" id="phone" class="form-control" style="padding-left: 40px;"
-                                                   value="<?php echo htmlspecialchars($profile['phone'] ?? ($user['phone'] ?? '')); ?>"
-                                                   placeholder="+91 98765 43210">
-                                        </div>
-                                    </div>
-
-                                    <div class="form-group">
                                         <label for="bio">Bio / Academic Interests</label>
                                         <textarea name="bio" id="bio" class="form-control" rows="4" placeholder="Share your academic interests, focus areas, and learning goals..."><?php echo htmlspecialchars($profile['bio'] ?? ''); ?></textarea>
                                     </div>
@@ -324,6 +405,7 @@ $initials = getInitials(($user['first_name'] ?? 'Alex') . ' ' . ($user['last_nam
                                     </button>
                                 </form>
                             </div>
+
 
                             <!-- Tab 3: Security -->
                             <div id="tab-security" class="profile-tab-pane" style="display: none;">

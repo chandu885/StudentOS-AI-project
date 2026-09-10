@@ -24,10 +24,8 @@ $currentSemester = '1';
 // 1. Fetch Student Profile from Database
 if ($db && $userId > 0) {
     $stmtProf = $db->prepare(
-        "SELECT sp.*, d.name AS department_name, d.code AS department_code, c.name AS course_name, c.code AS course_code 
+        "SELECT sp.* 
          FROM student_profiles sp 
-         LEFT JOIN departments d ON sp.department_id = d.id 
-         LEFT JOIN courses c ON sp.course_id = c.id 
          WHERE sp.user_id = ?"
     );
     if ($stmtProf) {
@@ -36,12 +34,6 @@ if ($db && $userId > 0) {
         $profRes = $stmtProf->get_result();
         if ($dbProf = $profRes->fetch_assoc()) {
             $rollNumber = !empty($dbProf['student_id']) ? $dbProf['student_id'] : (!empty($dbProf['roll_number']) ? $dbProf['roll_number'] : 'STU-' . $userId);
-            $deptId = (int)($dbProf['department_id'] ?? 1);
-            $deptName = $dbProf['department_name'] ?? '';
-            $deptCode = strtoupper($dbProf['department_code'] ?? '');
-            $courseCode = strtoupper($dbProf['course_code'] ?? '');
-            $degreeProgram = !empty($dbProf['course_name']) ? $dbProf['course_name'] : (!empty($dbProf['course_code']) ? $dbProf['course_code'] : 'BCA');
-            $departmentName = !empty($deptName) ? $deptName : 'Department of Computer Applications';
             if (!empty($dbProf['semester'])) {
                 $currentSemester = $dbProf['semester'];
             }

@@ -13,30 +13,41 @@ class Student {
     public function create($data) {
         $userId = (int)$data['user_id'];
         $studentId = strtoupper(trim($data['student_id']));
-        $departmentId = (int)$data['department_id'];
-        $courseId = (int)$data['course_id'];
+        $department = !empty($data['department']) ? strtoupper(trim($data['department'])) : 'BCA';
+        if (!in_array($department, ['BBA', 'BCA'])) {
+            $department = 'BCA';
+        }
+        $departmentId = !empty($data['department_id']) ? (int)$data['department_id'] : null;
+        if (!$departmentId) {
+            $deptStmt = $this->db->prepare("SELECT id FROM departments WHERE code = ? LIMIT 1");
+            if ($deptStmt) {
+                $deptStmt->bind_param("s", $department);
+                $deptStmt->execute();
+                $dRow = $deptStmt->get_result()->fetch_assoc();
+                if ($dRow) {
+                    $departmentId = (int)$dRow['id'];
+                }
+                $deptStmt->close();
+            }
+        }
         $semester = (string)($data['semester'] ?? '1');
-        $section = !empty($data['section']) ? (string)$data['section'] : 'A';
         $rollNumber = !empty($data['roll_number']) ? (string)$data['roll_number'] : null;
-        $phone = !empty($data['phone']) ? (string)$data['phone'] : null;
         $dateOfBirth = !empty($data['date_of_birth']) ? (string)$data['date_of_birth'] : null;
         $address = !empty($data['address']) ? (string)$data['address'] : null;
 
         $stmt = $this->db->prepare(
             "INSERT INTO student_profiles 
-            (user_id, student_id, department_id, course_id, semester, section, roll_number, phone, date_of_birth, address) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            (user_id, student_id, department, department_id, semester, roll_number, date_of_birth, address) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
         );
         $stmt->bind_param(
-            "isiissssss",
+            "ississss",
             $userId,
             $studentId,
+            $department,
             $departmentId,
-            $courseId,
             $semester,
-            $section,
             $rollNumber,
-            $phone,
             $dateOfBirth,
             $address
         );
@@ -49,10 +60,10 @@ class Student {
     
     public function findById($id) {
         $stmt = $this->db->prepare(
-            "SELECT sp.*, d.name AS department_name, d.code AS department_code, c.name AS course_name, c.code AS course_code 
+            "SELECT sp.*, d.name AS department_name, d.code AS department_code, u.first_name, u.last_name, u.email 
              FROM student_profiles sp 
-             LEFT JOIN departments d ON sp.department_id = d.id 
-             LEFT JOIN courses c ON sp.course_id = c.id 
+             LEFT JOIN departments d ON sp.department_id = d.id
+             LEFT JOIN users u ON sp.user_id = u.id 
              WHERE sp.id = ?"
         );
         $stmt->bind_param("i", $id);
@@ -63,10 +74,10 @@ class Student {
     
     public function findByUserId($userId) {
         $stmt = $this->db->prepare(
-            "SELECT sp.*, d.name AS department_name, d.code AS department_code, c.name AS course_name, c.code AS course_code 
+            "SELECT sp.*, d.name AS department_name, d.code AS department_code, u.first_name, u.last_name, u.email 
              FROM student_profiles sp 
-             LEFT JOIN departments d ON sp.department_id = d.id 
-             LEFT JOIN courses c ON sp.course_id = c.id 
+             LEFT JOIN departments d ON sp.department_id = d.id
+             LEFT JOIN users u ON sp.user_id = u.id 
              WHERE sp.user_id = ?"
         );
         $stmt->bind_param("i", $userId);
@@ -77,10 +88,10 @@ class Student {
     
     public function findByStudentId($studentId) {
         $stmt = $this->db->prepare(
-            "SELECT sp.*, d.name AS department_name, d.code AS department_code, c.name AS course_name, c.code AS course_code 
+            "SELECT sp.*, d.name AS department_name, d.code AS department_code, u.first_name, u.last_name, u.email 
              FROM student_profiles sp 
-             LEFT JOIN departments d ON sp.department_id = d.id 
-             LEFT JOIN courses c ON sp.course_id = c.id 
+             LEFT JOIN departments d ON sp.department_id = d.id
+             LEFT JOIN users u ON sp.user_id = u.id 
              WHERE sp.student_id = ?"
         );
         $stmt->bind_param("s", $studentId);
@@ -93,13 +104,37 @@ class Student {
         $fields = [];
         $types = "";
         $values = [];
+
+        if (isset($data['department'])) {
+            $dept = strtoupper(trim($data['department']));
+            if (in_array($dept, ['BBA', 'BCA'])) {
+                $data['department'] = $dept;
+                // auto set department_id if not explicitly provided
+                if (!isset($data['department_id'])) {
+                    $deptStmt = $this->db->prepare("SELECT id FROM departments WHERE code = ? LIMIT 1");
+                    if ($deptStmt) {
+                        $deptStmt->bind_param("s", $dept);
+                        $deptStmt->execute();
+                        $dRow = $deptStmt->get_result()->fetch_assoc();
+                        if ($dRow) {
+                            $data['department_id'] = (int)$dRow['id'];
+                        }
+                        $deptStmt->close();
+                    }
+                }
+            }
+        }
         
-        $allowedFields = ['semester', 'section', 'roll_number', 'phone', 'date_of_birth', 'address'];
+        $allowedFields = [
+            'department', 'department_id', 'semester', 'roll_number', 'date_of_birth', 'address',
+            'promotion_opt_in', 'promotion_status', 'promotion_target_sem', 'promotion_requested_at',
+            'promoted_at', 'promoted_by', 'promotion_notes', 'prev_semester'
+        ];
         foreach ($data as $key => $value) {
             if (in_array($key, $allowedFields)) {
                 $fields[] = "$key = ?";
                 $values[] = $value;
-                $types .= "s";
+                $types .= ($key === 'department_id' || $key === 'promotion_opt_in' || $key === 'promoted_by') ? "i" : "s";
             }
         }
         
@@ -117,6 +152,190 @@ class Student {
         $stmt->execute();
         
         return $this->findById($id) ?: $this->findByUserId($id);
+    }
+
+    public function optInPromotion($userId, $targetSem = null, $notes = '') {
+        $profile = $this->findByUserId($userId);
+        if (!$profile) {
+            return ['success' => false, 'error' => 'Student profile not found.'];
+        }
+
+        // Check if promotion window is open
+        $res = $this->db->query("SELECT `value` FROM `system_settings` WHERE `key` = 'semester_promotion_open' LIMIT 1");
+        if ($res && $row = $res->fetch_assoc()) {
+            if ($row['value'] === '0') {
+                return ['success' => false, 'error' => 'Semester promotion opt-in window is currently closed by the administration.'];
+            }
+        }
+
+        $currentSem = $profile['semester'] ?? '1';
+        if (!$targetSem) {
+            $targetSem = is_numeric($currentSem) ? (string)((int)$currentSem + 1) : '2';
+        }
+
+        $stmt = $this->db->prepare(
+            "UPDATE student_profiles 
+             SET promotion_opt_in = 1, promotion_status = 'opted_in', promotion_target_sem = ?, promotion_requested_at = NOW(), promotion_notes = ?, updated_at = NOW() 
+             WHERE user_id = ?"
+        );
+        if ($stmt) {
+            $stmt->bind_param("ssi", $targetSem, $notes, $userId);
+            $stmt->execute();
+            $stmt->close();
+
+            $ayRes = $this->db->query("SELECT `value` FROM `system_settings` WHERE `key` = 'semester_promotion_academic_year' LIMIT 1");
+            $ayRow = $ayRes ? $ayRes->fetch_assoc() : null;
+            $academicYear = $ayRow['value'] ?? '2026-2027';
+            $dept = $profile['department'] ?? 'BCA';
+
+            $logStmt = $this->db->prepare(
+                "INSERT INTO semester_promotions (student_id, from_semester, to_semester, department, academic_year, action, performed_by, notes) 
+                 VALUES (?, ?, ?, ?, ?, 'opt_in', ?, ?)"
+            );
+            if ($logStmt) {
+                $logStmt->bind_param("issssis", $userId, $currentSem, $targetSem, $dept, $academicYear, $userId, $notes);
+                $logStmt->execute();
+                $logStmt->close();
+            }
+
+            return ['success' => true, 'message' => "Successfully opted in for promotion to Semester $targetSem! Your application is pending review."];
+        }
+
+        return ['success' => false, 'error' => 'Database error during opt-in.'];
+    }
+
+    public function optOutPromotion($userId, $notes = '') {
+        $profile = $this->findByUserId($userId);
+        if (!$profile) {
+            return ['success' => false, 'error' => 'Student profile not found.'];
+        }
+
+        $currentSem = $profile['semester'] ?? '1';
+        $targetSem = $profile['promotion_target_sem'] ?? (string)((int)$currentSem + 1);
+
+        $stmt = $this->db->prepare(
+            "UPDATE student_profiles 
+             SET promotion_opt_in = 0, promotion_status = 'not_opted', promotion_target_sem = NULL, promotion_notes = ?, updated_at = NOW() 
+             WHERE user_id = ?"
+        );
+        if ($stmt) {
+            $stmt->bind_param("si", $notes, $userId);
+            $stmt->execute();
+            $stmt->close();
+
+            $dept = $profile['department'] ?? 'BCA';
+            $logStmt = $this->db->prepare(
+                "INSERT INTO semester_promotions (student_id, from_semester, to_semester, department, action, performed_by, notes) 
+                 VALUES (?, ?, ?, ?, 'opt_out', ?, ?)"
+            );
+            if ($logStmt) {
+                $logStmt->bind_param("isssis", $userId, $currentSem, $targetSem, $dept, $userId, $notes);
+                $logStmt->execute();
+                $logStmt->close();
+            }
+
+            return ['success' => true, 'message' => 'Successfully opted out of semester promotion.'];
+        }
+
+        return ['success' => false, 'error' => 'Database error during opt-out.'];
+    }
+
+    public function promoteStudent($userId, $targetSem = null, $promotedBy = 1, $notes = '') {
+        $profile = $this->findByUserId($userId);
+        if (!$profile) {
+            return ['success' => false, 'error' => 'Student profile not found.'];
+        }
+
+        $currentSem = $profile['semester'] ?? '1';
+        if (!$targetSem) {
+            $targetSem = is_numeric($currentSem) ? (string)((int)$currentSem + 1) : '2';
+        }
+
+        $stmt = $this->db->prepare(
+            "UPDATE student_profiles 
+             SET prev_semester = semester, semester = ?, promotion_opt_in = 0, promotion_status = 'promoted', promotion_target_sem = NULL, promoted_at = NOW(), promoted_by = ?, promotion_notes = ?, updated_at = NOW() 
+             WHERE user_id = ?"
+        );
+        if ($stmt) {
+            $stmt->bind_param("sisi", $targetSem, $promotedBy, $notes, $userId);
+            $stmt->execute();
+            $stmt->close();
+
+            $dept = $profile['department'] ?? 'BCA';
+            $logStmt = $this->db->prepare(
+                "INSERT INTO semester_promotions (student_id, from_semester, to_semester, department, action, performed_by, notes) 
+                 VALUES (?, ?, ?, ?, 'promoted', ?, ?)"
+            );
+            if ($logStmt) {
+                $logStmt->bind_param("isssis", $userId, $currentSem, $targetSem, $dept, $promotedBy, $notes);
+                $logStmt->execute();
+                $logStmt->close();
+            }
+
+            // Notification for student
+            $notifTitle = "Semester Promotion Confirmed!";
+            $notifMsg = "Congratulations! You have been officially promoted from Semester $currentSem to Semester $targetSem.";
+            $notifStmt = $this->db->prepare("INSERT INTO notifications (user_id, title, message, type, is_read, created_at) VALUES (?, ?, ?, 'success', 0, NOW())");
+            if ($notifStmt) {
+                $notifStmt->bind_param("iss", $userId, $notifTitle, $notifMsg);
+                $notifStmt->execute();
+                $notifStmt->close();
+            }
+
+            return ['success' => true, 'message' => "Student promoted from Semester $currentSem to Semester $targetSem successfully!"];
+        }
+
+        return ['success' => false, 'error' => 'Database error during promotion.'];
+    }
+
+    public function rollbackPromotion($userId, $performedBy = 1, $reason = '') {
+        $profile = $this->findByUserId($userId);
+        if (!$profile) {
+            return ['success' => false, 'error' => 'Student profile not found.'];
+        }
+
+        $currentSem = $profile['semester'] ?? '2';
+        $prevSem = $profile['prev_semester'];
+        if (empty($prevSem)) {
+            $prevSem = is_numeric($currentSem) && (int)$currentSem > 1 ? (string)((int)$currentSem - 1) : '1';
+        }
+
+        $notes = !empty($reason) ? "Rollback: $reason" : "Rollback to previous semester";
+        $stmt = $this->db->prepare(
+            "UPDATE student_profiles 
+             SET semester = ?, prev_semester = NULL, promotion_opt_in = 1, promotion_status = 'opted_in', promotion_target_sem = ?, promoted_at = NULL, promoted_by = NULL, promotion_notes = ?, updated_at = NOW() 
+             WHERE user_id = ?"
+        );
+        if ($stmt) {
+            $stmt->bind_param("sssi", $prevSem, $currentSem, $notes, $userId);
+            $stmt->execute();
+            $stmt->close();
+
+            $dept = $profile['department'] ?? 'BCA';
+            $logStmt = $this->db->prepare(
+                "INSERT INTO semester_promotions (student_id, from_semester, to_semester, department, action, performed_by, notes) 
+                 VALUES (?, ?, ?, ?, 'rollback', ?, ?)"
+            );
+            if ($logStmt) {
+                $logStmt->bind_param("isssis", $userId, $currentSem, $prevSem, $dept, $performedBy, $notes);
+                $logStmt->execute();
+                $logStmt->close();
+            }
+
+            // Notification for student
+            $notifTitle = "Academic Semester Update";
+            $notifMsg = "Your semester status has been reverted to Semester $prevSem by Academic Administration.";
+            $notifStmt = $this->db->prepare("INSERT INTO notifications (user_id, title, message, type, is_read, created_at) VALUES (?, ?, ?, 'warning', 0, NOW())");
+            if ($notifStmt) {
+                $notifStmt->bind_param("iss", $userId, $notifTitle, $notifMsg);
+                $notifStmt->execute();
+                $notifStmt->close();
+            }
+
+            return ['success' => true, 'message' => "Student rolled back from Semester $currentSem to Semester $prevSem successfully."];
+        }
+
+        return ['success' => false, 'error' => 'Database error during rollback.'];
     }
     
     public function getDashboard($userId) {
