@@ -48,8 +48,9 @@ function createCSRFField() {
  * @return string HTML
  */
 function renderLogoutButton($extraClass = 'btn btn-danger btn-logout-action', $label = 'Log Out') {
-    $logoutUrl = function_exists('url') ? url('/login.php?action=logout') : '/login.php?action=logout';
-    return '<a href="' . htmlspecialchars($logoutUrl) . '" class="' . htmlspecialchars($extraClass) . '" role="button" title="Sign Out of Session">'
+    $logoutUrl = function_exists('url') ? url('/logout.php') : '/logout.php';
+    return '<a href="' . htmlspecialchars($logoutUrl) . '" class="' . htmlspecialchars($extraClass) . '" role="button" title="Sign Out of Session"'
+         . ' onclick="try{localStorage.removeItem(\'auth_token\');localStorage.removeItem(\'session_token\');sessionStorage.removeItem(\'auth_token\');sessionStorage.removeItem(\'session_token\');}catch(e){}">'
          . '<i class="fas fa-sign-out-alt"></i> <span>' . htmlspecialchars($label) . '</span></a>';
 }
 

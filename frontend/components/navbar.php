@@ -67,7 +67,7 @@ if (($user['role_id'] ?? 4) == 1) {
 
         <?php if (!empty($_SESSION['auth_token']) && !empty($_SESSION['user'])): ?>
         <!-- Dedicated Logout Button -->
-        <a href="<?php echo htmlspecialchars(url('/login.php?action=logout')); ?>" class="nav-logout-btn btn btn-danger" role="button" title="Sign Out of Account">
+        <a href="<?php echo htmlspecialchars(url('/logout.php')); ?>" class="nav-logout-btn btn btn-danger" role="button" title="Sign Out of Account" onclick="try{localStorage.removeItem('auth_token');localStorage.removeItem('session_token');sessionStorage.removeItem('auth_token');sessionStorage.removeItem('session_token');}catch(e){}">
             <i class="fas fa-sign-out-alt"></i>
             <span class="hide-mobile">Logout</span>
         </a>
@@ -112,7 +112,7 @@ if (($user['role_id'] ?? 4) == 1) {
                     <i class="fas fa-life-ring"></i> Get Help & Support
                 </a>
                 <div class="dropdown-divider"></div>
-                <a href="<?php echo htmlspecialchars(url('/login.php?action=logout')); ?>" class="dropdown-item" style="color: var(--danger); font-weight: 600;">
+                <a href="<?php echo htmlspecialchars(url('/logout.php')); ?>" class="dropdown-item" style="color: var(--danger); font-weight: 600;" onclick="try{localStorage.removeItem('auth_token');localStorage.removeItem('session_token');sessionStorage.removeItem('auth_token');sessionStorage.removeItem('session_token');}catch(e){}">
                     <i class="fas fa-sign-out-alt"></i> Sign Out
                 </a>
             </div>

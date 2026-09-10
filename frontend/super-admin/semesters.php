@@ -22,6 +22,19 @@ if (empty($_SESSION['csrf_token'])) {
 }
 $csrfToken = $_SESSION['csrf_token'];
 
+// Candidate preview AJAX for promotion modal
+if (isset($_GET['action']) && $_GET['action'] === 'preview_candidates') {
+    require_once __DIR__ . '/../../backend/models/Student.php';
+    $stuModel = new Student();
+    $deg = sanitize($_GET['degree'] ?? 'all');
+    $sem = sanitize($_GET['from_semester'] ?? 'all');
+    $opt = (!empty($_GET['only_opted_in']) && $_GET['only_opted_in'] === '1');
+    $candidates = $stuModel->getPromotionCandidates($deg, $sem, $opt);
+    header('Content-Type: application/json');
+    echo json_encode(['success' => true, 'count' => count($candidates), 'candidates' => $candidates]);
+    exit;
+}
+
 // Handle POST actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $submittedCsrf = $_POST['csrf_token'] ?? '';
@@ -30,7 +43,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $action = $_POST['action'] ?? 'create_semester';
 
-        if ($action === 'create_semester') {
+        // PROMOTE COHORT BY DEGREE & SEMESTER
+        if ($action === 'promote_cohort') {
+            require_once __DIR__ . '/../../backend/models/Student.php';
+            $studentModel = new Student();
+
+            $degree = sanitize($_POST['degree'] ?? 'all');
+            $fromSemester = sanitize($_POST['from_semester'] ?? 'all');
+            $targetSemester = sanitize($_POST['target_semester'] ?? 'next');
+            $scope = sanitize($_POST['scope'] ?? 'all');
+            $notes = sanitize($_POST['notes'] ?? 'Super Admin cohort semester promotion run');
+            $onlyOptedIn = ($scope === 'opted_in');
+
+            $res = $studentModel->promoteByDegreeAndSemester($degree, $fromSemester, $targetSemester, $userId, $notes, $onlyOptedIn);
+            if ($res['success']) {
+                $successMsg = $res['message'];
+                $sysModel->logAudit($userId, 'SUPER_ADMIN_EXECUTE_PROMOTION', 'student_profiles', 0, "Super Admin promoted {$res['count']} student(s) (Degree: $degree, From Sem: $fromSemester, Target: $targetSemester). Notes: $notes");
+            } else {
+                $errorMsg = $res['error'];
+            }
+        } elseif ($action === 'create_semester') {
             $data = [
                 'course_id'       => (int)($_POST['course_id'] ?? 0),
                 'semester_number' => (int)($_POST['semester_number'] ?? 1),
@@ -93,6 +125,7 @@ $searchQuery = !empty($_GET['q']) ? trim($_GET['q']) : null;
 
 $semesters = $academic->getSemesters($filterCourse, $filterStatus, $filterYear, $searchQuery);
 $courses = $academic->getCourses();
+$departments = $academic->getDepartments();
 
 $totalSemesters = count($semesters);
 $activeSemesters = 0;
@@ -189,9 +222,6 @@ foreach ($semesters as $s) {
                         <p class="page-subtitle">Super Admin control of academic cohorts, semester sessions, and degree term schedules</p>
                     </div>
                     <div class="header-actions" style="display: flex; gap: 10px; flex-wrap: wrap;">
-                        <a href="students.php?promotion_status=opted_in" class="btn btn-outline" style="border-color: rgba(34, 197, 94, 0.4); color: var(--success);">
-                            <i class="fas fa-level-up-alt"></i> Student Promotions
-                        </a>
                         <a href="subjects.php" class="btn btn-secondary">
                             <i class="fas fa-book"></i> View Subjects
                         </a>
@@ -202,16 +232,16 @@ foreach ($semesters as $s) {
                 </div>
 
                 <?php if (!empty($successMsg)): ?>
-                    <div class="alert alert-success" style="background: rgba(34, 197, 94, 0.15); border: 1px solid var(--success); color: var(--success); padding: 12px 16px; border-radius: var(--radius-md); margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
-                        <i class="fas fa-check-circle" style="font-size: 18px;"></i>
-                        <span><?php echo htmlspecialchars($successMsg); ?></span>
+                    <div class="alert alert-success" style="background: rgba(34, 197, 94, 0.15); border: 1px solid var(--success); color: var(--success); padding: 14px 18px; border-radius: var(--radius-md); margin-bottom: 20px; display: flex; align-items: center; gap: 12px; box-shadow: 0 4px 14px rgba(34, 197, 94, 0.1);">
+                        <i class="fas fa-check-circle" style="font-size: 20px;"></i>
+                        <span style="font-size: 14px; font-weight: 600;"><?php echo htmlspecialchars($successMsg); ?></span>
                     </div>
                 <?php endif; ?>
 
                 <?php if (!empty($errorMsg)): ?>
-                    <div class="alert alert-danger" style="background: rgba(239, 68, 68, 0.15); border: 1px solid var(--danger); color: var(--danger); padding: 12px 16px; border-radius: var(--radius-md); margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
-                        <i class="fas fa-exclamation-triangle" style="font-size: 18px;"></i>
-                        <span><?php echo htmlspecialchars($errorMsg); ?></span>
+                    <div class="alert alert-danger" style="background: rgba(239, 68, 68, 0.15); border: 1px solid var(--danger); color: var(--danger); padding: 14px 18px; border-radius: var(--radius-md); margin-bottom: 20px; display: flex; align-items: center; gap: 12px;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 20px;"></i>
+                        <span style="font-size: 14px; font-weight: 600;"><?php echo htmlspecialchars($errorMsg); ?></span>
                     </div>
                 <?php endif; ?>
 
@@ -252,6 +282,104 @@ foreach ($semesters as $s) {
                             <div style="font-size: 12px; color: var(--text-muted); font-weight: 500;">Completed Terms</div>
                             <div style="font-size: 22px; font-weight: 700; color: var(--text-primary);"><?php echo $completedSemesters; ?></div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Degree & Semester Promotion Console Card (Super Admin) -->
+                <div class="card" style="margin-bottom: 24px; border-left: 4px solid var(--success); background: var(--bg-card); box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
+                    <div class="card-body" style="padding: 22px 26px;">
+                        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px;">
+                            <div>
+                                <h3 style="font-size: 17px; font-weight: 700; margin: 0; color: var(--text-primary); display: flex; align-items: center; gap: 10px;">
+                                    <i class="fas fa-graduation-cap" style="color: var(--success); font-size: 20px;"></i> Semester Promotion by Degree & Semester
+                                    <span class="badge badge-success" style="font-size: 11px;">Super Admin Control</span>
+                                </h3>
+                                <p style="font-size: 13px; color: var(--text-muted); margin: 4px 0 0 0;">
+                                    Execute bulk academic semester progression for student cohorts across degrees with automatic notification dispatch.
+                                </p>
+                            </div>
+                            <button type="button" class="btn btn-outline" onclick="openModal('promoteCohortModal')" style="font-size: 12.5px; border-color: rgba(34, 197, 94, 0.4); color: var(--success);">
+                                <i class="fas fa-expand-arrows-alt"></i> Advanced Wizard
+                            </button>
+                        </div>
+
+                        <form method="POST" action="semesters.php" id="inlinePromotionForm" onsubmit="return confirmCohortPromotion(this);">
+                            <input type="hidden" name="action" value="promote_cohort">
+                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; align-items: flex-end;">
+                                <div class="form-group" style="margin: 0;">
+                                    <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 6px;">
+                                        <i class="fas fa-university" style="margin-right: 4px;"></i> 1. Select Degree
+                                    </label>
+                                    <select name="degree" id="inlinePromDegree" class="form-control" onchange="updateCandidatePreview('inline')" required>
+                                        <option value="all">All Degrees & Departments</option>
+                                        <?php if (!empty($departments)): ?>
+                                            <?php foreach ($departments as $d): ?>
+                                                <option value="<?php echo htmlspecialchars($d['code']); ?>">
+                                                    <?php echo htmlspecialchars($d['name'] . ' (' . $d['code'] . ')'); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        <?php else: ?>
+                                            <option value="BCA">Bachelor of Computer Applications (BCA)</option>
+                                            <option value="BBA">Bachelor of Business Administration (BBA)</option>
+                                            <option value="CSE">Computer Science & Engineering (CSE)</option>
+                                        <?php endif; ?>
+                                    </select>
+                                </div>
+
+                                <div class="form-group" style="margin: 0;">
+                                    <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 6px;">
+                                        <i class="fas fa-step-forward" style="margin-right: 4px;"></i> 2. Current Semester (From)
+                                    </label>
+                                    <select name="from_semester" id="inlinePromFromSem" class="form-control" onchange="updateCandidatePreview('inline')" required>
+                                        <option value="all">All Semesters (Cohorts)</option>
+                                        <?php for ($i = 1; $i <= 8; $i++): ?>
+                                            <option value="<?php echo $i; ?>">Semester <?php echo $i; ?></option>
+                                        <?php endfor; ?>
+                                    </select>
+                                </div>
+
+                                <div class="form-group" style="margin: 0;">
+                                    <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 6px;">
+                                        <i class="fas fa-arrow-alt-circle-up" style="margin-right: 4px;"></i> 3. Promote To (Target)
+                                    </label>
+                                    <select name="target_semester" id="inlinePromTargetSem" class="form-control" required>
+                                        <option value="next">Advance to Next Semester (+1 Auto)</option>
+                                        <?php for ($i = 2; $i <= 8; $i++): ?>
+                                            <option value="<?php echo $i; ?>">Semester <?php echo $i; ?></option>
+                                        <?php endfor; ?>
+                                        <option value="Graduated">Graduated / Program Completed</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group" style="margin: 0;">
+                                    <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 6px;">
+                                        <i class="fas fa-users" style="margin-right: 4px;"></i> 4. Student Scope
+                                    </label>
+                                    <select name="scope" id="inlinePromScope" class="form-control" onchange="updateCandidatePreview('inline')">
+                                        <option value="all">All Enrolled Students</option>
+                                        <option value="opted_in">Only Students with Opt-In Status</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <button type="submit" class="btn btn-success" style="width: 100%; height: 38px; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 700;">
+                                        <i class="fas fa-level-up-alt"></i> Execute Promotion
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+                                <div id="inlineCandidatePreview" style="font-size: 12.5px; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas fa-user-check" style="color: var(--success);"></i>
+                                    <span id="inlineCandidateCountText">Checking eligible students in roster...</span>
+                                </div>
+                                <div style="font-size: 11.5px; color: var(--text-muted);">
+                                    <i class="fas fa-bell" style="color: var(--warning, #f59e0b);"></i> Automatic confirmation notifications will be dispatched to student accounts.
+                                </div>
+                            </div>
+                        </form>
                     </div>
                 </div>
 
@@ -557,6 +685,117 @@ foreach ($semesters as $s) {
         </div>
     </div>
 
+    <!-- PROMOTE COHORT BY DEGREE & SEMESTER MODAL (SUPER ADMIN) -->
+    <div class="modal-backdrop" id="promoteCohortModal" style="display: none; align-items: center; justify-content: center; z-index: 1000;">
+        <div class="modal-card" style="max-width: 580px; width: 95%; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-xl); box-shadow: 0 24px 60px rgba(0,0,0,0.7);">
+            <div class="modal-header" style="background: rgba(34, 197, 94, 0.08); border-bottom: 1px solid rgba(34, 197, 94, 0.25); padding: 18px 24px; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="color: var(--success); margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-graduation-cap"></i> Super Admin - Execute Semester Promotion by Degree
+                </h3>
+                <button type="button" class="modal-close" onclick="closeModal('promoteCohortModal')">&times;</button>
+            </div>
+            <form method="POST" action="semesters.php" onsubmit="return confirmCohortPromotion(this);">
+                <input type="hidden" name="action" value="promote_cohort">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+
+                <div class="modal-body" style="padding: 24px;">
+                    <div style="background: rgba(34, 197, 94, 0.05); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: var(--radius-md); padding: 14px; margin-bottom: 18px;">
+                        <div style="font-size: 13.5px; color: var(--text-primary); font-weight: 600;">
+                            <i class="fas fa-user-shield" style="color: var(--success);"></i> Master Promotion Authority
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; line-height: 1.5;">
+                            As Super Administrator, you hold top-level authorization to execute degree-wide cohort semester advancements. Automatic congratulatory notifications are immediately dispatched to student accounts.
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px;">
+                        <div class="form-group" style="margin: 0;">
+                            <label style="font-size: 12px; font-weight: 600; color: var(--text-primary); display: block; margin-bottom: 6px;">
+                                Target Degree / Department *
+                            </label>
+                            <select name="degree" id="modalPromDegree" class="form-control" onchange="updateCandidatePreview('modal')" required>
+                                <option value="all">All Degrees & Programs</option>
+                                <?php if (!empty($departments)): ?>
+                                    <?php foreach ($departments as $d): ?>
+                                        <option value="<?php echo htmlspecialchars($d['code']); ?>">
+                                            <?php echo htmlspecialchars($d['name'] . ' (' . $d['code'] . ')'); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                <?php else: ?>
+                                    <option value="BCA">BCA (Bachelor of Computer Applications)</option>
+                                    <option value="BBA">BBA (Bachelor of Business Administration)</option>
+                                    <option value="CSE">CSE (Computer Science & Engineering)</option>
+                                <?php endif; ?>
+                            </select>
+                        </div>
+
+                        <div class="form-group" style="margin: 0;">
+                            <label style="font-size: 12px; font-weight: 600; color: var(--text-primary); display: block; margin-bottom: 6px;">
+                                Current Semester (From) *
+                            </label>
+                            <select name="from_semester" id="modalPromFromSem" class="form-control" onchange="updateCandidatePreview('modal')" required>
+                                <option value="all">All Semesters</option>
+                                <?php for ($i = 1; $i <= 8; $i++): ?>
+                                    <option value="<?php echo $i; ?>">Semester <?php echo $i; ?></option>
+                                <?php endfor; ?>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px;">
+                        <div class="form-group" style="margin: 0;">
+                            <label style="font-size: 12px; font-weight: 600; color: var(--text-primary); display: block; margin-bottom: 6px;">
+                                Advance To (Target Term) *
+                            </label>
+                            <select name="target_semester" id="modalPromTargetSem" class="form-control" required>
+                                <option value="next">Advance to Next Semester (+1 Auto)</option>
+                                <?php for ($i = 2; $i <= 8; $i++): ?>
+                                    <option value="<?php echo $i; ?>">Semester <?php echo $i; ?></option>
+                                <?php endfor; ?>
+                                <option value="Graduated">Graduated / Program Completed</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group" style="margin: 0;">
+                            <label style="font-size: 12px; font-weight: 600; color: var(--text-primary); display: block; margin-bottom: 6px;">
+                                Promotion Scope *
+                            </label>
+                            <select name="scope" id="modalPromScope" class="form-control" onchange="updateCandidatePreview('modal')">
+                                <option value="all">All Enrolled Students</option>
+                                <option value="opted_in">Only Students with Opt-In Status</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label style="font-size: 12px; font-weight: 600; color: var(--text-primary); display: block; margin-bottom: 6px;">
+                            Super Admin Notes / Ledger Remarks
+                        </label>
+                        <input type="text" name="notes" class="form-control" value="Cohort semester promotion authorized by Super Administration" required>
+                    </div>
+
+                    <!-- Live candidate preview container -->
+                    <div id="modalCandidateBox" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px 16px;">
+                        <div style="font-size: 12px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; justify-content: space-between;">
+                            <span><i class="fas fa-users" style="color: var(--primary);"></i> Candidate Roster Preview</span>
+                            <span id="modalCandidateCountBadge" class="badge badge-success" style="font-size: 11px;">0 Eligible Students</span>
+                        </div>
+                        <div id="modalCandidateList" style="max-height: 110px; overflow-y: auto; margin-top: 8px; font-size: 12px; color: var(--text-muted); line-height: 1.6;">
+                            Select degree and semester above to view eligible students.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer" style="padding: 16px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px;">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('promoteCohortModal')">Cancel</button>
+                    <button type="submit" class="btn btn-success" style="font-weight: 700;">
+                        <i class="fas fa-check-double"></i> Confirm & Execute Promotion
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="../assets/js/utils.js"></script>
     <script src="../assets/js/notifications.js"></script>
     <script>
@@ -568,6 +807,9 @@ foreach ($semesters as $s) {
                 el.style.opacity = '1';
                 el.style.pointerEvents = 'auto';
                 document.body.style.overflow = 'hidden';
+                if (id === 'promoteCohortModal') {
+                    updateCandidatePreview('modal');
+                }
             }
         }
 
@@ -622,8 +864,65 @@ foreach ($semesters as $s) {
             openModal('deleteSemesterModal');
         }
 
+        // Live candidate preview for promotion console and modal
+        async function updateCandidatePreview(prefix) {
+            const degEl = document.getElementById(prefix === 'modal' ? 'modalPromDegree' : 'inlinePromDegree');
+            const semEl = document.getElementById(prefix === 'modal' ? 'modalPromFromSem' : 'inlinePromFromSem');
+            const scopeEl = document.getElementById(prefix === 'modal' ? 'modalPromScope' : 'inlinePromScope');
+
+            if (!degEl || !semEl) return;
+
+            const deg = degEl.value;
+            const sem = semEl.value;
+            const onlyOptedIn = scopeEl && scopeEl.value === 'opted_in' ? '1' : '0';
+
+            try {
+                const res = await fetch(`semesters.php?action=preview_candidates&degree=${encodeURIComponent(deg)}&from_semester=${encodeURIComponent(sem)}&only_opted_in=${onlyOptedIn}`);
+                const data = await res.json();
+
+                if (prefix === 'modal') {
+                    const badge = document.getElementById('modalCandidateCountBadge');
+                    const list = document.getElementById('modalCandidateList');
+                    if (badge) badge.textContent = `${data.count || 0} Eligible Students`;
+                    if (list) {
+                        if (data.candidates && data.candidates.length > 0) {
+                            list.innerHTML = data.candidates.map(c => `
+                                <div style="display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px dashed var(--border-color);">
+                                    <span><strong>${escapeHTML(c.first_name + ' ' + c.last_name)}</strong> (${escapeHTML(c.student_id || c.roll_number || '')})</span>
+                                    <span>Dept: <strong style="color:var(--primary);">${escapeHTML(c.department)}</strong> | Sem <strong>${escapeHTML(c.semester)}</strong></span>
+                                </div>
+                            `).join('');
+                        } else {
+                            list.innerHTML = `<span style="color:var(--text-muted);"><i class="fas fa-info-circle"></i> No eligible active students found for ${escapeHTML(deg)} (Semester ${escapeHTML(sem)}).</span>`;
+                        }
+                    }
+                } else {
+                    const textEl = document.getElementById('inlineCandidateCountText');
+                    if (textEl) {
+                        const degLabel = deg === 'all' ? 'all departments' : deg;
+                        const semLabel = sem === 'all' ? 'all semesters' : `Semester ${sem}`;
+                        textEl.innerHTML = `<strong>${data.count || 0}</strong> eligible active student(s) found in <strong>${escapeHTML(degLabel)}</strong> (${escapeHTML(semLabel)}).`;
+                    }
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function confirmCohortPromotion(form) {
+            const deg = form.degree ? form.degree.options[form.degree.selectedIndex].text : '';
+            const sem = form.from_semester ? form.from_semester.options[form.from_semester.selectedIndex].text : '';
+            const target = form.target_semester ? form.target_semester.options[form.target_semester.selectedIndex].text : '';
+            return confirm(`Are you sure you want to execute semester promotion for:\n\n• Degree: ${deg}\n• Current Term: ${sem}\n• Target Term: ${target}\n\nThis will advance eligible students and dispatch confirmation notifications.`);
+        }
+
+        // Initialize candidate counter on load
+        document.addEventListener('DOMContentLoaded', function() {
+            updateCandidatePreview('inline');
+        });
+
         window.addEventListener('click', function(e) {
-            ['createSemesterModal', 'editSemesterModal', 'deleteSemesterModal'].forEach(id => {
+            ['createSemesterModal', 'editSemesterModal', 'deleteSemesterModal', 'promoteCohortModal'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el && e.target === el) {
                     closeModal(id);
@@ -633,7 +932,7 @@ foreach ($semesters as $s) {
 
         window.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
-                ['createSemesterModal', 'editSemesterModal', 'deleteSemesterModal'].forEach(id => {
+                ['createSemesterModal', 'editSemesterModal', 'deleteSemesterModal', 'promoteCohortModal'].forEach(id => {
                     closeModal(id);
                 });
             }

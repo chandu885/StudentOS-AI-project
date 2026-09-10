@@ -7,7 +7,7 @@ require_once __DIR__ . '/includes/helpers.php';
 
 if (isset($_GET['action']) && $_GET['action'] === 'logout') {
     logout();
-    redirect('/login.php');
+    redirect('/index.php');
 }
 
 // Redirect if already logged in

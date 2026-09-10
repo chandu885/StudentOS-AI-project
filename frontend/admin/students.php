@@ -246,27 +246,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($action === 'bulk_promote') {
         $deptParam = sanitize($_POST['department'] ?? 'all');
+        $fromSem = sanitize($_POST['from_semester'] ?? 'all');
+        $targetSem = sanitize($_POST['target_semester'] ?? 'next');
+        $scope = sanitize($_POST['scope'] ?? 'opted_in');
+        $onlyOptedIn = ($scope === 'opted_in');
         $notes = sanitize($_POST['notes'] ?? 'Admin bulk semester promotion run');
         if ($db) {
             require_once __DIR__ . '/../../backend/models/Student.php';
             $studentModel = new Student();
-
-            $bulkQ = "SELECT user_id, semester, promotion_target_sem FROM student_profiles WHERE promotion_opt_in = 1 AND promotion_status = 'opted_in'";
-            if ($deptParam === 'BBA' || $deptParam === 'BCA') {
-                $bulkQ .= " AND department = '$deptParam'";
+            $res = $studentModel->promoteByDegreeAndSemester($deptParam, $fromSem, $targetSem, $userId, $notes, $onlyOptedIn);
+            if ($res['success']) {
+                $successMsg = $res['message'];
+            } else {
+                $errorMsg = $res['error'];
             }
-            $bRes = $db->query($bulkQ);
-            $promotedCount = 0;
-            if ($bRes) {
-                while ($bRow = $bRes->fetch_assoc()) {
-                    $tSem = !empty($bRow['promotion_target_sem']) ? $bRow['promotion_target_sem'] : ((is_numeric($bRow['semester']) ? (string)((int)$bRow['semester'] + 1) : '2'));
-                    $pRes = $studentModel->promoteStudent($bRow['user_id'], (string)$tSem, $userId, $notes);
-                    if ($pRes['success']) {
-                        $promotedCount++;
-                    }
-                }
-            }
-            $successMsg = "Bulk promotion executed! Successfully promoted $promotedCount student(s) to their next academic semester.";
         }
     } elseif ($action === 'toggle_promotion_window') {
         $windowStatus = sanitize($_POST['window_status'] ?? '1');
@@ -413,68 +406,7 @@ if ($db) {
                     </div>
                 <?php endif; ?>
 
-                <!-- Semester Promotion Management & Opt-In Overview Bar -->
-                <div class="card" style="margin-bottom: 24px; border-left: 4px solid var(--primary); background: var(--bg-card);">
-                    <div class="card-body" style="padding: 20px 24px;">
-                        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px;">
-                            <div>
-                                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
-                                    <h3 style="font-size: 17px; font-weight: 700; margin: 0; color: var(--text-primary);">
-                                        <i class="fas fa-graduation-cap" style="color: var(--primary);"></i> Semester Promotion & Opt-In Control
-                                    </h3>
-                                    <?php if ($promWindowOpen): ?>
-                                        <span class="badge badge-success" style="font-size: 11px; font-weight: 700;">
-                                            <i class="fas fa-circle" style="font-size: 8px;"></i> Opt-In Window OPEN (<?php echo htmlspecialchars($promYear); ?>)
-                                        </span>
-                                    <?php else: ?>
-                                        <span class="badge badge-danger" style="font-size: 11px; font-weight: 700;">
-                                            <i class="fas fa-lock"></i> Opt-In Window CLOSED
-                                        </span>
-                                    <?php endif; ?>
-                                </div>
-                                <p style="font-size: 13px; color: var(--text-muted); margin: 0;">
-                                    Review student opt-in applications, promote qualified cohorts, or manage the semester promotion schedule.
-                                </p>
-                            </div>
-
-                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                                <button type="button" class="btn btn-outline" style="font-size: 13px;" onclick="openModal('promotionSettingsModal')">
-                                    <i class="fas fa-sliders-h"></i> Window Settings
-                                </button>
-
-                                <button type="button" class="btn btn-success" style="font-size: 13px; font-weight: 600;" onclick="openBulkPromoteModal()" <?php echo ($optedInCount === 0) ? 'disabled style="opacity:0.6; cursor:not-allowed;"' : ''; ?>>
-                                    <i class="fas fa-level-up-alt"></i> Bulk Promote Opted-In (<?php echo $optedInCount; ?>)
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Promotion KPI Metrics -->
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-top: 18px;">
-                            <div style="background: var(--bg-primary); padding: 12px 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-                                <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Total Students</div>
-                                <div style="font-size: 20px; font-weight: 800; color: var(--text-primary); margin-top: 2px;"><?php echo $totalAll; ?></div>
-                            </div>
-                            <div style="background: rgba(34, 197, 94, 0.08); padding: 12px 16px; border-radius: var(--radius-md); border: 1px solid rgba(34, 197, 94, 0.25);">
-                                <div style="font-size: 11px; color: var(--success); text-transform: uppercase; font-weight: 700;">Opted-In (Ready)</div>
-                                <div style="font-size: 20px; font-weight: 800; color: var(--success); margin-top: 2px; display: flex; align-items: center; gap: 8px;">
-                                    <?php echo $optedInCount; ?>
-                                    <?php if ($optedInCount > 0): ?>
-                                        <span class="badge badge-success" style="font-size: 10px; padding: 2px 6px;">Needs Action</span>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                            <div style="background: rgba(139, 92, 246, 0.08); padding: 12px 16px; border-radius: var(--radius-md); border: 1px solid rgba(139, 92, 246, 0.25);">
-                                <div style="font-size: 11px; color: #8B5CF6; text-transform: uppercase; font-weight: 700;">Promoted Cohort</div>
-                                <div style="font-size: 20px; font-weight: 800; color: #8B5CF6; margin-top: 2px;"><?php echo $promotedCount; ?></div>
-                            </div>
-                            <div style="background: var(--bg-primary); padding: 12px 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-                                <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Not Opted-In</div>
-                                <div style="font-size: 20px; font-weight: 800; color: var(--text-secondary); margin-top: 2px;"><?php echo $notOptedCount; ?></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
+                
                 <!-- Filters & Search Bar -->
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 18px;">
                     <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
@@ -867,12 +799,43 @@ if ($db) {
                         </div>
                     </div>
 
-                    <div class="form-group" style="margin-bottom: 16px;">
-                        <label for="bulkDept">Target Department</label>
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label for="bulkDept">Select Degree / Department</label>
                         <select name="department" id="bulkDept" class="form-control">
-                            <option value="all">All Departments (BBA & BCA)</option>
-                            <option value="BBA">BBA Only</option>
-                            <option value="BCA">BCA Only</option>
+                            <option value="all">All Degrees & Departments</option>
+                            <option value="BCA">BCA - Bachelor of Computer Applications</option>
+                            <option value="BBA">BBA - Bachelor of Business Administration</option>
+                        </select>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+                        <div class="form-group" style="margin: 0;">
+                            <label for="bulkFromSem">Current Semester (From)</label>
+                            <select name="from_semester" id="bulkFromSem" class="form-control">
+                                <option value="all">All Semesters</option>
+                                <?php for ($i = 1; $i <= 8; $i++): ?>
+                                    <option value="<?php echo $i; ?>">Semester <?php echo $i; ?></option>
+                                <?php endfor; ?>
+                            </select>
+                        </div>
+
+                        <div class="form-group" style="margin: 0;">
+                            <label for="bulkTargetSem">Target Semester</label>
+                            <select name="target_semester" id="bulkTargetSem" class="form-control">
+                                <option value="next">Next Semester (+1 Auto)</option>
+                                <?php for ($i = 2; $i <= 8; $i++): ?>
+                                    <option value="<?php echo $i; ?>">Semester <?php echo $i; ?></option>
+                                <?php endfor; ?>
+                                <option value="Graduated">Graduated</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label for="bulkScope">Promotion Candidate Filter</label>
+                        <select name="scope" id="bulkScope" class="form-control">
+                            <option value="opted_in">Only Opted-In Students (Ready Cohort)</option>
+                            <option value="all">All Enrolled Students in Selected Degree/Term</option>
                         </select>
                     </div>
 

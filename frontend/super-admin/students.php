@@ -307,36 +307,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($action === 'bulk_promote') {
         $deptParam = sanitize($_POST['department'] ?? 'all');
+        $fromSem = sanitize($_POST['from_semester'] ?? 'all');
+        $targetSem = sanitize($_POST['target_semester'] ?? 'next');
+        $scope = sanitize($_POST['scope'] ?? 'opted_in');
+        $onlyOptedIn = ($scope === 'opted_in');
         $notes = sanitize($_POST['notes'] ?? 'Super Admin universal bulk promotion');
         if ($db) {
             require_once __DIR__ . '/../../backend/models/Student.php';
             $studentModel = new Student();
-
-            $bulkQ = "SELECT user_id, semester, promotion_target_sem FROM student_profiles WHERE promotion_opt_in = 1 AND promotion_status = 'opted_in'";
-            if ($deptParam === 'BBA' || $deptParam === 'BCA') {
-                $bulkQ .= " AND department = '$deptParam'";
-            }
-            $bRes = $db->query($bulkQ);
-            $promotedCount = 0;
-            if ($bRes) {
-                while ($bRow = $bRes->fetch_assoc()) {
-                    $tSem = !empty($bRow['promotion_target_sem']) ? $bRow['promotion_target_sem'] : ((is_numeric($bRow['semester']) ? (string)((int)$bRow['semester'] + 1) : '2'));
-                    $pRes = $studentModel->promoteStudent($bRow['user_id'], (string)$tSem, $currentUserId, $notes);
-                    if ($pRes['success']) {
-                        $promotedCount++;
-                    }
+            $res = $studentModel->promoteByDegreeAndSemester($deptParam, $fromSem, $targetSem, $currentUserId, $notes, $onlyOptedIn);
+            if ($res['success']) {
+                $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+                $details = "Super Admin executed bulk semester promotion: {$res['count']} student(s) promoted (Degree: {$deptParam}, From Sem: {$fromSem}, Target: {$targetSem}).";
+                $aud = $db->prepare("INSERT INTO audit_logs (user_id, action, resource, details, ip_address) VALUES (?, 'BULK_PROMOTION_EXECUTED', 'students', ?, ?)");
+                if ($aud) {
+                    $aud->bind_param("iss", $currentUserId, $details, $ip);
+                    $aud->execute();
                 }
+                $successMsg = $res['message'];
+            } else {
+                $errorMsg = $res['error'];
             }
-
-            $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
-            $details = "Super Admin executed bulk semester promotion: {$promotedCount} student(s) promoted in department '{$deptParam}'.";
-            $aud = $db->prepare("INSERT INTO audit_logs (user_id, action, resource, details, ip_address) VALUES (?, 'BULK_PROMOTION_EXECUTED', 'students', ?, ?)");
-            if ($aud) {
-                $aud->bind_param("iss", $currentUserId, $details, $ip);
-                $aud->execute();
-            }
-
-            $successMsg = "Universal bulk promotion executed! Successfully advanced $promotedCount student(s) to their next semester.";
         }
     } elseif ($action === 'rollback_promotion') {
         $stuId = (int)($_POST['student_id'] ?? 0);
@@ -1054,12 +1045,44 @@ if ($db) {
                         </div>
                     </div>
 
-                    <div class="form-group" style="margin-bottom: 16px;">
-                        <label for="bulkDept">Target Department</label>
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label for="bulkDept">Select Degree / Department</label>
                         <select name="department" id="bulkDept" class="form-control">
-                            <option value="all">All Departments (BBA & BCA)</option>
-                            <option value="BBA">BBA Only</option>
-                            <option value="BCA">BCA Only</option>
+                            <option value="all">All Degrees & Departments</option>
+                            <option value="BCA">BCA - Bachelor of Computer Applications</option>
+                            <option value="BBA">BBA - Bachelor of Business Administration</option>
+                            <option value="CSE">CSE - Computer Science & Engineering</option>
+                        </select>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+                        <div class="form-group" style="margin: 0;">
+                            <label for="bulkFromSem">Current Semester (From)</label>
+                            <select name="from_semester" id="bulkFromSem" class="form-control">
+                                <option value="all">All Semesters</option>
+                                <?php for ($i = 1; $i <= 8; $i++): ?>
+                                    <option value="<?php echo $i; ?>">Semester <?php echo $i; ?></option>
+                                <?php endfor; ?>
+                            </select>
+                        </div>
+
+                        <div class="form-group" style="margin: 0;">
+                            <label for="bulkTargetSem">Target Semester</label>
+                            <select name="target_semester" id="bulkTargetSem" class="form-control">
+                                <option value="next">Next Semester (+1 Auto)</option>
+                                <?php for ($i = 2; $i <= 8; $i++): ?>
+                                    <option value="<?php echo $i; ?>">Semester <?php echo $i; ?></option>
+                                <?php endfor; ?>
+                                <option value="Graduated">Graduated</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label for="bulkScope">Promotion Candidate Filter</label>
+                        <select name="scope" id="bulkScope" class="form-control">
+                            <option value="opted_in">Only Opted-In Students (Ready Cohort)</option>
+                            <option value="all">All Enrolled Students in Selected Degree/Term</option>
                         </select>
                     </div>
 

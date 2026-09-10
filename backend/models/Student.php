@@ -337,6 +337,154 @@ class Student {
 
         return ['success' => false, 'error' => 'Database error during rollback.'];
     }
+
+    /**
+     * Promote students filtered by degree and semester
+     *
+     * @param string|int $degree Department name, code, or ID ('all' for any)
+     * @param string $fromSemester Current semester to promote from ('all' for any)
+     * @param string|null $targetSemester Specific semester or null/'next' for current + 1
+     * @param int $promotedBy Admin user ID executing the promotion
+     * @param string $notes Optional audit notes
+     * @param bool $onlyOptedIn Only promote students who opted in
+     * @return array
+     */
+    public function promoteByDegreeAndSemester($degree = 'all', $fromSemester = 'all', $targetSemester = null, $promotedBy = 1, $notes = '', $onlyOptedIn = false) {
+        $where = ["u.is_active = 1", "u.deleted_at IS NULL"];
+        $params = [];
+        $types = "";
+
+        if (!empty($fromSemester) && $fromSemester !== 'all') {
+            $where[] = "sp.semester = ?";
+            $params[] = (string)$fromSemester;
+            $types .= "s";
+        }
+
+        if (!empty($degree) && $degree !== 'all') {
+            if (is_numeric($degree)) {
+                $where[] = "sp.department_id = ?";
+                $params[] = (int)$degree;
+                $types .= "i";
+            } else {
+                $where[] = "(sp.department = ? OR d.code = ? OR d.name = ?)";
+                $params[] = (string)$degree;
+                $params[] = (string)$degree;
+                $params[] = (string)$degree;
+                $types .= "sss";
+            }
+        }
+
+        if ($onlyOptedIn) {
+            $where[] = "sp.promotion_opt_in = 1";
+        }
+
+        $sql = "SELECT sp.user_id, sp.semester, sp.department, sp.promotion_target_sem, u.first_name, u.last_name 
+                FROM student_profiles sp 
+                JOIN users u ON sp.user_id = u.id 
+                LEFT JOIN departments d ON sp.department_id = d.id 
+                WHERE " . implode(" AND ", $where);
+
+        $stmt = $this->db->prepare($sql);
+        if ($stmt) {
+            if (!empty($types)) {
+                $stmt->bind_param($types, ...$params);
+            }
+            $stmt->execute();
+            $students = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+            $stmt->close();
+        } else {
+            return ['success' => false, 'error' => 'Database query preparation failed.'];
+        }
+
+        if (empty($students)) {
+            return ['success' => false, 'error' => 'No matching active students found for the selected degree and semester.'];
+        }
+
+        $promotedCount = 0;
+        $studentNames = [];
+
+        foreach ($students as $stu) {
+            $uId = (int)$stu['user_id'];
+            $curSem = $stu['semester'] ?? '1';
+
+            if (!empty($targetSemester) && $targetSemester !== 'next') {
+                $tSem = (string)$targetSemester;
+            } elseif (!empty($stu['promotion_target_sem'])) {
+                $tSem = (string)$stu['promotion_target_sem'];
+            } else {
+                $tSem = is_numeric($curSem) ? (string)((int)$curSem + 1) : '2';
+            }
+
+            $res = $this->promoteStudent($uId, $tSem, $promotedBy, $notes);
+            if ($res['success']) {
+                $promotedCount++;
+                $studentNames[] = $stu['first_name'] . ' ' . $stu['last_name'];
+            }
+        }
+
+        $targetLabel = (!empty($targetSemester) && $targetSemester !== 'next') ? "Semester $targetSemester" : "their next semester";
+        $degLabel = ($degree !== 'all') ? "in $degree" : "across all departments";
+        $fromLabel = ($fromSemester !== 'all') ? "from Semester $fromSemester" : "";
+
+        return [
+            'success' => true,
+            'count' => $promotedCount,
+            'students' => $studentNames,
+            'message' => "Promotion completed! Successfully promoted $promotedCount student(s) $degLabel $fromLabel to $targetLabel."
+        ];
+    }
+
+    /**
+     * Get candidate count for degree/semester promotion preview
+     */
+    public function getPromotionCandidates($degree = 'all', $fromSemester = 'all', $onlyOptedIn = false) {
+        $where = ["u.is_active = 1", "u.deleted_at IS NULL"];
+        $params = [];
+        $types = "";
+
+        if (!empty($fromSemester) && $fromSemester !== 'all') {
+            $where[] = "sp.semester = ?";
+            $params[] = (string)$fromSemester;
+            $types .= "s";
+        }
+
+        if (!empty($degree) && $degree !== 'all') {
+            if (is_numeric($degree)) {
+                $where[] = "sp.department_id = ?";
+                $params[] = (int)$degree;
+                $types .= "i";
+            } else {
+                $where[] = "(sp.department = ? OR d.code = ? OR d.name = ?)";
+                $params[] = (string)$degree;
+                $params[] = (string)$degree;
+                $params[] = (string)$degree;
+                $types .= "sss";
+            }
+        }
+
+        if ($onlyOptedIn) {
+            $where[] = "sp.promotion_opt_in = 1";
+        }
+
+        $sql = "SELECT sp.user_id, sp.student_id, sp.semester, sp.department, sp.promotion_status, u.first_name, u.last_name, u.email 
+                FROM student_profiles sp 
+                JOIN users u ON sp.user_id = u.id 
+                LEFT JOIN departments d ON sp.department_id = d.id 
+                WHERE " . implode(" AND ", $where) . " 
+                ORDER BY sp.semester ASC, u.first_name ASC";
+
+        $stmt = $this->db->prepare($sql);
+        if ($stmt) {
+            if (!empty($types)) {
+                $stmt->bind_param($types, ...$params);
+            }
+            $stmt->execute();
+            $results = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+            $stmt->close();
+            return $results;
+        }
+        return [];
+    }
     
     public function getDashboard($userId) {
         $student = $this->findByUserId($userId);

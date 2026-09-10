@@ -21,5 +21,5 @@ function handleClientLogout() {
     localStorage.removeItem('session_token');
     sessionStorage.removeItem('auth_token');
     sessionStorage.removeItem('session_token');
-    window.location.href = '/StudentOS-AI-project/frontend/login.php';
+    window.location.href = '/StudentOS-AI-project/frontend/logout.php';
 }

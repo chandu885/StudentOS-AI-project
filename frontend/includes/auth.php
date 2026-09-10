@@ -76,10 +76,37 @@ function logout() {
         session_start();
     }
     if (isset($_SESSION['session_token'])) {
-        apiCall('/auth.php?path=logout', 'POST');
+        $st = $_SESSION['session_token'];
+        if (function_exists('getDbConnection')) {
+            try {
+                $db = getDbConnection();
+                if ($db) {
+                    $stmt = $db->prepare("DELETE FROM user_sessions WHERE session_token = ?");
+                    if ($stmt) {
+                        $stmt->bind_param("s", $st);
+                        $stmt->execute();
+                        $stmt->close();
+                    }
+                }
+            } catch (Throwable $e) {
+                // Silently ignore to ensure logout always succeeds
+            }
+        }
+        try {
+            apiCall('/auth.php?path=logout', 'POST');
+        } catch (Throwable $e) {
+            // Silently ignore to ensure logout always succeeds
+        }
     }
     $_SESSION = [];
     session_destroy();
+    if (ini_get("session.use_cookies")) {
+        $params = session_get_cookie_params();
+        setcookie(session_name(), '', time() - 42000,
+            $params["path"], $params["domain"],
+            $params["secure"], $params["httponly"]
+        );
+    }
     if (isset($_COOKIE['remember_token'])) {
         setcookie('remember_token', '', time() - 3600, '/');
     }

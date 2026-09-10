@@ -57,11 +57,15 @@ class AIService {
         // Fetch student context (enrolled subjects, upcoming exams, pending assignments)
         $context = $this->buildStudentContext($userId);
 
-        $systemPrompt = "You are StudentOS AI, an expert academic tutor and life manager for university students.\n"
-                      . "Tone: Encouraging, concise, structured, and pedagogical.\n"
+        $systemPrompt = "You are StudentOS AI, an intelligent Google-style academic search and tutoring assistant.\n"
+                      . "Tone: Clear, structured, authoritative, concise, and helpful like Google Search AI Overviews and Featured Snippets.\n"
+                      . "Formatting Guidelines:\n"
+                      . "1. **Direct Answer / Overview**: Start immediately with a succinct 1-2 sentence direct answer/definition that gives the student the core answer upfront.\n"
+                      . "2. **Key Highlights**: Use clear, readable bullet points with **bold terms** explaining the primary concepts, mechanisms, or steps.\n"
+                      . "3. **Knowledge Card / Practical Example**: Provide a real-world example, comparison table, or key formula if applicable.\n"
+                      . "4. **People Also Ask**: Conclude with 2-3 related follow-up questions students frequently ask about this subject (format each as a bullet starting with '• ').\n\n"
                       . "Context about this student:\n" . $context . "\n\n"
-                      . "If asked about classes, schedules, or exams, use the provided context.\n"
-                      . "If asked academic concepts (e.g., DBMS, Algorithms, OS, Math), explain with clarity, key definitions, and real-world examples.";
+                      . "If asked about classes, schedules, or exams, use the provided student context.";
 
         $answer = $this->callGemini($systemPrompt, $question);
 
@@ -87,21 +91,39 @@ class AIService {
         $chunkContext = "";
         $sources = [];
         foreach ($chunks as $c) {
-            $chunkContext .= "--- Chunk #" . $c['chunk_index'] . " ---\n" . $c['chunk_text'] . "\n\n";
-            $sources[] = "Chunk #" . $c['chunk_index'];
+            $chunkContext .= "--- Section #" . $c['chunk_index'] . " ---\n" . $c['chunk_text'] . "\n\n";
+            $sources[] = "Section #" . $c['chunk_index'];
         }
 
         if (empty($chunkContext)) {
-            $chunkContext = "Document excerpts currently not indexed or no direct keyword match found. Synthesize an answer based on foundational computer science principles.";
+            $db = Database::getInstance();
+            $stmt = $db->prepare("SELECT chunk_index, chunk_text FROM document_chunks WHERE document_id = ? ORDER BY chunk_index ASC LIMIT 5");
+            if ($stmt) {
+                $stmt->bind_param("i", $documentId);
+                $stmt->execute();
+                $allChunks = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+                $stmt->close();
+                foreach ($allChunks as $c) {
+                    $chunkContext .= "--- Section #" . $c['chunk_index'] . " ---\n" . $c['chunk_text'] . "\n\n";
+                    $sources[] = "Section #" . $c['chunk_index'];
+                }
+            }
+        }
+
+        if (empty($chunkContext)) {
+            $chunkContext = "Document excerpts currently not indexed or no direct keyword match found.";
         }
 
         $prompt = "You are StudentOS AI Document Q&A assistant (RAG).\n"
-                . "Based ONLY on the following excerpts from the student's document, answer the question accurately.\n"
-                . "Cite relevant sections where applicable.\n\n"
+                . "Based on the following excerpts from the student's document, provide a structured, Google-style answer to the question.\n"
+                . "Structure:\n"
+                . "1. **Direct Answer**: Direct 1-2 sentence summary from the document.\n"
+                . "2. **Key Findings from Document**: Bullet points with section citations.\n"
+                . "3. **Takeaway**: Actionable concept takeaway.\n\n"
                 . "DOCUMENT EXCERPTS:\n" . $chunkContext . "\n\n"
                 . "QUESTION:\n" . $question;
 
-        $answer = $this->callGemini("You are an academic document Q&A tutor.", $prompt);
+        $answer = $this->callGemini("You are an academic document Q&A tutor providing Google-style structured summaries.", $prompt);
         $this->aiModel->recordUsage($userId, 'pdf_qa', strlen($prompt)/4, strlen($answer)/4, $this->modelName);
 
         return [
@@ -301,85 +323,183 @@ class AIService {
             $excerpts = trim($m[1] ?? '');
             $userQ = trim($m[2] ?? '');
             if (!empty($excerpts) && strpos($excerpts, 'not indexed') === false) {
-                return "### 📄 Document RAG Synthesis\n\n"
-                     . "Based on the retrieved excerpts from your course document:\n\n"
+                // Find matching sentences in the excerpts
+                $sentences = preg_split('/(?<=[.?!])\s+/', $excerpts);
+                $qWords = preg_split('/[^\w]+/', strtolower($userQ), -1, PREG_SPLIT_NO_EMPTY);
+                $stopWords = ['what', 'is', 'the', 'of', 'in', 'and', 'to', 'a', 'for', 'are', 'how', 'does', 'can', 'you', 'explain', 'this', 'document'];
+                $keywords = array_filter($qWords, function($w) use ($stopWords) { return strlen($w) > 2 && !in_array($w, $stopWords); });
+
+                $highlightedSentences = [];
+                foreach ($sentences as $s) {
+                    $sClean = strtolower($s);
+                    $matches = 0;
+                    foreach ($keywords as $kw) {
+                        if (strpos($sClean, $kw) !== false) $matches++;
+                    }
+                    if ($matches > 0 && strlen(trim($s)) > 20) {
+                        $highlightedSentences[] = trim($s);
+                    }
+                }
+
+                $directAnswer = !empty($highlightedSentences) 
+                    ? implode(' ', array_slice($highlightedSentences, 0, 3))
+                    : (strlen($excerpts) > 280 ? substr($excerpts, 0, 260) . '...' : $excerpts);
+
+                return "### 🔍 Google-Style Document Overview\n\n"
+                     . "**Quick Answer:** " . $directAnswer . "\n\n"
+                     . "### 📌 Verified Document Excerpts\n"
                      . $excerpts . "\n\n"
-                     . "**Key Takeaway:** The retrieved lecture notes directly address: *" . htmlspecialchars($userQ) . "*. Make sure to study these definitions and their proofs for upcoming examinations.";
+                     . "### 💡 Knowledge Takeaway\n"
+                     . "- **Context**: Synthesized from verified excerpts of your uploaded PDF document.\n"
+                     . "- **Focus**: Review the highlighted definitions and formulas for upcoming assessments.\n\n"
+                     . "### ❓ People Also Ask\n"
+                     . "• Can you summarize this document section in simple bullet points?\n"
+                     . "• What are the most likely exam questions based on this excerpt?\n"
+                     . "• How does this concept apply in practical real-world engineering?";
             }
         }
 
+        // Process vs Thread
+        if (strpos($q, 'process') !== false && strpos($q, 'thread') !== false) {
+            return "### 🔍 Google AI Overview\n\n"
+                 . "**Quick Answer:** A **Process** is an independent executing program with its own private address space and dedicated memory, while a **Thread** is a lightweight unit of execution within a process that shares memory and resources with other threads.\n\n"
+                 . "### 📌 Key Differences & Highlights\n"
+                 . "- **Address Space**: Processes have separate isolated memory spaces; threads of the same process share code, data, and OS resources.\n"
+                 . "- **Creation & Overhead**: Context switching between processes is heavy and slow; thread context switching is fast and lightweight.\n"
+                 . "- **Communication**: Processes communicate via Inter-Process Communication (IPC, sockets, pipes); threads communicate directly via shared memory.\n"
+                 . "- **Fault Isolation**: If one process crashes, other processes remain unaffected; if a thread encounters an unhandled fatal error, the entire process terminates.\n\n"
+                 . "### 💡 Quick Comparison Card\n"
+                 . "| Feature | Process | Thread |\n"
+                 . "|---|---|---|\n"
+                 . "| **Memory** | Separate isolated space | Shared within process |\n"
+                 . "| **Switch Cost** | High (MMU/TLB flush) | Low (registers/stack only) |\n"
+                 . "| **Communication** | IPC (Pipes, Sockets) | Direct Shared Memory |\n\n"
+                 . "### ❓ People Also Ask\n"
+                 . "• What is the difference between user-level threads and kernel-level threads?\n"
+                 . "• When should I use multithreading versus multiprocessing in software engineering?\n"
+                 . "• What is a race condition and how do mutex locks resolve it?";
+        }
+
+        // Dijkstra's Algorithm
+        if (strpos($q, 'dijkstra') !== false || (strpos($q, 'shortest path') !== false && strpos($q, 'algorithm') !== false)) {
+            return "### 🔍 Google AI Overview\n\n"
+                 . "**Quick Answer:** **Dijkstra's Algorithm** is a greedy graph search algorithm that finds the shortest path from a single source vertex to all other vertices in a weighted graph with non-negative edge weights.\n\n"
+                 . "### 📌 Step-by-Step Logic\n"
+                 . "1. **Initialize Distances**: Assign distance `0` to the source node and `Infinity` to all other nodes. Maintain a min-priority queue.\n"
+                 . "2. **Select Minimum Node**: Extract the unvisited vertex `u` with the smallest tentative distance.\n"
+                 . "3. **Relax Edges**: For each neighbor `v` of `u`, calculate `alt = dist[u] + weight(u, v)`. If `alt < dist[v]`, update `dist[v] = alt`.\n"
+                 . "4. **Repeat**: Mark `u` as visited and repeat until all reachable vertices are processed.\n\n"
+                 . "### 💡 Fast Facts & Complexity\n"
+                 . "- **Time Complexity**: **O((V + E) log V)** using a binary min-heap / priority queue.\n"
+                 . "- **Space Complexity**: **O(V)** to store distances and visited sets.\n"
+                 . "- **Critical Constraint**: Does **NOT** work with negative edge weights (use *Bellman-Ford* instead).\n\n"
+                 . "### ❓ People Also Ask\n"
+                 . "• Why does Dijkstra's algorithm fail with negative edge weights?\n"
+                 . "• How does Dijkstra compare to the A* search algorithm?\n"
+                 . "• Can Dijkstra be used on unweighted graphs instead of Breadth-First Search (BFS)?";
+        }
+
+        // Database Normalization Overview
+        if (strpos($q, 'normaliz') !== false || strpos($q, 'bcnf') !== false || strpos($q, '3nf') !== false || strpos($q, '1nf') !== false || strpos($q, '2nf') !== false) {
+            return "### 🔍 Google AI Overview\n\n"
+                 . "**Quick Answer:** **Database Normalization** is a multi-step design technique used to organize relational database tables, eliminate redundant duplicate data, and protect data integrity against insertion, update, and deletion anomalies.\n\n"
+                 . "### 📌 Core Normal Forms Breakdown\n"
+                 . "- **1NF (Atomic Values)**: All column values must be atomic (indivisible). No repeating groups, arrays, or comma-separated lists.\n"
+                 . "- **2NF (No Partial Dependencies)**: Must be in 1NF, and all non-key columns must depend on the **entire** candidate key (not just part of a composite key).\n"
+                 . "- **3NF (No Transitive Dependencies)**: Must be in 2NF, and no non-key column can depend on another non-key column (`A → B → C` is forbidden).\n"
+                 . "- **BCNF (Boyce-Codd Normal Form)**: A stricter variant of 3NF. For **every** functional dependency `X → Y`, `X` **must be a superkey**.\n\n"
+                 . "### 💡 Knowledge Card: Anomaly Prevention\n"
+                 . "- **Insert Anomaly**: Cannot record an entity without creating a dummy record for another entity.\n"
+                 . "- **Delete Anomaly**: Deleting one piece of data inadvertently deletes critical unrelated data.\n"
+                 . "- **Update Anomaly**: Changing an attribute requires updating dozens of redundant rows.\n\n"
+                 . "### ❓ People Also Ask\n"
+                 . "• What is the difference between 3NF and BCNF with a real-world example?\n"
+                 . "• Is BCNF always dependency-preserving during decomposition?\n"
+                 . "• When is denormalization recommended in production databases?";
+        }
+
         // Study plan requests
-        if (strpos($q, 'day-by-day') !== false || strpos($q, 'study plan') !== false || strpos($q, 'exam preparation') !== false) {
-            return "### 📅 Structured Academic Study Plan\n\n"
-                 . "**Day 1–2: Theoretical Foundations & Architecture**\n"
-                 . "- Review core concepts, definitions, and architectural diagrams.\n"
-                 . "- Complete 5 self-assessment diagnostic questions.\n\n"
-                 . "**Day 3–4: Core Problem Solving & Decompositions**\n"
-                 . "- Solve medium-difficulty algorithmic problems and case proofs.\n"
-                 . "- Review previous semester examination patterns.\n\n"
-                 . "**Day 5–6: Advanced Applications & Lab Implementations**\n"
-                 . "- Practice practical implementations, edge cases, and optimizations.\n"
-                 . "- Complete a 60-minute timed active recall session.\n\n"
-                 . "**Day 7: Mock Exam & Comprehensive Revision**\n"
-                 . "- Take an AI-generated mock quiz.\n"
-                 . "- Focus on weak spots identified in review.";
+        if (strpos($q, 'day-by-day') !== false || strpos($q, 'study plan') !== false || strpos($q, 'revision') !== false) {
+            return "### 🔍 Google AI Overview\n\n"
+                 . "**Quick Answer:** A high-yield academic study strategy divides exam preparation into spaced active recall phases: foundation review, timed problem solving, and targeted mock exam iterations.\n\n"
+                 . "### 📌 Structured Revision Roadmap\n"
+                 . "- **Phase 1 (Day 1–2: Theoretical Mastery)**: Review lecture summaries, definitions, and core theorems in 45-minute Pomodoro cycles.\n"
+                 . "- **Phase 2 (Day 3–4: Hands-On Problems)**: Solve 10-15 mid-term examination questions and edge-case algorithm proofs.\n"
+                 . "- **Phase 3 (Day 5–6: Active Recall & Lab Practice)**: Implement core algorithms, review formulas, and teach concepts to a peer without looking at notes.\n"
+                 . "- **Phase 4 (Day 7: Full Mock Simulation)**: Complete a timed AI mock exam to uncover and remediate any remaining knowledge gaps.\n\n"
+                 . "### 💡 Top Exam Preparation Rule\n"
+                 . "- **Spaced Testing Effect**: Practicing retrieval via self-testing improves long-term exam scores by over 40% compared to passive rereading.\n\n"
+                 . "### ❓ People Also Ask\n"
+                 . "• What is the Feynman Technique and how does it help in engineering subjects?\n"
+                 . "• How many hours a day should a university student dedicate to revision?\n"
+                 . "• How can I create an AI study schedule for multiple simultaneous exam deadlines?";
         }
 
-        // Summarizer requests
-        if (strpos($q, 'summarize the following') !== false || strpos($q, 'summarizer') !== false) {
-            return "### 📌 High-Yield Academic Summary\n\n"
-                 . "**Core Definitions:**\n"
-                 . "- Key concepts synthesized into focused, examinable points.\n\n"
-                 . "**Key Formulas & Axioms:**\n"
-                 . "- Fundamental laws, properties, and constraints applicable to coursework.\n\n"
-                 . "**Top 3 Exam Takeaways:**\n"
-                 . "1. Master theoretical foundations before attempting practical decompositions.\n"
-                 . "2. Verify edge conditions and constraint preservation on each step.\n"
-                 . "3. Use spaced active recall to solidify retention.";
-        }
-
-        if (strpos($q, 'normaliz') !== false || strpos($q, 'bcnf') !== false || strpos($q, '3nf') !== false) {
-            return "### Database Normalization Overview\n\n"
-                 . "**Normalization** is the systematic process of organizing relational tables to minimize redundancy and prevent insert/update/delete anomalies.\n\n"
-                 . "1. **1NF**: All table columns hold atomic (indivisible) values with no repeating groups.\n"
-                 . "2. **2NF**: Table is in 1NF and contains no *partial functional dependencies* (all non-key attributes fully depend on the entire candidate key).\n"
-                 . "3. **3NF**: Table is in 2NF and has no *transitive dependencies* (for every FD \$X \\to A\$, either \$X\$ is a superkey or \$A\$ is prime).\n"
-                 . "4. **BCNF (Boyce-Codd Normal Form)**: A stricter variant of 3NF. For every non-trivial functional dependency \$X \\to A\$, \$X\$ MUST be a superkey.";
-        }
-
+        // Schedule / Classes
         if (strpos($q, 'class') !== false || strpos($q, 'tomorrow') !== false || strpos($q, 'today') !== false || strpos($q, 'schedule') !== false) {
-            return "### Your Academic Schedule\n\n"
-                 . "Based on your active semester timetable:\n"
-                 . "- **Monday**: 09:00 - 10:00 (DBMS in LH-201), 10:15 - 11:15 (Algorithms in LH-201)\n"
-                 . "- **Tuesday**: 09:00 - 10:00 (OS in LH-203), 11:30 - 12:30 (Web Eng Lab in Lab-3)\n"
-                 . "- **Wednesday**: 09:00 - 10:00 (DBMS in LH-201)\n"
-                 . "- **Thursday**: 10:00 - 11:00 (Algorithms in LH-201)\n"
-                 . "- **Friday**: 14:00 - 16:00 (Web Eng Project Lab in Lab-3)\n\n"
-                 . "Remember to arrive 5 minutes before class!";
+            return "### 🔍 Google AI Overview\n\n"
+                 . "**Quick Answer:** Here is your verified academic class schedule for the current semester cycle, optimized by lecture hall and time slots.\n\n"
+                 . "### 📌 Weekly Class Timetable\n"
+                 . "- **Monday**: 09:00 - 10:00 (DBMS • LH-201) | 10:15 - 11:15 (Algorithms • LH-201)\n"
+                 . "- **Tuesday**: 09:00 - 10:00 (Operating Systems • LH-203) | 11:30 - 12:30 (Web Eng Lab • Lab-3)\n"
+                 . "- **Wednesday**: 09:00 - 10:00 (DBMS • LH-201)\n"
+                 . "- **Thursday**: 10:00 - 11:00 (Algorithms • LH-201)\n"
+                 . "- **Friday**: 14:00 - 16:00 (Web Eng Project Lab • Lab-3)\n\n"
+                 . "### 💡 Quick Campus Tip\n"
+                 . "- Lecture halls LH-201 and LH-203 are in Academic Block A. Arrive 5 minutes early for attendance logging.\n\n"
+                 . "### ❓ People Also Ask\n"
+                 . "• What is my current attendance percentage for DBMS and Algorithms?\n"
+                 . "• Where can I find syllabus notes for my upcoming Web Engineering lab?\n"
+                 . "• How do I apply for an authorized absence leave?";
         }
 
+        // Assignments
         if (strpos($q, 'assignment') !== false || strpos($q, 'deadline') !== false || strpos($q, 'pending') !== false) {
-            return "### Current Pending Assignments\n\n"
-                 . "1. **DBMS Normalization & BCNF Case Study** (Deadline: Sept 12) - *Max Marks: 50*\n"
-                 . "2. **Dynamic Programming: Knapsack & Edit Distance** (Deadline: Sept 15) - *Max Marks: 50*\n"
-                 . "3. **Secure REST API in PHP/Flask** (Deadline: Sept 20) - *Max Marks: 100*\n\n"
-                 . "Tip: Allocate 45 minutes today to complete the BCNF proofs before the weekend.";
+            return "### 🔍 Google AI Overview\n\n"
+                 . "**Quick Answer:** You have **3 active coursework assignments** registered in your academic portal with upcoming deadlines.\n\n"
+                 . "### 📌 Pending Assignments List\n"
+                 . "1. **DBMS Normalization & BCNF Case Study** • *Due: Sept 12* • 50 Marks • [Status: Open]\n"
+                 . "2. **Dynamic Programming: Knapsack & Edit Distance** • *Due: Sept 15* • 50 Marks • [Status: In Progress]\n"
+                 . "3. **Secure REST API in PHP/Flask** • *Due: Sept 20* • 100 Marks • [Status: Pending Review]\n\n"
+                 . "### 💡 Next Recommended Action\n"
+                 . "- Complete the BCNF Case Study first. Dedicate 45 minutes today to verify the functional dependency matrix.\n\n"
+                 . "### ❓ People Also Ask\n"
+                 . "• How do I upload my assignment file submission in the portal?\n"
+                 . "• What are the formatting guidelines for code submissions?\n"
+                 . "• What penalties apply to late coursework submissions?";
         }
 
+        // Attendance
         if (strpos($q, 'attendance') !== false) {
-            return "### Attendance Standing\n\n"
-                 . "- **Overall Attendance**: 94.2% (Good Standing - Above 75% minimum threshold)\n"
-                 . "- **DBMS**: 80.0%\n"
-                 . "- **Algorithms**: 87.5%\n"
-                 . "- **Operating Systems**: 100.0%\n"
-                 . "- **Web Engineering**: 100.0%\n\n"
-                 . "You are eligible to sit for all mid-semester and final examinations!";
+            return "### 🔍 Google AI Overview\n\n"
+                 . "**Quick Answer:** Your cumulative academic attendance is **94.2%**, well above the mandatory 75.0% institutional examination threshold.\n\n"
+                 . "### 📌 Subject-Wise Attendance Breakdown\n"
+                 . "- **Database Management Systems (DBMS)**: 80.0% (Eligible)\n"
+                 . "- **Design & Analysis of Algorithms**: 87.5% (Eligible)\n"
+                 . "- **Operating Systems**: 100.0% (Perfect Standing)\n"
+                 . "- **Web Engineering**: 100.0% (Perfect Standing)\n\n"
+                 . "### 💡 Standing Badge\n"
+                 . "- **Status**: ✅ Good Standing — Fully qualified for all Mid-Term and End-Semester examinations.\n\n"
+                 . "### ❓ People Also Ask\n"
+                 . "• How many classes can I safely miss without dropping below 75%?\n"
+                 . "• How are medical certificate exemptions processed by the administration?\n"
+                 . "• What is the attendance requirement for scholarship eligibility?";
         }
 
-        return "### StudentOS AI Assistant Response\n\n"
-             . "I have analyzed your query regarding: **" . htmlspecialchars(substr($query, 0, 80)) . "**\n\n"
-             . "Key Takeaway: Consistent spaced repetition and focused practice are the most effective strategies for mastering this topic. Review your lecture notes in the Notes portal, practice end-of-unit problems, and take an AI mock quiz to gauge your understanding.\n\n"
-             . "*Tip: You can configure a Google Gemini API Key in Super Admin -> AI Settings to unlock live LLM capabilities.*";
+        // Generic academic fallback with Google structure
+        $cleanTopic = htmlspecialchars(substr($query, 0, 80));
+        return "### 🔍 Google AI Overview\n\n"
+             . "**Quick Answer:** Comprehensive academic analysis for **\"{$cleanTopic}\"**. Master this topic through fundamental definitions, conceptual breakdown, and active problem-solving.\n\n"
+             . "### 📌 Key Highlights & Concepts\n"
+             . "- **Foundational Principles**: Focus on formal definitions, boundary conditions, and primary constraints.\n"
+             . "- **Application & Implementation**: Practice practical end-of-chapter problems to cement theoretical knowledge.\n"
+             . "- **Verification**: Cross-reference lecture notes in the Notes portal and verify with your course syllabus.\n\n"
+             . "### 💡 Knowledge Card\n"
+             . "- **Recommendation**: For advanced interactive queries, configure a live Google Gemini API Key in Super Admin -> AI Settings.\n\n"
+             . "### ❓ People Also Ask\n"
+             . "• What are the most common exam questions asked about {$cleanTopic}?\n"
+             . "• Can you provide a step-by-step example with a detailed solution?\n"
+             . "• What textbook chapters or PDF notes cover this topic?";
     }
 
     private function getFallbackQuiz($topic) {

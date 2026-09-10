@@ -141,7 +141,7 @@ if ($loggedIn && $currentUser) {
                     <a href="<?php echo htmlspecialchars(url(getDashboardUrl())); ?>" class="btn btn-primary" role="button">
                         <i class="fas fa-chart-pie"></i> Go to Dashboard
                     </a>
-                    <a href="<?php echo htmlspecialchars(url('/login.php?action=logout')); ?>" class="btn btn-danger btn-logout-action" role="button" style="padding: 9px 16px; display: inline-flex; align-items: center; gap: 6px; font-weight: 600;" title="Logout">
+                    <a href="<?php echo htmlspecialchars(url('/logout.php')); ?>" class="btn btn-danger btn-logout-action" role="button" style="padding: 9px 16px; display: inline-flex; align-items: center; gap: 6px; font-weight: 600;" title="Logout" onclick="try{localStorage.removeItem('auth_token');localStorage.removeItem('session_token');sessionStorage.removeItem('auth_token');sessionStorage.removeItem('session_token');}catch(e){}">
                         <i class="fas fa-sign-out-alt"></i> <span>Log Out</span>
                     </a>
                 <?php else: ?>
@@ -557,6 +557,14 @@ if ($loggedIn && $currentUser) {
             btn.style.pointerEvents = 'auto';
         }, 1800);
     }
+    <?php if (!$loggedIn): ?>
+    try {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('session_token');
+        sessionStorage.removeItem('auth_token');
+        sessionStorage.removeItem('session_token');
+    } catch(e) {}
+    <?php endif; ?>
     </script>
 </body>
 </html>
