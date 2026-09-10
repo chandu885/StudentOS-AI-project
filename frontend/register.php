@@ -160,7 +160,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Student Registration - StudentOS AI</title>
     <?php if (!empty($success)): ?>
     <meta http-equiv="refresh" content="15;url=student/login.php">
@@ -174,6 +174,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="assets/css/reset.css">
     <link rel="stylesheet" href="assets/css/global.css">
     <link rel="stylesheet" href="assets/css/components.css">
+    <link rel="stylesheet" href="assets/css/responsive.css">
 </head>
 <body class="auth-page">
     <div class="auth-container">
@@ -205,7 +206,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div style="display: flex; align-items: flex-start; gap: 14px;">
                         <i class="fas fa-check-circle" style="font-size: 24px; color: var(--success); margin-top: 2px;"></i>
                         <div style="flex: 1;">
-                            <div style="font-weight: 700; font-size: 15px; color: var(--success); margin-bottom: 6px;">Registration Successful!</div>
+                            <div style="font-weight: 700; font-size: 15px; color: var(--success); margin-bottom: 6px;">User Registration Successful!</div>
                             <div style="font-size: 13.5px; color: var(--text-secondary); line-height: 1.5;">
                                 <?php echo htmlspecialchars($success); ?> You will be automatically redirected to the student login page in <strong id="redirectCountdown" style="color: var(--primary); font-size: 16px;">15</strong> seconds.
                             </div>
@@ -214,80 +215,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <i class="fas fa-sign-in-alt"></i> Sign In to Student Portal Now
                                 </a>
                                 <span style="font-size: 12px; color: var(--text-muted);">(Auto redirecting in <span id="redirectCountdownText">15s</span>)</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Registration Success Pop-up Modal Dialog with 15-Second Countdown Timer -->
-                <div id="regSuccessModal" class="modal-backdrop show" style="display: flex; opacity: 1; z-index: 99999; backdrop-filter: blur(8px); background: rgba(15, 23, 42, 0.82); position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; align-items: center; justify-content: center;">
-                    <div class="modal-card" style="max-width: 540px; width: 92%; border-radius: var(--radius-xl); border: 1.5px solid rgba(34, 197, 94, 0.45); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6), 0 0 35px rgba(34, 197, 94, 0.2); text-align: center; padding: 0; overflow: hidden; transform: scale(1); background: var(--bg-card);">
-                        <!-- Header Banner -->
-                        <div style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.18), rgba(16, 185, 129, 0.06)); padding: 26px 24px 18px; border-bottom: 1px solid var(--border-color);">
-                            <div style="width: 66px; height: 66px; margin: 0 auto 12px; border-radius: 50%; background: linear-gradient(135deg, #22C55E, #16A34A); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 30px; box-shadow: 0 10px 25px rgba(34, 197, 94, 0.4);">
-                                <i class="fas fa-check"></i>
-                            </div>
-                            <h2 style="font-size: 22px; font-weight: 800; color: var(--text-primary); margin-bottom: 4px;">Registration Successful!</h2>
-                            <p style="font-size: 13.5px; color: var(--text-secondary); margin: 0;">Your student credentials and profile have been registered in the database.</p>
-                        </div>
-
-                        <div class="modal-body" style="padding: 22px 24px;">
-                            <?php if (!empty($regSummary)): ?>
-                            <!-- Summary Details Grid -->
-                            <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 14px 16px; margin-bottom: 20px; text-align: left; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12.5px;">
-                                <div>
-                                    <span style="color: var(--text-muted); display: block; font-size: 10.5px; text-transform: uppercase;">Student Name</span>
-                                    <strong style="color: var(--text-primary);"><?php echo htmlspecialchars($regSummary['name'] ?? ''); ?></strong>
-                                </div>
-                                <div>
-                                    <span style="color: var(--text-muted); display: block; font-size: 10.5px; text-transform: uppercase;">Student ID</span>
-                                    <strong style="color: var(--primary);"><?php echo htmlspecialchars($regSummary['student_id'] ?? ''); ?></strong>
-                                </div>
-                                <div>
-                                    <span style="color: var(--text-muted); display: block; font-size: 10.5px; text-transform: uppercase;">Department</span>
-                                    <span class="badge badge-primary" style="font-weight: 700; background: rgba(37, 99, 235, 0.15); color: var(--primary); padding: 3px 8px; border-radius: 4px;"><?php echo htmlspecialchars($regSummary['department'] ?? 'BCA'); ?></span>
-                                </div>
-                                <div>
-                                    <span style="color: var(--text-muted); display: block; font-size: 10.5px; text-transform: uppercase;">Roll Number</span>
-                                    <strong style="color: var(--text-primary);"><?php echo htmlspecialchars($regSummary['roll_number'] ?? ''); ?></strong>
-                                </div>
-                                <div>
-                                    <span style="color: var(--text-muted); display: block; font-size: 10.5px; text-transform: uppercase;">Current Semester</span>
-                                    <span class="badge badge-info">Semester <?php echo htmlspecialchars($regSummary['semester'] ?? '1'); ?></span>
-                                </div>
-                                <div style="grid-column: span 2;">
-                                    <span style="color: var(--text-muted); display: block; font-size: 10.5px; text-transform: uppercase;">Email</span>
-                                    <span style="color: var(--text-secondary); word-break: break-all;"><?php echo htmlspecialchars($regSummary['email'] ?? ''); ?></span>
-                                </div>
-                            </div>
-                            <?php endif; ?>
-
-                            <!-- 15-Second Countdown Display -->
-                            <div style="background: rgba(37, 99, 235, 0.08); border: 1.5px dashed var(--primary); border-radius: var(--radius-lg); padding: 16px; margin-bottom: 20px;">
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 14px;">
-                                    <div style="width: 50px; height: 50px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 800; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);">
-                                        <span id="popupCountdownNumber" style="font-size: 21px; line-height: 1;">15</span>
-                                        <span style="font-size: 8.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">SEC</span>
-                                    </div>
-                                    <div style="text-align: left;">
-                                        <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);">Automatic Portal Redirect</div>
-                                        <div style="font-size: 12.5px; color: var(--text-secondary);">Redirecting to student login in <strong id="popupCountdownSec" style="color: var(--primary); font-size: 14px;">15</strong> seconds...</div>
-                                    </div>
-                                </div>
-                                <!-- Animated Progress Bar -->
-                                <div style="width: 100%; height: 6px; background: rgba(0,0,0,0.1); border-radius: 3px; margin-top: 12px; overflow: hidden;">
-                                    <div id="popupProgressBar" style="width: 100%; height: 100%; background: linear-gradient(90deg, var(--primary), #10B981); transition: width 1s linear;"></div>
-                                </div>
-                            </div>
-
-                            <!-- Modal Action Buttons -->
-                            <div style="display: flex; flex-direction: column; gap: 10px;">
-                                <a href="student/login.php" class="btn btn-primary btn-lg" style="width: 100%; justify-content: center; padding: 11px; font-weight: 700; font-size: 14.5px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
-                                    <i class="fas fa-sign-in-alt"></i> Sign In to Student Portal Now
-                                </a>
-                                <button type="button" class="btn btn-outline" onclick="closeSuccessModal()" style="font-size: 12px; padding: 7px;">
-                                    <i class="fas fa-pause"></i> Stay on this page (Pause redirect)
-                                </button>
                             </div>
                         </div>
                     </div>
@@ -395,7 +322,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <div class="input-group">
                             <span class="input-icon"><i class="fas fa-lock"></i></span>
                             <input type="password" id="password" name="password" class="form-control has-toggle"
-                                   placeholder="Min 8 chars with uppercase, digit & symbol" required>
+                                   placeholder="Enter password" required>
                             <button type="button" class="toggle-password" onclick="togglePassword('password', this)" title="Show/Hide password">
                                 <i class="fas fa-eye"></i>
                             </button>
@@ -431,6 +358,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         </div>
     </div>
+    
+    <?php if (!empty($success)): ?>
+    <!-- "User Registration Successful" Pop-up Modal Dialog centered globally across all screens and devices -->
+    <div id="regSuccessModal" class="modal-backdrop show" style="position: fixed; inset: 0; top: 0; left: 0; right: 0; bottom: 0; width: 100%; width: 100vw; height: 100%; height: 100vh; height: 100dvh; min-height: 100vh; min-height: 100dvh; display: flex !important; align-items: center !important; justify-content: center !important; z-index: 999999; background: rgba(10, 15, 30, 0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); padding: 16px; margin: 0; box-sizing: border-box;">
+        <div class="modal-card" style="margin: auto !important; max-width: 520px; width: 100%; max-height: calc(100dvh - 32px); max-height: calc(100vh - 32px); overflow-y: auto; -webkit-overflow-scrolling: touch; border-radius: var(--radius-xl); border: 1.5px solid rgba(34, 197, 94, 0.45); box-shadow: 0 25px 60px -10px rgba(0, 0, 0, 0.75), 0 0 35px rgba(34, 197, 94, 0.25); text-align: center; padding: 0; background: var(--bg-card); position: relative;">
+            <!-- Header Banner -->
+            <div style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.18), rgba(16, 185, 129, 0.06)); padding: 26px 24px 18px; border-bottom: 1px solid var(--border-color);">
+                <div style="width: 66px; height: 66px; margin: 0 auto 12px; border-radius: 50%; background: linear-gradient(135deg, #22C55E, #16A34A); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 30px; box-shadow: 0 10px 25px rgba(34, 197, 94, 0.4);">
+                    <i class="fas fa-check"></i>
+                </div>
+                <h2 style="font-size: 22px; font-weight: 800; color: var(--text-primary); margin-bottom: 4px;">User Registration Successful!</h2>
+                <p style="font-size: 13.5px; color: var(--text-secondary); margin: 0;">Your student credentials and profile have been registered in the database.</p>
+            </div>
+
+            <div class="modal-body" style="padding: 22px 24px;">
+                <?php if (!empty($regSummary)): ?>
+                <!-- Summary Details Grid -->
+                <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 14px 16px; margin-bottom: 20px; text-align: left; display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; font-size: 12.5px;">
+                    <div>
+                        <span style="color: var(--text-muted); display: block; font-size: 10.5px; text-transform: uppercase;">Student Name</span>
+                        <strong style="color: var(--text-primary);"><?php echo htmlspecialchars($regSummary['name'] ?? ''); ?></strong>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-muted); display: block; font-size: 10.5px; text-transform: uppercase;">Student ID</span>
+                        <strong style="color: var(--primary);"><?php echo htmlspecialchars($regSummary['student_id'] ?? ''); ?></strong>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-muted); display: block; font-size: 10.5px; text-transform: uppercase;">Department</span>
+                        <span class="badge badge-primary" style="font-weight: 700; background: rgba(37, 99, 235, 0.15); color: var(--primary); padding: 3px 8px; border-radius: 4px;"><?php echo htmlspecialchars($regSummary['department'] ?? 'BCA'); ?></span>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-muted); display: block; font-size: 10.5px; text-transform: uppercase;">Roll Number</span>
+                        <strong style="color: var(--text-primary);"><?php echo htmlspecialchars($regSummary['roll_number'] ?? ''); ?></strong>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-muted); display: block; font-size: 10.5px; text-transform: uppercase;">Current Semester</span>
+                        <span class="badge badge-info">Semester <?php echo htmlspecialchars($regSummary['semester'] ?? '1'); ?></span>
+                    </div>
+                    <div style="grid-column: 1 / -1;">
+                        <span style="color: var(--text-muted); display: block; font-size: 10.5px; text-transform: uppercase;">Email</span>
+                        <span style="color: var(--text-secondary); word-break: break-all;"><?php echo htmlspecialchars($regSummary['email'] ?? ''); ?></span>
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <!-- 15-Second Countdown Display -->
+                <div style="background: rgba(37, 99, 235, 0.08); border: 1.5px dashed var(--primary); border-radius: var(--radius-lg); padding: 16px; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 14px;">
+                        <div style="width: 50px; height: 50px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 800; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35); flex-shrink: 0;">
+                            <span id="popupCountdownNumber" style="font-size: 21px; line-height: 1;">15</span>
+                            <span style="font-size: 8.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">SEC</span>
+                        </div>
+                        <div style="text-align: left;">
+                            <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);">Automatic Portal Redirect</div>
+                            <div style="font-size: 12.5px; color: var(--text-secondary);">Redirecting to student login in <strong id="popupCountdownSec" style="color: var(--primary); font-size: 14px;">15</strong> seconds...</div>
+                        </div>
+                    </div>
+                    <!-- Animated Progress Bar -->
+                    <div style="width: 100%; height: 6px; background: rgba(0,0,0,0.1); border-radius: 3px; margin-top: 12px; overflow: hidden;">
+                        <div id="popupProgressBar" style="width: 100%; height: 100%; background: linear-gradient(90deg, var(--primary), #10B981); transition: width 1s linear;"></div>
+                    </div>
+                </div>
+
+                <!-- Modal Action Buttons -->
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <a href="student/login.php" class="btn btn-primary btn-lg" style="width: 100%; justify-content: center; padding: 11px; font-weight: 700; font-size: 14.5px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-sign-in-alt"></i> Sign In to Student Portal Now
+                    </a>
+                    <button type="button" class="btn btn-outline" onclick="closeSuccessModal()" style="font-size: 12px; padding: 7px;">
+                        <i class="fas fa-pause"></i> Stay on this page (Pause redirect)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
     
     <script>
         function togglePassword(inputId, btn) {

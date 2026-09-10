@@ -43,8 +43,9 @@ if (($user['role_id'] ?? 4) == 1) {
     <div class="navbar-right">
         <!-- Quick AI Access -->
         <?php if (($user['role_id'] ?? 4) == 4): ?>
-        <a href="<?php echo htmlspecialchars(url('/student/ai-assistant.php')); ?>" class="btn btn-outline" style="padding: 6px 14px; font-size: 13px; height: 38px;">
-            <i class="fas fa-robot" style="color: var(--ai-accent);"></i> AI Assistant
+        <a href="<?php echo htmlspecialchars(url('/student/ai-assistant.php')); ?>" class="btn btn-outline" style="padding: 6px 12px; font-size: 13px; height: 38px; display: inline-flex; align-items: center; gap: 6px;" title="AI Assistant">
+            <i class="fas fa-robot" style="color: var(--ai-accent);"></i>
+            <span class="hide-mobile">AI Assistant</span>
         </a>
         <?php endif; ?>
 
@@ -75,7 +76,7 @@ if (($user['role_id'] ?? 4) == 1) {
         <!-- Dedicated Login Button -->
         <a href="<?php echo htmlspecialchars(url('/login.php')); ?>" class="btn btn-primary nav-login-btn" role="button" title="Sign In">
             <i class="fas fa-sign-in-alt"></i>
-            <span>Sign In</span>
+            <span class="hide-mobile">Sign In</span>
         </a>
         <?php endif; ?>
 
