@@ -225,28 +225,10 @@ if ($conn) {
 
 $totalUsers = count($usersList);
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Global Users Master - StudentOS AI</title>
-    <link rel="stylesheet" href="../assets/css/variables.css">
-    <link rel="stylesheet" href="../assets/css/reset.css">
-    <link rel="stylesheet" href="../assets/css/global.css">
-    <link rel="stylesheet" href="../assets/css/components.css">
-    <link rel="stylesheet" href="../assets/css/responsive.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-</head>
-<body>
-    <div class="dashboard-layout">
-        <?php include_once __DIR__ . '/../components/sidebar.php'; ?>
-        
-        <main class="dashboard-main">
-            <?php include_once __DIR__ . '/../components/navbar.php'; ?>
-            
-            <div class="dashboard-content">
+<?php
+$pageTitle = 'Global Users Master - StudentOS AI';
+include_once __DIR__ . '/../components/header.php';
+?>
                 <div class="page-header">
                     <div>
                         <h1>Global User Master & Credential Authority</h1>

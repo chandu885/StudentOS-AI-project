@@ -5,7 +5,8 @@
    ========================================================================== */
 .dashboard-layout {
     display: flex;
-    min-height: 100vh;
+    min-height: calc(100vh - 72px);
+    margin-top: 72px;
     background: var(--bg-primary);
     position: relative;
 }
@@ -17,6 +18,7 @@
     min-width: 0;
     margin-left: 260px;
     width: calc(100% - 260px);
+    min-height: calc(100vh - 72px);
     transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -68,17 +70,17 @@
 .sidebar {
     width: 260px;
     min-width: 260px;
-    height: 100vh;
-    height: 100dvh;
+    height: calc(100vh - 72px);
+    height: calc(100dvh - 72px);
     position: fixed;
-    top: 0;
+    top: 72px;
     left: 0;
     bottom: 0;
     background: var(--bg-secondary);
     border-right: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
-    z-index: var(--z-fixed);
+    z-index: 1000;
     transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
 }
 
@@ -88,16 +90,8 @@
     pointer-events: none;
 }
 
-
 .sidebar-header {
-    height: 72px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 var(--spacing-lg);
-    background: linear-gradient(180deg, #0d1326 0%, #10172d 100%);
-    border-bottom: 1px solid rgba(99, 102, 241, 0.2);
-    flex-shrink: 0;
+    display: none !important;
 }
 
 .sidebar-brand {
@@ -315,15 +309,18 @@
    ========================================================================== */
 .top-navbar {
     height: 72px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
     background: linear-gradient(90deg, #0d1326 0%, #111a33 35%, #181e3d 70%, #1e1b4b 100%);
     border-bottom: 1px solid rgba(99, 102, 241, 0.25);
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 0 var(--spacing-xl);
-    position: sticky;
-    top: 0;
-    z-index: var(--z-sticky);
+    z-index: 1050;
     box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.45), 0 0 15px rgba(99, 102, 241, 0.08);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);

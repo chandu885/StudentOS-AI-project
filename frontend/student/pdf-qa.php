@@ -162,24 +162,12 @@ $docId = isset($_GET['doc_id']) && isset($documents[(int)$_GET['doc_id']]) ? (in
 $activeDoc = $documents[$docId] ?? null;
 $activeDocTitle = $activeDoc['title'] ?? 'Selected Document';
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF Q&A / Document RAG - StudentOS AI</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="../assets/css/variables.css">
-    <link rel="stylesheet" href="../assets/css/reset.css">
-    <link rel="stylesheet" href="../assets/css/global.css">
-    <link rel="stylesheet" href="../assets/css/components.css">
-    <link rel="stylesheet" href="../assets/css/responsive.css">
-    <style>
-    .pdf-upload-box {
+<?php
+$pageTitle = 'PDF Q&A / Document RAG - StudentOS AI';
+include_once __DIR__ . '/../components/header.php';
+?>
+<style>
+.pdf-upload-box {
         border: 2px dashed rgba(66, 133, 244, 0.4);
         background: rgba(66, 133, 244, 0.03);
         border-radius: var(--radius-lg);
@@ -235,16 +223,7 @@ $activeDocTitle = $activeDoc['title'] ?? 'Selected Document';
         border-radius: 10px;
         margin-right: 6px;
     }
-    </style>
-</head>
-<body>
-    <div class="dashboard-layout">
-        <?php include_once __DIR__ . '/../components/sidebar.php'; ?>
-        
-        <main class="dashboard-main">
-            <?php include_once __DIR__ . '/../components/navbar.php'; ?>
-            
-            <div class="dashboard-content">
+</style>
                 <div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 14px;">
                     <div>
                         <h1><i class="fas fa-file-pdf" style="color: #EF4444; margin-right: 8px;"></i> PDF Q&A (Document RAG)</h1>

@@ -80,15 +80,34 @@ elseif ($userRole == 1) {
 ?>
 
 <style>
-/* Fixed Sidebar - Prevents sidebar from scrolling with the dashboard content */
-.sidebar {
+/* Full Top Header Layout - Header covers sidebar, fixed across top */
+.top-navbar {
     position: fixed !important;
     top: 0 !important;
-    left: 0;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    height: 72px !important;
+    z-index: 1050 !important;
+}
+
+.dashboard-layout {
+    margin-top: 72px !important;
+    min-height: calc(100vh - 72px) !important;
+}
+
+.sidebar {
+    position: fixed !important;
+    top: 72px !important;
+    left: 0 !important;
     bottom: 0 !important;
-    height: 100vh !important;
-    height: 100dvh !important;
-    z-index: var(--z-fixed, 1000);
+    height: calc(100vh - 72px) !important;
+    height: calc(100dvh - 72px) !important;
+    z-index: 1000 !important;
+}
+
+.sidebar-header {
+    display: none !important;
 }
 
 @media (min-width: 993px) {
@@ -104,6 +123,7 @@ elseif ($userRole == 1) {
     .dashboard-main {
         margin-left: 260px;
         width: calc(100% - 260px);
+        min-height: calc(100vh - 72px);
         transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
     .sidebar.collapsed ~ .dashboard-main,
@@ -115,6 +135,23 @@ elseif ($userRole == 1) {
 }
 
 @media (max-width: 992px) {
+    .sidebar {
+        top: 72px !important;
+        height: calc(100vh - 72px) !important;
+        height: calc(100dvh - 72px) !important;
+        left: -280px !important;
+        width: 280px !important;
+        z-index: 1060 !important;
+    }
+    .sidebar.open, .sidebar.show {
+        left: 0 !important;
+    }
+    .sidebar-overlay {
+        top: 72px !important;
+        height: calc(100vh - 72px) !important;
+        height: calc(100dvh - 72px) !important;
+        z-index: 1055 !important;
+    }
     .dashboard-main {
         margin-left: 0 !important;
         width: 100% !important;
@@ -123,16 +160,6 @@ elseif ($userRole == 1) {
 </style>
 
 <aside class="sidebar" id="sidebar">
-    <div class="sidebar-header">
-        <a href="<?php echo htmlspecialchars(url(getDashboardUrl())); ?>" class="sidebar-brand" title="BSTUDENTOS Dashboard">
-            <i class="fas fa-graduation-cap"></i>
-            <span>BSTUDENTOS</span>
-        </a>
-        <button class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle Sidebar" aria-label="Toggle Sidebar">
-            <i class="fas fa-bars"></i>
-        </button>
-    </div>
-    
     <nav class="sidebar-nav">
         <ul class="nav-list">
             <?php foreach ($menuItems as $item): ?>

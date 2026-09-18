@@ -157,10 +157,12 @@ button, .btn, a, input, select, textarea {
     .sidebar {
         position: fixed;
         left: -280px;
-        top: 0;
+        top: 72px;
         bottom: 0;
+        height: calc(100vh - 72px);
+        height: calc(100dvh - 72px);
         width: 280px;
-        z-index: var(--z-fixed);
+        z-index: 1060;
         transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         box-shadow: var(--shadow-xl);
     }
@@ -172,11 +174,13 @@ button, .btn, a, input, select, textarea {
     .sidebar-overlay {
         position: fixed;
         inset: 0;
+        top: 72px;
         width: 100vw;
-        height: 100vh;
+        height: calc(100vh - 72px);
+        height: calc(100dvh - 72px);
         background: rgba(0, 0, 0, 0.65);
         backdrop-filter: blur(3px);
-        z-index: calc(var(--z-fixed) - 1);
+        z-index: 1055;
         display: none;
     }
 

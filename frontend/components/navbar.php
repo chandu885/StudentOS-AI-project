@@ -29,6 +29,10 @@ if (($user['role_id'] ?? 4) == 1) {
 ?>
 <header class="top-navbar">
     <div class="navbar-left">
+        <a href="<?php echo htmlspecialchars(url(getDashboardUrl())); ?>" class="sidebar-brand navbar-brand" title="BSTUDENTOS Dashboard" style="margin-right: 16px; display: inline-flex; align-items: center; text-decoration: none;">
+            <i class="fas fa-graduation-cap"></i>
+            <span>BSTUDENTOS</span>
+        </a>
         <button class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle Sidebar" aria-label="Toggle Sidebar">
             <i class="fas fa-bars"></i>
         </button>
