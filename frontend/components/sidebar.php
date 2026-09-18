@@ -79,6 +79,49 @@ elseif ($userRole == 1) {
 }
 ?>
 
+<style>
+/* Fixed Sidebar - Prevents sidebar from scrolling with the dashboard content */
+.sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0;
+    bottom: 0 !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    z-index: var(--z-fixed, 1000);
+}
+
+@media (min-width: 993px) {
+    .sidebar {
+        width: 260px;
+        transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
+    }
+    .sidebar.collapsed {
+        left: -260px !important;
+        opacity: 0;
+        pointer-events: none;
+    }
+    .dashboard-main {
+        margin-left: 260px;
+        width: calc(100% - 260px);
+        transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .sidebar.collapsed ~ .dashboard-main,
+    .sidebar.collapsed + .dashboard-main,
+    .dashboard-layout.sidebar-collapsed .dashboard-main {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+}
+
+@media (max-width: 992px) {
+    .dashboard-main {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+}
+</style>
+
 <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
         <a href="<?php echo htmlspecialchars(url(getDashboardUrl())); ?>" class="sidebar-brand" title="BSTUDENTOS Dashboard">
@@ -120,6 +163,7 @@ elseif ($userRole == 1) {
 function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
     const overlay = document.getElementById('sidebarOverlay');
+    const layout = document.querySelector('.dashboard-layout');
     if (!sidebar) return;
     
     if (window.innerWidth <= 992) {
@@ -130,6 +174,9 @@ function toggleSidebar() {
     } else {
         sidebar.classList.toggle('collapsed');
         const isCollapsed = sidebar.classList.contains('collapsed');
+        if (layout) {
+            layout.classList.toggle('sidebar-collapsed', isCollapsed);
+        }
         try {
             localStorage.setItem('studentos_sidebar_collapsed', isCollapsed ? '1' : '0');
         } catch (e) {}
@@ -146,10 +193,14 @@ function closeSidebar() {
 // Restore sidebar preference on desktop
 document.addEventListener('DOMContentLoaded', function() {
     const sidebar = document.getElementById('sidebar');
+    const layout = document.querySelector('.dashboard-layout');
     if (sidebar && window.innerWidth > 992) {
         try {
             if (localStorage.getItem('studentos_sidebar_collapsed') === '1') {
                 sidebar.classList.add('collapsed');
+                if (layout) {
+                    layout.classList.add('sidebar-collapsed');
+                }
             }
         } catch (e) {}
     }

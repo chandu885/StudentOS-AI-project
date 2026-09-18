@@ -7,6 +7,7 @@
     display: flex;
     min-height: 100vh;
     background: var(--bg-primary);
+    position: relative;
 }
 
 .dashboard-main {
@@ -14,7 +15,16 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
-    transition: all var(--transition-normal);
+    margin-left: 260px;
+    width: calc(100% - 260px);
+    transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar.collapsed ~ .dashboard-main,
+.sidebar.collapsed + .dashboard-main,
+.dashboard-layout.sidebar-collapsed .dashboard-main {
+    margin-left: 0;
+    width: 100%;
 }
 
 .dashboard-content {
@@ -59,18 +69,21 @@
     width: 260px;
     min-width: 260px;
     height: 100vh;
-    position: sticky;
+    height: 100dvh;
+    position: fixed;
     top: 0;
+    left: 0;
+    bottom: 0;
     background: var(--bg-secondary);
     border-right: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
     z-index: var(--z-fixed);
-    transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
 }
 
 .sidebar.collapsed {
-    margin-left: -260px;
+    left: -260px;
     opacity: 0;
     pointer-events: none;
 }
