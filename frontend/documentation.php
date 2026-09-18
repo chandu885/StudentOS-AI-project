@@ -41,8 +41,10 @@ if (!in_array($requestedRole, ['student', 'faculty', 'admin', 'superadmin'])) {
     <link rel="stylesheet" href="assets/css/responsive.css">
     <link rel="stylesheet" href="assets/css/animations.css">
     
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="assets/images/favicon.svg">
+    <link rel="alternate icon" href="assets/images/favicon.ico">
+    <link rel="stylesheet" href="assets/icons/all.min.css">
+    <link rel="stylesheet" href="assets/css/normalize.min.css">
     
     <style>
         .doc-page-header {

@@ -24,6 +24,19 @@ function url($path = '') {
     return $cleanPath;
 }
 
+if (!function_exists('resolveAssetUrl')) {
+    function resolveAssetUrl($path) {
+        if (empty($path)) return '';
+        if (strpos($path, 'http://') === 0 || strpos($path, 'https://') === 0) {
+            return $path;
+        }
+        if (function_exists('url')) {
+            return url($path);
+        }
+        return '../' . ltrim($path, '/');
+    }
+}
+
 function redirect($url) {
     header('Location: ' . url($url));
     exit;

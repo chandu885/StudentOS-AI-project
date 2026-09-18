@@ -1,0 +1,26 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200" width="400" height="200" fill="none">
+  <defs>
+    <linearGradient id="dhGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4F46E5"/>
+      <stop offset="100%" stop-color="#7C3AED"/>
+    </linearGradient>
+    <linearGradient id="dhGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06B6D4" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#3B82F6" stop-opacity="0.1"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="200" rx="16" fill="url(#dhGrad1)"/>
+  <circle cx="350" cy="30" r="90" fill="url(#dhGrad2)"/>
+  <circle cx="50" cy="180" r="80" fill="url(#dhGrad2)"/>
+  <!-- Floating decorative cards -->
+  <g transform="translate(260, 50)" opacity="0.85">
+    <rect width="110" height="60" rx="10" fill="#FFFFFF" fill-opacity="0.15"/>
+    <circle cx="24" cy="24" r="10" fill="#FBBF24"/>
+    <rect x="42" y="16" width="50" height="6" rx="3" fill="#FFFFFF"/>
+    <rect x="42" y="28" width="30" height="4" rx="2" fill="#FFFFFF" fill-opacity="0.7"/>
+    <rect x="14" y="44" width="82" height="4" rx="2" fill="#FFFFFF" fill-opacity="0.4"/>
+  </g>
+  <!-- Sparkles -->
+  <path d="M120 40L123 48L131 51L123 54L120 62L117 54L109 51L117 48Z" fill="#FBBF24"/>
+  <path d="M220 130L222 135L227 137L222 139L220 144L218 139L213 137L218 135Z" fill="#FFFFFF" fill-opacity="0.7"/>
+</svg>

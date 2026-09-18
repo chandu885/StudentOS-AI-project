@@ -135,7 +135,7 @@ if ($db && $userId > 0) {
 ?>
 <?php
 $pageTitle = 'Academic Analytics - StudentOS AI';
-$extraHead = '<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>';
+$extraHead = '<script src="' . htmlspecialchars(resolveAssetUrl('/assets/js/chart.min.js')) . '"></script>';
 include_once __DIR__ . '/../components/header.php';
 ?>
                 <div class="page-header">
