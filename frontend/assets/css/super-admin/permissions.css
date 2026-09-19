@@ -1,0 +1,7 @@
+﻿/**
+ * frontend/assets/css/super-admin/permissions.css
+ * Dedicated stylesheet for frontend/super-admin/permissions.php
+ */
+body.page-super-admin-permissions .perm-matrix-table td {
+    text-align: center;
+}

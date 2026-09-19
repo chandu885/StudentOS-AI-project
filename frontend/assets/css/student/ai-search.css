@@ -1,0 +1,18 @@
+﻿/**
+ * frontend/assets/css/student/ai-search.css
+ * Dedicated stylesheet for frontend/student/ai-search.php
+ */
+body.page-student-ai-search .search-hero-box {
+    padding: 32px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    text-align: center;
+    margin-bottom: 28px;
+}
+body.page-student-ai-search .search-input-lg {
+    height: 48px;
+    font-size: 16px;
+    padding-left: 48px;
+    border-radius: 24px;
+}

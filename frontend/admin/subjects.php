@@ -137,62 +137,7 @@ $assignedFacultyCount = count($facultyAssignedSet);
 $pageTitle = 'Subject & Course Curriculum - StudentOS AI';
 include_once __DIR__ . '/../components/header.php';
 ?>
-<style>
-.type-badge-core {
-            background: rgba(99, 102, 241, 0.15);
-            color: #6366f1;
-            border: 1px solid rgba(99, 102, 241, 0.3);
-            font-size: 11px;
-            font-weight: 600;
-            padding: 2px 7px;
-            border-radius: 4px;
-            text-transform: uppercase;
-        }
-        .type-badge-elective {
-            background: rgba(245, 158, 11, 0.15);
-            color: #f59e0b;
-            border: 1px solid rgba(245, 158, 11, 0.3);
-            font-size: 11px;
-            font-weight: 600;
-            padding: 2px 7px;
-            border-radius: 4px;
-            text-transform: uppercase;
-        }
-        .type-badge-lab {
-            background: rgba(16, 185, 129, 0.15);
-            color: #10b981;
-            border: 1px solid rgba(16, 185, 129, 0.3);
-            font-size: 11px;
-            font-weight: 600;
-            padding: 2px 7px;
-            border-radius: 4px;
-            text-transform: uppercase;
-        }
-        .stat-grid-subjects {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-            gap: 16px;
-            margin-bottom: 24px;
-        }
-        .stat-card-sub {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-lg, 12px);
-            padding: 16px 18px;
-            display: flex;
-            align-items: center;
-            gap: 14px;
-        }
-        .stat-icon-wrap {
-            width: 44px;
-            height: 44px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-        }
-</style>
+
                 <div class="page-header">
                     <div>
                         <h1>Subject & Course Catalog</h1>

@@ -1,0 +1,9 @@
+﻿/**
+ * frontend/assets/css/faculty/notifications.css
+ * Dedicated stylesheet for frontend/faculty/notifications.php
+ */
+body.page-faculty-notifications .notif-feed-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}

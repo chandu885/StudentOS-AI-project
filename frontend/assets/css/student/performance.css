@@ -1,0 +1,17 @@
+﻿/**
+ * frontend/assets/css/student/performance.css
+ * Dedicated stylesheet for frontend/student/performance.php
+ */
+body.page-student-performance .cgpa-hero-banner {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    padding: 32px;
+    text-align: center;
+    margin-bottom: 24px;
+}
+body.page-student-performance .cgpa-number {
+    font-size: 48px;
+    font-weight: 800;
+    color: var(--primary);
+}

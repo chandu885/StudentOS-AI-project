@@ -1,0 +1,23 @@
+﻿/**
+ * frontend/assets/css/admin/exams.css
+ * Dedicated stylesheet for frontend/admin/exams.php
+ */
+body.page-admin-exams .exam-schedule-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 18px;
+    margin-bottom: 16px;
+}
+body.page-admin-exams .exam-status-scheduled {
+    background: rgba(99, 102, 241, 0.15);
+    color: #6366f1;
+}
+body.page-admin-exams .exam-status-ongoing {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+}
+body.page-admin-exams .exam-status-completed {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+}

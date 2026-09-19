@@ -1,0 +1,11 @@
+﻿/**
+ * frontend/assets/css/student/exams.css
+ * Dedicated stylesheet for frontend/student/exams.php
+ */
+body.page-student-exams .exam-hall-ticket-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 22px;
+    margin-bottom: 20px;
+}

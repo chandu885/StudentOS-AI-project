@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // frontend/student/pdf-qa.php - Interactive PDF Upload & RAG Document Q&A
 session_start();
 require_once __DIR__ . '/../includes/config.php';
@@ -85,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         }
 
                         $chunkCount = count($chunks);
-                        $successMsg = "🎉 PDF \"$title\" uploaded successfully and indexed into $chunkCount semantic chunks! You can now ask questions based on it.";
+                        $successMsg = "ðŸŽ‰ PDF \"$title\" uploaded successfully and indexed into $chunkCount semantic chunks! You can now ask questions based on it.";
                         header("Location: pdf-qa.php?doc_id=$newDocId&msg=" . urlencode($successMsg));
                         exit;
                     } else {
@@ -167,430 +167,6 @@ $bodyClass = 'ai-app-screen-mode';
 $pageTitle = 'PDF Q&A / Document RAG - StudentOS AI';
 include_once __DIR__ . '/../components/header.php';
 ?>
-<style>
-/* Viewport lock: eliminate body scroll completely */
-html, body.ai-app-screen-mode {
-    height: 100vh;
-    max-height: 100vh;
-    overflow: hidden !important;
-}
-
-body.ai-app-screen-mode .dashboard-layout {
-    height: calc(100vh - 72px);
-    min-height: calc(100vh - 72px);
-    max-height: calc(100vh - 72px);
-    overflow: hidden !important;
-}
-
-body.ai-app-screen-mode .dashboard-main {
-    height: 100%;
-    max-height: 100%;
-    min-height: 0;
-    overflow: hidden !important;
-    display: flex;
-    flex-direction: column;
-}
-
-body.ai-app-screen-mode .dashboard-content {
-    height: 100%;
-    max-height: 100%;
-    min-height: 0;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    padding: 12px 20px 10px 20px !important;
-    overflow: hidden !important;
-    gap: 10px;
-}
-
-body.ai-app-screen-mode .dashboard-footer {
-    display: none !important;
-}
-
-/* Compact Topbar */
-.pdf-app-topbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 10px;
-    padding: 8px 16px;
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
-    flex-shrink: 0;
-}
-
-.pdf-topbar-left {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    min-width: 0;
-    flex: 1;
-}
-
-.pdf-icon-box {
-    width: 36px;
-    height: 36px;
-    border-radius: 9px;
-    background: rgba(239, 68, 68, 0.12);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 17px;
-    color: #EF4444;
-    border: 1px solid rgba(239, 68, 68, 0.25);
-    flex-shrink: 0;
-}
-
-.pdf-doc-meta {
-    min-width: 0;
-    flex: 1;
-}
-
-.pdf-topbar-title-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    line-height: 1.2;
-}
-
-.pdf-topbar-heading {
-    font-size: 14.5px;
-    font-weight: 700;
-    color: var(--text-primary);
-    margin: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 320px;
-}
-
-.pdf-topbar-sub {
-    font-size: 11px;
-    color: var(--text-muted);
-    margin-top: 2px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
-.doc-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 10.5px;
-    font-weight: 600;
-    padding: 2px 7px;
-    border-radius: 12px;
-    white-space: nowrap;
-}
-
-.pdf-topbar-right {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-}
-
-.pdf-switcher-select {
-    height: 32px;
-    padding: 3px 10px;
-    font-size: 12px;
-    border-radius: 8px;
-    max-width: 200px;
-    border: 1px solid var(--border-color);
-    background: var(--bg-secondary);
-    color: var(--text-primary);
-    cursor: pointer;
-}
-
-.pdf-upload-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    height: 32px;
-    padding: 0 13px;
-    font-size: 12px;
-    font-weight: 600;
-    border-radius: 16px;
-    background: #EF4444;
-    border: 1px solid #EF4444;
-    color: white;
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-.pdf-upload-btn:hover {
-    background: #DC2626;
-    border-color: #DC2626;
-}
-
-.pdf-delete-btn {
-    height: 32px;
-    padding: 0 10px;
-    font-size: 12px;
-    border-radius: 8px;
-    color: var(--danger);
-    border: 1px solid rgba(239, 68, 68, 0.35);
-    background: transparent;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    transition: all 0.15s ease;
-}
-.pdf-delete-btn:hover {
-    background: rgba(239, 68, 68, 0.08);
-}
-
-.pdf-reset-btn {
-    height: 32px;
-    padding: 0 10px;
-    font-size: 11.5px;
-    border-radius: 14px;
-    color: var(--text-muted);
-    border: 1px solid var(--border-color);
-    background: transparent;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    transition: all 0.15s ease;
-}
-.pdf-reset-btn:hover {
-    color: var(--danger);
-    border-color: rgba(239, 68, 68, 0.3);
-    background: rgba(239, 68, 68, 0.06);
-}
-
-/* Quick prompt pills row */
-.pdf-prompts-bar {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    overflow-x: auto;
-    padding-bottom: 2px;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-}
-.pdf-prompts-bar::-webkit-scrollbar {
-    display: none;
-}
-
-.pdf-quick-pill {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary);
-    font-size: 11px;
-    font-weight: 500;
-    padding: 3px 10px;
-    border-radius: 12px;
-    white-space: nowrap;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-}
-.pdf-quick-pill:hover {
-    background: rgba(239, 68, 68, 0.08);
-    border-color: #EF4444;
-    color: #EF4444;
-    transform: translateY(-1px);
-}
-
-/* Alert Banner */
-.pdf-alert-banner {
-    padding: 7px 14px;
-    font-size: 12px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-shrink: 0;
-    border: 1px solid transparent;
-}
-.pdf-alert-banner.alert-success {
-    background: rgba(16, 185, 129, 0.12);
-    border-color: rgba(16, 185, 129, 0.3);
-    color: var(--success);
-}
-.pdf-alert-banner.alert-danger {
-    background: rgba(239, 68, 68, 0.12);
-    border-color: rgba(239, 68, 68, 0.3);
-    color: var(--danger);
-}
-
-/* Chat Box */
-body.ai-app-screen-mode .ai-chat-box {
-    flex: 1 !important;
-    min-height: 0 !important;
-    height: auto !important;
-    display: flex !important;
-    flex-direction: column !important;
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.04);
-    overflow: hidden;
-}
-
-.ai-chat-messages {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    padding: 16px 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    scroll-behavior: smooth;
-}
-
-.ai-chat-messages::-webkit-scrollbar {
-    width: 6px;
-}
-.ai-chat-messages::-webkit-scrollbar-track {
-    background: transparent;
-}
-.ai-chat-messages::-webkit-scrollbar-thumb {
-    background: rgba(150, 150, 150, 0.25);
-    border-radius: 4px;
-}
-.ai-chat-messages::-webkit-scrollbar-thumb:hover {
-    background: rgba(150, 150, 150, 0.45);
-}
-
-/* Input Bar */
-.ai-chat-input-bar {
-    flex-shrink: 0;
-    padding: 10px 18px 8px 18px;
-    background: var(--bg-card);
-    border-top: 1px solid var(--border-color);
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-}
-
-.pdf-input-pill-wrapper {
-    display: flex;
-    align-items: center;
-    background: var(--bg-secondary);
-    border: 1px solid rgba(239, 68, 68, 0.35);
-    border-radius: 28px;
-    padding: 5px 6px 5px 16px;
-    gap: 10px;
-    transition: all 0.2s ease;
-    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.05);
-}
-
-.pdf-input-pill-wrapper:focus-within {
-    border-color: #EF4444;
-    background: var(--bg-card);
-    box-shadow: 0 3px 14px rgba(239, 68, 68, 0.15);
-}
-
-.pdf-input-pill-wrapper input {
-    flex: 1;
-    border: none;
-    background: transparent;
-    font-size: 13.5px;
-    color: var(--text-primary);
-    outline: none;
-    padding: 6px 0;
-}
-
-.pdf-input-pill-wrapper input::placeholder {
-    color: var(--text-muted);
-}
-
-.pdf-send-btn {
-    border: none;
-    background: #EF4444;
-    color: white;
-    padding: 7px 18px;
-    border-radius: 20px;
-    font-size: 12.5px;
-    font-weight: 600;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    cursor: pointer;
-    transition: all 0.18s ease;
-    white-space: nowrap;
-}
-
-.pdf-send-btn:hover {
-    background: #DC2626;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
-}
-
-.pdf-disclaimer-subline {
-    text-align: center;
-    font-size: 11px;
-    color: var(--text-muted);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-.google-doc-overview {
-    background: var(--bg-card) !important;
-    border: 1px solid rgba(239, 68, 68, 0.25) !important;
-    border-radius: 12px !important;
-    padding: 16px 20px !important;
-    box-shadow: 0 4px 16px rgba(239, 68, 68, 0.05);
-    color: var(--text-primary) !important;
-    max-width: 85% !important;
-    line-height: 1.65;
-}
-
-.citation-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 11px;
-    background: rgba(16, 185, 129, 0.1);
-    color: var(--success);
-    border: 1px solid rgba(16, 185, 129, 0.3);
-    padding: 2px 8px;
-    border-radius: 10px;
-    margin-right: 6px;
-}
-
-.pdf-empty-card {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    padding: 30px 20px;
-    text-align: center;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.04);
-}
-
-.pdf-upload-box {
-    border: 2px dashed rgba(66, 133, 244, 0.4);
-    background: rgba(66, 133, 244, 0.03);
-    border-radius: var(--radius-lg);
-    padding: 24px;
-    text-align: center;
-    transition: all 0.2s ease;
-    cursor: pointer;
-}
-.pdf-upload-box:hover, .pdf-upload-box.dragover {
-    border-color: #4285F4;
-    background: rgba(66, 133, 244, 0.08);
-}
-</style>
 
                 <!-- Sleek Document RAG Topbar -->
                 <div class="pdf-app-topbar">
@@ -633,7 +209,7 @@ body.ai-app-screen-mode .ai-chat-box {
                             <select class="pdf-switcher-select" onchange="window.location.href='pdf-qa.php?doc_id=' + this.value" title="Switch active PDF">
                                 <?php foreach ($documents as $d): ?>
                                     <option value="<?php echo $d['id']; ?>" <?php echo $d['id'] === $docId ? 'selected' : ''; ?>>
-                                        <?php echo ($d['user_id'] == $userId ? '👤 ' : '📚 ') . htmlspecialchars($d['title']); ?>
+                                        <?php echo ($d['user_id'] == $userId ? 'ðŸ‘¤ ' : 'ðŸ“š ') . htmlspecialchars($d['title']); ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
@@ -702,7 +278,7 @@ body.ai-app-screen-mode .ai-chat-box {
                                 </button>
                             </div>
                             <div class="pdf-disclaimer-subline">
-                                <span><i class="fas fa-file-pdf" style="color: #EF4444;"></i> <?php echo htmlspecialchars($activeDocTitle); ?></span> • <span>Semantic RAG Indexing</span> • <span>Answers cited directly from document text</span>
+                                <span><i class="fas fa-file-pdf" style="color: #EF4444;"></i> <?php echo htmlspecialchars($activeDocTitle); ?></span> â€¢ <span>Semantic RAG Indexing</span> â€¢ <span>Answers cited directly from document text</span>
                             </div>
                         </div>
                     </div>
@@ -745,7 +321,7 @@ body.ai-app-screen-mode .ai-chat-box {
                     <p style="font-weight: 600; font-size: 14px; margin-bottom: 4px; color: var(--text-primary);" id="uploadPrompt">
                         Click or Drag & Drop PDF file here
                     </p>
-                    <span style="font-size: 12px; color: var(--text-muted);" id="fileSelectedName">Maximum size: 15MB • PDF format only</span>
+                    <span style="font-size: 12px; color: var(--text-muted);" id="fileSelectedName">Maximum size: 15MB â€¢ PDF format only</span>
                     <input type="file" name="pdf_file" id="pdfFileInput" accept="application/pdf,.pdf" style="display: none;" required onchange="handleFileSelected(this)">
                 </div>
 
@@ -803,7 +379,7 @@ body.ai-app-screen-mode .ai-chat-box {
         if (input.files && input.files[0]) {
             const file = input.files[0];
             document.getElementById('uploadPrompt').innerText = 'Selected: ' + file.name;
-            document.getElementById('fileSelectedName').innerText = (file.size / (1024 * 1024)).toFixed(2) + ' MB • Ready to index';
+            document.getElementById('fileSelectedName').innerText = (file.size / (1024 * 1024)).toFixed(2) + ' MB â€¢ Ready to index';
             
             const titleInput = document.getElementById('pdfTitleInput');
             if (!titleInput.value) {
@@ -901,7 +477,7 @@ body.ai-app-screen-mode .ai-chat-box {
         html = html.replace(/\*([^\*]+)\*/g, '<em>$1</em>');
 
         // Bullets
-        html = html.replace(/^[•\-\*]\s+(.*?)$/gm, '<div style="display:flex; gap:8px; margin:4px 0 4px 8px;"><i class="fas fa-check-circle" style="font-size:10px; color:#10B981; margin-top:5px; flex-shrink:0;"></i><span>$1</span></div>');
+        html = html.replace(/^[â€¢\-\*]\s+(.*?)$/gm, '<div style="display:flex; gap:8px; margin:4px 0 4px 8px;"><i class="fas fa-check-circle" style="font-size:10px; color:#10B981; margin-top:5px; flex-shrink:0;"></i><span>$1</span></div>');
 
         // Linebreaks
         html = html.replace(/\n\n/g, '<div style="height:6px;"></div>');
@@ -1018,3 +594,4 @@ body.ai-app-screen-mode .ai-chat-box {
     </script>
 </body>
 </html>
+

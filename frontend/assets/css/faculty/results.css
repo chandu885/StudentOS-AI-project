@@ -1,0 +1,10 @@
+﻿/**
+ * frontend/assets/css/faculty/results.css
+ * Dedicated stylesheet for frontend/faculty/results.php
+ */
+body.page-faculty-results .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}

@@ -1,0 +1,18 @@
+﻿/**
+ * frontend/assets/css/student/notes.css
+ * Dedicated stylesheet for frontend/student/notes.php
+ */
+body.page-student-notes .notes-masonry {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 18px;
+}
+body.page-student-notes .note-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}

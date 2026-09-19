@@ -1,0 +1,16 @@
+﻿/**
+ * frontend/assets/css/student/goals.css
+ * Dedicated stylesheet for frontend/student/goals.php
+ */
+body.page-student-goals .goal-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+}
+body.page-student-goals .goal-progress-circle {
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}

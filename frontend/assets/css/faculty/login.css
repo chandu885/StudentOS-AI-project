@@ -1,0 +1,35 @@
+/**
+ * frontend/assets/css/faculty/login.css
+ * Dedicated stylesheet for frontend/faculty/login.php
+ */
+
+body.page-faculty-login,
+body.auth-page {
+    background-color: var(--bg-primary);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    box-sizing: border-box;
+}
+
+.page-faculty-login .auth-card {
+    border-top: 3px solid #22C55E;
+}
+
+.page-faculty-login .auth-logo i {
+    color: #22C55E;
+}
+
+.auth-badge-faculty {
+    background: rgba(34, 197, 94, 0.12);
+    color: #22C55E;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.auth-role-tab.active.faculty {
+    background: #22C55E;
+    color: #ffffff;
+    font-weight: 600;
+}

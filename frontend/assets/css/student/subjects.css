@@ -1,0 +1,18 @@
+﻿/**
+ * frontend/assets/css/student/subjects.css
+ * Dedicated stylesheet for frontend/student/subjects.php
+ */
+body.page-student-subjects .subject-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+}
+body.page-student-subjects .subject-enrolled-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}

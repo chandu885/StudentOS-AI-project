@@ -1,0 +1,31 @@
+/**
+ * frontend/assets/css/student/login.css
+ * Dedicated stylesheet for frontend/student/login.php
+ */
+
+body.page-student-login,
+body.auth-page {
+    background-color: var(--bg-primary);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    box-sizing: border-box;
+}
+
+.page-student-login .auth-card {
+    border-top: 3px solid var(--primary);
+}
+
+.auth-badge-student {
+    background: rgba(99, 102, 241, 0.12);
+    color: var(--primary);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.auth-role-tab.active.student {
+    background: var(--primary);
+    color: #ffffff;
+    font-weight: 600;
+}

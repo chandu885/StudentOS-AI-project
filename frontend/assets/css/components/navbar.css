@@ -1,0 +1,224 @@
+/**
+ * frontend/assets/css/components/navbar.css
+ * Dedicated stylesheet for frontend/components/navbar.php
+ */
+
+.top-navbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border-color);
+    box-sizing: border-box;
+}
+
+.navbar-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.navbar-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+    text-decoration: none;
+    margin-right: 16px;
+}
+
+.navbar-brand i {
+    color: var(--primary);
+    font-size: 20px;
+}
+
+.sidebar-toggle {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.sidebar-toggle:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.nav-search-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 6px 12px;
+    min-width: 260px;
+}
+
+.nav-search-box .search-icon {
+    color: var(--text-muted);
+    font-size: 14px;
+    margin-right: 8px;
+}
+
+.nav-search-box input {
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: 13px;
+    color: var(--text-primary);
+    width: 100%;
+}
+
+.nav-search-box .shortcut-badge {
+    font-size: 11px;
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 1px 5px;
+    margin-left: 8px;
+}
+
+.navbar-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.nav-action-btn {
+    position: relative;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    width: 38px;
+    height: 38px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    transition: all 0.2s ease;
+}
+
+.nav-action-btn:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.badge-dot {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    width: 8px;
+    height: 8px;
+    background: var(--danger);
+    border-radius: 50%;
+    border: 2px solid var(--bg-card);
+}
+
+.navbar-user-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 4px 10px 4px 6px;
+    cursor: pointer;
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+}
+
+.navbar-user-btn:hover {
+    background: var(--bg-secondary);
+}
+
+.navbar-user-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.navbar-user-info {
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+}
+
+.navbar-user-name {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.navbar-user-role {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.nav-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    min-width: 240px;
+    z-index: 1100;
+    display: none;
+    padding: 8px 0;
+}
+
+.nav-dropdown-menu.show {
+    display: block;
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 13px;
+    transition: all 0.15s ease;
+}
+
+.dropdown-item:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.dropdown-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 6px 0;
+}
+
+@media (max-width: 768px) {
+    .nav-search-box {
+        display: none;
+    }
+    .navbar-user-info {
+        display: none;
+    }
+}

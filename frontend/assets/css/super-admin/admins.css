@@ -1,0 +1,8 @@
+﻿/**
+ * frontend/assets/css/super-admin/admins.css
+ * Dedicated stylesheet for frontend/super-admin/admins.php
+ */
+body.page-super-admin-admins .admin-role-badge-root {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--danger);
+}

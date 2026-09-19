@@ -1,0 +1,36 @@
+/**
+ * frontend/assets/css/super-admin/login.css
+ * Dedicated stylesheet for frontend/super-admin/login.php
+ */
+
+body.page-super-admin-login,
+body.auth-page {
+    background-color: var(--bg-primary);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    box-sizing: border-box;
+}
+
+.page-super-admin-login .auth-card {
+    border-top: 3px solid #EF4444;
+    box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.85), 0 0 36px rgba(239, 68, 68, 0.2);
+}
+
+.page-super-admin-login .auth-logo i {
+    color: #EF4444;
+}
+
+.auth-badge-superadmin {
+    background: rgba(239, 68, 68, 0.12);
+    color: #EF4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.auth-role-tab.active.superadmin {
+    background: #EF4444;
+    color: #ffffff;
+    font-weight: 600;
+}

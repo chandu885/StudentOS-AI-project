@@ -1,0 +1,7 @@
+﻿/**
+ * frontend/assets/css/super-admin/admin-activity.css
+ * Dedicated stylesheet for frontend/super-admin/admin-activity.php
+ */
+body.page-super-admin-admin-activity .activity-log-table td {
+    font-size: 13px;
+}

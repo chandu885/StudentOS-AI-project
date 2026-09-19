@@ -1,0 +1,22 @@
+﻿/**
+ * frontend/assets/css/faculty/subjects.css
+ * Dedicated stylesheet for frontend/faculty/subjects.php
+ */
+body.page-faculty-subjects .subject-card-item {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-bottom: 16px;
+}
+body.page-faculty-subjects .attendance-bar {
+    height: 6px;
+    background: var(--bg-secondary);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 6px;
+}
+body.page-faculty-subjects .attendance-fill {
+    height: 100%;
+    background: var(--success);
+}

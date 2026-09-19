@@ -142,62 +142,7 @@ foreach ($semesters as $s) {
 $pageTitle = 'Academic Terms & Semesters - Super Admin - StudentOS AI';
 include_once __DIR__ . '/../components/header.php';
 ?>
-<style>
-.stat-grid-sems {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-            gap: 16px;
-            margin-bottom: 24px;
-        }
-        .stat-card-sem {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-lg, 12px);
-            padding: 16px 18px;
-            display: flex;
-            align-items: center;
-            gap: 14px;
-        }
-        .stat-icon-wrap {
-            width: 44px;
-            height: 44px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-        }
-        .sem-badge-active {
-            background: rgba(16, 185, 129, 0.15);
-            color: #10b981;
-            border: 1px solid rgba(16, 185, 129, 0.3);
-            font-size: 11px;
-            font-weight: 600;
-            padding: 3px 8px;
-            border-radius: 6px;
-            text-transform: uppercase;
-        }
-        .sem-badge-upcoming {
-            background: rgba(99, 102, 241, 0.15);
-            color: #6366f1;
-            border: 1px solid rgba(99, 102, 241, 0.3);
-            font-size: 11px;
-            font-weight: 600;
-            padding: 3px 8px;
-            border-radius: 6px;
-            text-transform: uppercase;
-        }
-        .sem-badge-completed {
-            background: rgba(148, 163, 184, 0.15);
-            color: #94a3b8;
-            border: 1px solid rgba(148, 163, 184, 0.3);
-            font-size: 11px;
-            font-weight: 600;
-            padding: 3px 8px;
-            border-radius: 6px;
-            text-transform: uppercase;
-        }
-</style>
+
                 <div class="page-header">
                     <div>
                         <h1>Institutional Semesters & Terms</h1>

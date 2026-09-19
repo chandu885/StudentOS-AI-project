@@ -86,8 +86,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="../assets/css/global.css">
     <link rel="stylesheet" href="../assets/css/components.css">
     <link rel="stylesheet" href="../assets/css/responsive.css">
+    <link rel="stylesheet" href="../assets/css/admin/login.css">
 </head>
-<body class="auth-page">
+<body class="auth-page page-admin-login">
     <div class="auth-container">
         <a href="../index.php" class="auth-back-link">
             <i class="fas fa-arrow-left"></i> Back to Home

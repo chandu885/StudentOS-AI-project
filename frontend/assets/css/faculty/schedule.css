@@ -1,0 +1,8 @@
+﻿/**
+ * frontend/assets/css/faculty/schedule.css
+ * Dedicated stylesheet for frontend/faculty/schedule.php
+ */
+body.page-faculty-schedule .timetable-grid-slot {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-color);
+}

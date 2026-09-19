@@ -59,6 +59,7 @@ class Email {
     }
     
     private function getEmailTemplate($title, $greeting, $message, $actionMessage, $actionText, $actionLink, $footer) {
+        $emailCss = file_exists(__DIR__ . '/email.css') ? file_get_contents(__DIR__ . '/email.css') : '';
         return "
         <!DOCTYPE html>
         <html>
@@ -67,15 +68,7 @@ class Email {
             <meta name='viewport' content='width=device-width, initial-scale=1.0'>
             <title>$title</title>
             <style>
-                body { font-family: 'Inter', Arial, sans-serif; background: #0B1020; color: #F8FAFC; margin: 0; padding: 0; }
-                .container { max-width: 600px; margin: 0 auto; padding: 40px 20px; }
-                .card { background: #111827; border-radius: 12px; padding: 40px; border: 1px solid #1F2937; }
-                .header { text-align: center; margin-bottom: 30px; }
-                .header h1 { color: #6366F1; font-size: 24px; }
-                .content { line-height: 1.6; }
-                .button { display: inline-block; background: #6366F1; color: white; padding: 12px 32px; 
-                         border-radius: 8px; text-decoration: none; margin: 20px 0; }
-                .footer { text-align: center; margin-top: 30px; color: #94A3B8; font-size: 14px; }
+                $emailCss
             </style>
         </head>
         <body>

@@ -1,0 +1,9 @@
+﻿/**
+ * frontend/assets/css/super-admin/audit-logs.css
+ * Dedicated stylesheet for frontend/super-admin/audit-logs.php
+ */
+body.page-super-admin-audit-logs .audit-timestamp {
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--text-muted);
+}

@@ -1,0 +1,123 @@
+/**
+ * frontend/assets/css/components/header.css
+ * Dedicated stylesheet for frontend/components/header.php
+ */
+
+/* Universal Header & Dashboard Content Frame */
+.dashboard-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100vh - 72px);
+    background-color: var(--bg-primary);
+    overflow-x: hidden;
+}
+
+.dashboard-content {
+    flex: 1;
+    padding: 24px;
+    width: 100%;
+    max-width: 1600px;
+    margin: 0 auto;
+    box-sizing: border-box;
+}
+
+/* Page Header Banner */
+.page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.page-header h1 {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+    line-height: 1.3;
+}
+
+.page-subtitle {
+    margin: 4px 0 0 0;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+/* Breadcrumb Navigation */
+.breadcrumb-nav {
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.breadcrumb-nav a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: color 0.15s ease;
+}
+
+.breadcrumb-nav a:hover {
+    color: var(--primary);
+}
+
+.breadcrumb-nav .breadcrumb-separator {
+    opacity: 0.5;
+}
+
+.breadcrumb-nav .breadcrumb-current {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+/* Flash Alerts */
+.alert-container-header {
+    margin-bottom: 20px;
+}
+
+.alert-header-success {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(34, 197, 94, 0.15);
+    border: 1px solid var(--success);
+    color: var(--success);
+    padding: 14px 18px;
+    border-radius: var(--radius-md);
+    margin-bottom: 20px;
+}
+
+.alert-header-error {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid var(--danger);
+    color: var(--danger);
+    padding: 14px 18px;
+    border-radius: var(--radius-md);
+    margin-bottom: 20px;
+}
+
+@media (max-width: 768px) {
+    .dashboard-content {
+        padding: 16px;
+    }
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}

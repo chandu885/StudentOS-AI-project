@@ -1,0 +1,22 @@
+﻿/**
+ * frontend/assets/css/admin/assignments.css
+ * Dedicated stylesheet for frontend/admin/assignments.php
+ */
+body.page-admin-assignments .assignments-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+body.page-admin-assignments .assignment-status-chip {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: var(--radius-full);
+    text-transform: uppercase;
+}
+body.page-admin-assignments .assignment-due-urgent {
+    color: var(--danger);
+    font-weight: 600;
+}

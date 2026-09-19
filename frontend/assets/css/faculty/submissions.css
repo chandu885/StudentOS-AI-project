@@ -1,0 +1,8 @@
+﻿/**
+ * frontend/assets/css/faculty/submissions.css
+ * Dedicated stylesheet for frontend/faculty/submissions.php
+ */
+body.page-faculty-submissions .grade-input-box {
+    width: 80px;
+    text-align: center;
+}

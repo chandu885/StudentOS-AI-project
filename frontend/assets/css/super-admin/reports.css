@@ -1,0 +1,9 @@
+﻿/**
+ * frontend/assets/css/super-admin/reports.css
+ * Dedicated stylesheet for frontend/super-admin/reports.php
+ */
+body.page-super-admin-reports .super-report-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 20px;
+}

@@ -1,0 +1,22 @@
+﻿/**
+ * frontend/assets/css/student/attendance.css
+ * Dedicated stylesheet for frontend/student/attendance.php
+ */
+body.page-student-attendance .attendance-overall-gauge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    padding: 24px;
+}
+body.page-student-attendance .attendance-bar {
+    height: 8px;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 6px 0;
+}
+body.page-student-attendance .attendance-fill {
+    height: 100%;
+    transition: width 0.4s ease;
+}

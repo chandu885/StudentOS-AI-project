@@ -1,0 +1,5 @@
+﻿/**
+ * frontend/assets/css/student/ai-summsrizes.css
+ * Alias stylesheet forwarding to ai-summarizer.css
+ */
+@import url('ai-summarizer.css');

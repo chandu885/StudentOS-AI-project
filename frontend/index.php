@@ -119,8 +119,9 @@ if ($loggedIn && $currentUser) {
     <link rel="stylesheet" href="assets/css/components.css">
     <link rel="stylesheet" href="assets/css/responsive.css">
     <link rel="stylesheet" href="assets/css/animations.css">
+    <link rel="stylesheet" href="assets/css/pages/index.css">
 </head>
-<body class="landing-page">
+<body class="landing-page page-landing">
 
     <!-- Public Navigation Bar (No login required) -->
     <header class="landing-header">

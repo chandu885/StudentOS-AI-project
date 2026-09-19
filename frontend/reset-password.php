@@ -96,8 +96,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="assets/css/global.css">
     <link rel="stylesheet" href="assets/css/components.css">
     <link rel="stylesheet" href="assets/css/responsive.css">
+    <link rel="stylesheet" href="assets/css/pages/reset-password.css">
 </head>
-<body class="auth-page">
+<body class="auth-page page-reset-password">
     <div class="auth-container" style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px;">
         <div class="auth-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-xl); padding: 40px; width: 100%; max-width: 440px; box-shadow: var(--shadow-xl);">
             <div class="auth-header" style="text-align: center; margin-bottom: 28px;">

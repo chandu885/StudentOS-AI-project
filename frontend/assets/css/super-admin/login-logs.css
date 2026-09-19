@@ -1,0 +1,9 @@
+﻿/**
+ * frontend/assets/css/super-admin/login-logs.css
+ * Dedicated stylesheet for frontend/super-admin/login-logs.php
+ */
+body.page-super-admin-login-logs .ip-address-chip {
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--text-secondary);
+}

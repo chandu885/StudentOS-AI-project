@@ -1,0 +1,23 @@
+﻿/**
+ * frontend/assets/css/admin/faculty.css
+ * Dedicated stylesheet for frontend/admin/faculty.php
+ */
+body.page-admin-faculty .faculty-avatar-circle {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 14px;
+}
+body.page-admin-faculty .designation-pill {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(99, 102, 241, 0.1);
+    color: var(--primary);
+}

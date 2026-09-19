@@ -1,0 +1,18 @@
+﻿/**
+ * frontend/assets/css/faculty/attendance.css
+ * Dedicated stylesheet for frontend/faculty/attendance.php
+ */
+body.page-faculty-attendance .att-radio-present {
+    accent-color: var(--success);
+}
+body.page-faculty-attendance .att-radio-absent {
+    accent-color: var(--danger);
+}
+body.page-faculty-attendance .batch-attendance-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+}

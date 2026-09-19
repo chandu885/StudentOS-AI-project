@@ -1,0 +1,11 @@
+﻿/**
+ * frontend/assets/css/super-admin/ai-settings.css
+ * Dedicated stylesheet for frontend/super-admin/ai-settings.php
+ */
+body.page-super-admin-ai-settings .ai-config-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    margin-bottom: 24px;
+}

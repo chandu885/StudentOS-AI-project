@@ -1,0 +1,7 @@
+﻿/**
+ * frontend/assets/css/faculty/students.css
+ * Dedicated stylesheet for frontend/faculty/students.php
+ */
+body.page-faculty-students .student-roster-row:hover {
+    background: rgba(255, 255, 255, 0.02);
+}

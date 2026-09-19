@@ -1,0 +1,71 @@
+/**
+ * frontend/assets/css/super-admin/subjects.css
+ * Dedicated stylesheet for frontend/super-admin/subjects.php
+ */
+
+/* Scoped to page-super-admin-subjects to prevent conflicts */
+.page-super-admin-subjects .type-badge-core,
+.type-badge-core {
+    background: rgba(99, 102, 241, 0.15);
+    color: #6366f1;
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.page-super-admin-subjects .type-badge-elective,
+.type-badge-elective {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.page-super-admin-subjects .type-badge-lab,
+.type-badge-lab {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.page-super-admin-subjects .stat-grid-subjects,
+.stat-grid-subjects {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.page-super-admin-subjects .stat-card-sub,
+.stat-card-sub {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg, 12px);
+    padding: 16px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.page-super-admin-subjects .stat-icon-wrap,
+.stat-icon-wrap {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+}

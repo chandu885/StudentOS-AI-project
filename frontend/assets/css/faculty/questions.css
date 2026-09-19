@@ -1,0 +1,14 @@
+﻿/**
+ * frontend/assets/css/faculty/questions.css
+ * Dedicated stylesheet for frontend/faculty/questions.php
+ */
+body.page-faculty-questions .question-bank-item {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 18px;
+    margin-bottom: 14px;
+}
+body.page-faculty-questions .difficulty-pill-easy { color: var(--success); }
+body.page-faculty-questions .difficulty-pill-medium { color: var(--warning); }
+body.page-faculty-questions .difficulty-pill-hard { color: var(--danger); }

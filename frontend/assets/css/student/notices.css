@@ -1,0 +1,11 @@
+﻿/**
+ * frontend/assets/css/student/notices.css
+ * Dedicated stylesheet for frontend/student/notices.php
+ */
+body.page-student-notices .student-notice-item {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 18px;
+    margin-bottom: 14px;
+}

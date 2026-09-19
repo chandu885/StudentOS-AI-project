@@ -1,0 +1,16 @@
+﻿/**
+ * frontend/assets/css/student/calendar.css
+ * Dedicated stylesheet for frontend/student/calendar.php
+ */
+body.page-student-calendar .calendar-month-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+}
+body.page-student-calendar .calendar-day-cell {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    min-height: 90px;
+    padding: 8px;
+}

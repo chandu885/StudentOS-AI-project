@@ -1,0 +1,14 @@
+﻿/**
+ * frontend/assets/css/faculty/marks.css
+ * Dedicated stylesheet for frontend/faculty/marks.php
+ */
+body.page-faculty-marks .marks-entry-table input[type="number"] {
+    max-width: 90px;
+    text-align: center;
+}
+body.page-faculty-marks .marks-summary-bar {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}

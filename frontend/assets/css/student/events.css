@@ -1,0 +1,11 @@
+﻿/**
+ * frontend/assets/css/student/events.css
+ * Dedicated stylesheet for frontend/student/events.php
+ */
+body.page-student-events .event-card-banner {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-bottom: 16px;
+}

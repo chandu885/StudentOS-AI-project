@@ -1,0 +1,27 @@
+﻿/**
+ * frontend/assets/css/faculty/support.css
+ * Dedicated stylesheet for frontend/faculty/support.php
+ */
+body.page-faculty-support .support-quick-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+body.page-faculty-support .support-quick-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    text-align: center;
+}
+body.page-faculty-support .dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.2fr;
+    gap: 24px;
+}
+@media (max-width: 992px) {
+    body.page-faculty-support .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+}

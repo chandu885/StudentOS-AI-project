@@ -1,0 +1,18 @@
+﻿/**
+ * frontend/assets/css/admin/schedules.css
+ * Dedicated stylesheet for frontend/admin/schedules.php
+ */
+body.page-admin-schedules .day-tabs-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+}
+body.page-admin-schedules .schedule-slot-pill {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+}

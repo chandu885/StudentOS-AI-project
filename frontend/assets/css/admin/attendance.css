@@ -1,0 +1,26 @@
+﻿/**
+ * frontend/assets/css/admin/attendance.css
+ * Dedicated stylesheet for frontend/admin/attendance.php
+ */
+body.page-admin-attendance .attendance-matrix {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+body.page-admin-attendance .attendance-rate-bar {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--bg-secondary);
+    overflow: hidden;
+    margin-top: 4px;
+}
+body.page-admin-attendance .attendance-rate-fill {
+    height: 100%;
+    background: var(--success);
+    transition: width 0.3s ease;
+}
+body.page-admin-attendance .stat-grid-att {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}

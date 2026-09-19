@@ -1,0 +1,9 @@
+﻿/**
+ * frontend/assets/css/student/documents.css
+ * Dedicated stylesheet for frontend/student/documents.php
+ */
+body.page-student-documents .doc-vault-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 18px;
+}

@@ -1,0 +1,11 @@
+﻿/**
+ * frontend/assets/css/super-admin/security.css
+ * Dedicated stylesheet for frontend/super-admin/security.php
+ */
+body.page-super-admin-security .security-param-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-bottom: 16px;
+}

@@ -1,0 +1,23 @@
+﻿/**
+ * frontend/assets/css/student/results.css
+ * Dedicated stylesheet for frontend/student/results.php
+ */
+body.page-student-results .results-action-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+body.page-student-results .print-header {
+    display: none;
+}
+@media print {
+    .no-print, .top-navbar, .sidebar, .dashboard-footer {
+        display: none !important;
+    }
+    body.page-student-results .print-header {
+        display: block !important;
+    }
+}

@@ -1,0 +1,24 @@
+﻿/**
+ * frontend/assets/css/admin/students.css
+ * Dedicated stylesheet for frontend/admin/students.php
+ */
+body.page-admin-students .students-filter-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+body.page-admin-students .promotion-chip-opted {
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--success);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 4px;
+}
+body.page-admin-students .student-avatar-cell {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}

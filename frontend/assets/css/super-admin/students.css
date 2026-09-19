@@ -1,0 +1,11 @@
+﻿/**
+ * frontend/assets/css/super-admin/students.css
+ * Dedicated stylesheet for frontend/super-admin/students.php
+ */
+body.page-super-admin-students .students-master-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}

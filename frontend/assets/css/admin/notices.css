@@ -1,0 +1,24 @@
+﻿/**
+ * frontend/assets/css/admin/notices.css
+ * Dedicated stylesheet for frontend/admin/notices.php
+ */
+body.page-admin-notices .notice-item-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-bottom: 16px;
+    transition: border-color 0.2s ease;
+}
+body.page-admin-notices .notice-item-card:hover {
+    border-color: var(--primary);
+}
+body.page-admin-notices .priority-urgent {
+    border-left: 4px solid var(--danger);
+}
+body.page-admin-notices .priority-high {
+    border-left: 4px solid var(--warning);
+}
+body.page-admin-notices .priority-normal {
+    border-left: 4px solid var(--primary);
+}

@@ -1,0 +1,14 @@
+﻿/**
+ * frontend/assets/css/super-admin/support.css
+ * Dedicated stylesheet for frontend/super-admin/support.php
+ */
+body.page-super-admin-support .super-support-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.2fr;
+    gap: 24px;
+}
+@media (max-width: 992px) {
+    body.page-super-admin-support .super-support-grid {
+        grid-template-columns: 1fr;
+    }
+}

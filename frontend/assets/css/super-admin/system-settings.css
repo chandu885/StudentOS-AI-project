@@ -1,0 +1,11 @@
+﻿/**
+ * frontend/assets/css/super-admin/system-settings.css
+ * Dedicated stylesheet for frontend/super-admin/system-settings.php
+ */
+body.page-super-admin-system-settings .settings-form-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    margin-bottom: 20px;
+}

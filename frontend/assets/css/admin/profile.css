@@ -1,0 +1,41 @@
+﻿/**
+ * frontend/assets/css/admin/profile.css
+ * Dedicated stylesheet for frontend/admin/profile.php
+ */
+body.page-admin-profile .profile-grid {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 24px;
+}
+body.page-admin-profile .profile-meta-list {
+    list-style: none;
+    padding: 0;
+    margin: 16px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+body.page-admin-profile .profile-tabs {
+    display: flex;
+    gap: 8px;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 20px;
+}
+body.page-admin-profile .profile-tab-btn {
+    padding: 10px 18px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary);
+    font-weight: 500;
+    cursor: pointer;
+}
+body.page-admin-profile .profile-tab-btn.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+@media (max-width: 860px) {
+    body.page-admin-profile .profile-grid {
+        grid-template-columns: 1fr;
+    }
+}

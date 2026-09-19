@@ -45,88 +45,14 @@ if (!in_array($requestedRole, ['student', 'faculty', 'admin', 'superadmin'])) {
     <link rel="alternate icon" href="assets/images/favicon.ico">
     <link rel="stylesheet" href="assets/icons/all.min.css">
     <link rel="stylesheet" href="assets/css/normalize.min.css">
-    
-    <style>
-        .doc-page-header {
-            position: sticky;
-            top: 0;
-            z-index: var(--z-sticky);
-            background: rgba(15, 23, 42, 0.92);
-            backdrop-filter: blur(12px);
-            border-bottom: 1px solid var(--border-color);
-            padding: 14px 0;
-        }
-        .doc-page-header .container {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 16px;
-        }
-        .doc-brand {
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 19px;
-            font-weight: 800;
-            color: var(--text-primary);
-            text-decoration: none;
-        }
-        .doc-brand i {
-            color: var(--primary);
-            font-size: 22px;
-        }
-        .doc-header-actions {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-        .doc-hero-banner {
-            padding: 50px 0 30px;
-            text-align: center;
-            background: radial-gradient(circle at 50% 10%, rgba(99, 102, 241, 0.14) 0%, transparent 70%);
-            border-bottom: 1px solid var(--border-color);
-        }
-        .doc-hero-banner h1 {
-            font-size: 34px;
-            font-weight: 800;
-            color: #ffffff;
-            margin-bottom: 10px;
-        }
-        .doc-hero-banner p {
-            font-size: 15px;
-            color: var(--text-secondary);
-            max-width: 780px;
-            margin: 0 auto 20px;
-            line-height: 1.6;
-        }
-        .quick-nav-pills {
-            display: flex;
-            justify-content: center;
-            gap: 8px;
-            flex-wrap: wrap;
-            margin-top: 16px;
-        }
-        .quick-nav-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 5px 12px;
-            border-radius: var(--radius-full);
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            font-size: 12px;
-            color: var(--text-secondary);
-            text-decoration: none;
-            transition: all 0.2s ease;
-        }
-        .quick-nav-pill:hover {
-            color: var(--text-primary);
-            border-color: var(--primary);
-        }
-    </style>
+    <link rel="stylesheet" href="assets/css/variables.css">
+    <link rel="stylesheet" href="assets/css/reset.css">
+    <link rel="stylesheet" href="assets/css/global.css">
+    <link rel="stylesheet" href="assets/css/components.css">
+    <link rel="stylesheet" href="assets/css/responsive.css">
+    <link rel="stylesheet" href="assets/css/pages/documentation.css">
 </head>
-<body class="landing-page">
+<body class="landing-page page-documentation">
 
     <!-- Top Navigation Header -->
     <header class="doc-page-header">

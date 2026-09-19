@@ -1,0 +1,13 @@
+﻿/**
+ * frontend/assets/css/admin/support.css
+ * Dedicated stylesheet for frontend/admin/support.php
+ */
+body.page-admin-support .ticket-filter-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+body.page-admin-support .ticket-prio-high { color: var(--danger); font-weight: 600; }
+body.page-admin-support .ticket-prio-med { color: var(--warning); }
+body.page-admin-support .ticket-prio-low { color: var(--text-muted); }

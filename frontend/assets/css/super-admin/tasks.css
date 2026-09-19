@@ -1,0 +1,16 @@
+﻿/**
+ * frontend/assets/css/super-admin/tasks.css
+ * Dedicated stylesheet for frontend/super-admin/tasks.php
+ */
+body.page-super-admin-tasks .admin-options-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 18px;
+    margin-bottom: 28px;
+}
+body.page-super-admin-tasks .admin-option-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 22px;
+}

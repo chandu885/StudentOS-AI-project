@@ -1,0 +1,77 @@
+/**
+ * frontend/assets/css/components/tables.css
+ * Dedicated stylesheet for frontend/components/tables.php
+ */
+
+.table-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.table-search-wrap {
+    position: relative;
+    width: 260px;
+}
+
+.table-search-wrap i {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.table-search-input {
+    padding-left: 34px !important;
+    height: 38px;
+    border-radius: var(--radius-md, 8px);
+    width: 100%;
+}
+
+.table-filter-wrap {
+    display: flex;
+    gap: 8px;
+}
+
+.table-filter-select {
+    width: auto;
+    height: 38px;
+}
+
+.table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.table-standard {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+}
+
+.table-standard th {
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-weight: 600;
+    text-align: left;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+
+.table-standard td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+    vertical-align: middle;
+}
+
+.table-standard tbody tr:hover {
+    background: rgba(255, 255, 255, 0.02);
+}

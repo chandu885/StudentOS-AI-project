@@ -1,0 +1,18 @@
+﻿/**
+ * frontend/assets/css/faculty/assignments.css
+ * Dedicated stylesheet for frontend/faculty/assignments.php
+ */
+body.page-faculty-assignments .assignment-creator-box {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-bottom: 24px;
+}
+body.page-faculty-assignments .submission-count-badge {
+    background: rgba(99, 102, 241, 0.12);
+    color: var(--primary);
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+}

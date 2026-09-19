@@ -29,7 +29,7 @@
  * - $breadcrumbs      : array   - Optional breadcrumb links: [['label' => 'Home', 'url' => '/'], ['label' => 'Current']]
  * - $bodyClass        : string  - Additional CSS classes on <body> tag (default: '')
  * - $extraCss         : array   - Additional stylesheet paths or URLs to include in <head>
- * - $extraStyles      : string  - Raw CSS rules to inject into an inline <style> block
+ * - $extraStyles      : string  - (Deprecated) Custom styling should be placed in dedicated CSS files
  * - $extraHead        : string  - Raw HTML/tags to inject directly before </head>
  * - $openLayout       : bool    - Whether to render <div class="dashboard-layout"> (default: true)
  * - $includeSidebar   : bool    - Whether to include sidebar.php (default: true)
@@ -67,6 +67,69 @@ $pageHeading     = $pageHeading ?? '';
 $pageSubtitle    = $pageSubtitle ?? '';
 $pageActions     = $pageActions ?? '';
 $breadcrumbs     = $breadcrumbs ?? [];
+
+// Determine calling page and portal to scope styles and load dedicated CSS file
+$candidatePaths = [];
+$backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 5);
+foreach ($backtrace as $trace) {
+    if (!empty($trace['file']) && realpath($trace['file']) !== realpath(__FILE__)) {
+        $candidatePaths[] = $trace['file'];
+    }
+}
+if (!empty($_SERVER['SCRIPT_FILENAME'])) {
+    $candidatePaths[] = $_SERVER['SCRIPT_FILENAME'];
+}
+if (!empty($_SERVER['PHP_SELF'])) {
+    $candidatePaths[] = $_SERVER['PHP_SELF'];
+}
+if (!empty($_SERVER['SCRIPT_NAME'])) {
+    $candidatePaths[] = $_SERVER['SCRIPT_NAME'];
+}
+
+$detectedPortal = '';
+$detectedPage = '';
+foreach ($candidatePaths as $candidate) {
+    $normScript = str_replace('\\', '/', $candidate);
+    if (preg_match('#/(?:frontend/)?(admin|faculty|student|super-admin)/([^/]+)\.php$#', $normScript, $m)) {
+        $detectedPortal = $m[1];
+        $detectedPage = $m[2];
+        break;
+    }
+}
+
+// Scoped body class ensures page-level CSS isolation with zero conflicts across files
+if ($detectedPortal && $detectedPage) {
+    $pageClass = "page-{$detectedPortal}-{$detectedPage}";
+    if (strpos($bodyClass, $pageClass) === false) {
+        $bodyClass = trim($bodyClass . ' ' . $pageClass);
+    }
+}
+
+// Ensure component styles are included as separate CSS files
+$coreComponentStyles = [
+    '/assets/css/components/header.css',
+    '/assets/css/components/sidebar.css',
+    '/assets/css/components/navbar.css',
+    '/assets/css/components/footer.css',
+    '/assets/css/components/cards.css',
+    '/assets/css/components/modals.css',
+    '/assets/css/components/tables.css',
+    '/assets/css/components/notifications.css',
+    '/assets/css/components/loading.css'
+];
+foreach ($coreComponentStyles as $compStyle) {
+    if (!in_array($compStyle, $extraCss)) {
+        $extraCss[] = $compStyle;
+    }
+}
+
+// Auto-include dedicated page stylesheet if available
+if ($detectedPortal && $detectedPage && $detectedPortal !== 'components') {
+    $pageCssFile = "/assets/css/{$detectedPortal}/{$detectedPage}.css";
+    if (!in_array($pageCssFile, $extraCss)) {
+        $extraCss[] = $pageCssFile;
+    }
+}
 
 // Helper to resolve asset paths across any folder depth
 if (!function_exists('resolveAssetUrl')) {
@@ -107,17 +170,10 @@ if (!function_exists('resolveAssetUrl')) {
     <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/components.css')); ?>">
     <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/responsive.css')); ?>">
 
-    <!-- Additional Custom CSS files -->
+    <!-- Dedicated Separate Component & Page CSS Files -->
     <?php foreach ($extraCss as $cssHref): ?>
         <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl($cssHref)); ?>">
     <?php endforeach; ?>
-
-    <!-- Page Specific Inline Styles -->
-    <?php if (!empty($extraStyles)): ?>
-        <style>
-            <?php echo $extraStyles; ?>
-        </style>
-    <?php endif; ?>
 
     <!-- Additional Head Injections -->
     <?php if (!empty($extraHead)): ?>

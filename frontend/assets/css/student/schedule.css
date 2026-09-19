@@ -1,0 +1,11 @@
+﻿/**
+ * frontend/assets/css/student/schedule.css
+ * Dedicated stylesheet for frontend/student/schedule.php
+ */
+body.page-student-schedule .student-timetable-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-bottom: 18px;
+}

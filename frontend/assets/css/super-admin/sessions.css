@@ -1,0 +1,11 @@
+﻿/**
+ * frontend/assets/css/super-admin/sessions.css
+ * Dedicated stylesheet for frontend/super-admin/sessions.php
+ */
+body.page-super-admin-sessions .session-active-pill {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 4px;
+}

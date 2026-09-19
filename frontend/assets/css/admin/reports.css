@@ -1,0 +1,16 @@
+﻿/**
+ * frontend/assets/css/admin/reports.css
+ * Dedicated stylesheet for frontend/admin/reports.php
+ */
+body.page-admin-reports .report-metric-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 22px;
+}
+body.page-admin-reports .export-action-btns {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}

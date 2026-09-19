@@ -1,0 +1,5 @@
+﻿/**
+ * frontend/assets/css/student/pfd-qa.css
+ * Alias stylesheet forwarding to pdf-qa.css
+ */
+@import url('pdf-qa.css');

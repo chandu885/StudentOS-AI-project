@@ -1,0 +1,43 @@
+﻿/**
+ * frontend/assets/css/student/profile.css
+ * Dedicated stylesheet for frontend/student/profile.php
+ */
+body.page-student-profile .profile-grid {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 24px;
+}
+body.page-student-profile .profile-avatar-large {
+    width: 84px;
+    height: 84px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    font-weight: 700;
+    margin: 0 auto 16px;
+}
+body.page-student-profile .profile-meta-list {
+    list-style: none;
+    padding: 0;
+    margin: 16px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+body.page-student-profile .profile-meta-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 13px;
+}
+@media (max-width: 860px) {
+    body.page-student-profile .profile-grid {
+        grid-template-columns: 1fr;
+    }
+}
