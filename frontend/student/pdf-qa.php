@@ -625,17 +625,7 @@ body.ai-app-screen-mode .ai-chat-box {
                     </div>
 
                     <?php if (!empty($activeDoc)): ?>
-                        <div class="pdf-prompts-bar">
-                            <button type="button" class="pdf-quick-pill" onclick="fillAndSend('Provide a comprehensive summary of the main points covered in this document.')">
-                                📌 Summary
-                            </button>
-                            <button type="button" class="pdf-quick-pill" onclick="fillAndSend('Extract and define all key terms, definitions, and formulas mentioned in this document.')">
-                                🔍 Key Terms
-                            </button>
-                            <button type="button" class="pdf-quick-pill" onclick="fillAndSend('Generate 5 exam-style practice questions with concise answers based on this PDF.')">
-                                ❓ 5 Practice Questions
-                            </button>
-                        </div>
+
                     <?php endif; ?>
 
                     <div class="pdf-topbar-right">
@@ -706,7 +696,7 @@ body.ai-app-screen-mode .ai-chat-box {
                         <div class="ai-chat-input-bar">
                             <div class="pdf-input-pill-wrapper">
                                 <i class="fas fa-search" style="color: #EF4444; font-size: 14px;"></i>
-                                <input type="text" id="ragInput" placeholder="Ask any question grounded in this PDF (e.g. 'Summarize section 2', 'Define key concepts')..." onkeydown="if(event.key==='Enter') sendRagQuestion()" autofocus>
+                                <input type="text" id="ragInput" placeholder="Ask any question grounded in this PDF..." onkeydown="if(event.key==='Enter') sendRagQuestion()" autofocus>
                                 <button class="pdf-send-btn" id="ragSendBtn" onclick="sendRagQuestion()">
                                     <i class="fas fa-paper-plane"></i> <span>Ask PDF</span>
                                 </button>

@@ -30,20 +30,7 @@ include_once __DIR__ . '/../components/header.php';
                     </div>
 
                     <div class="ai-topbar-right">
-                        <div class="ai-prompts-scroller">
-                            <button type="button" class="ai-quick-pill" onclick="fillAndSend('Explain DBMS Normalization (1NF to BCNF) with simple examples.')">
-                                🔍 Normalization
-                            </button>
-                            <button type="button" class="ai-quick-pill" onclick="fillAndSend('What is the difference between Process and Thread in Operating Systems?')">
-                                ⚙️ Process vs Thread
-                            </button>
-                            <button type="button" class="ai-quick-pill" onclick="fillAndSend('How does Dijkstra\'s Shortest Path algorithm work? Provide step-by-step logic.')">
-                                🧭 Dijkstra Algorithm
-                            </button>
-                            <button type="button" class="ai-quick-pill" onclick="fillAndSend('Give me a high-yield revision strategy for upcoming Midterm exams.')">
-                                📅 7-Day Plan
-                            </button>
-                        </div>
+                        
                         <button type="button" class="ai-reset-btn" onclick="clearChat()" title="Start fresh conversation">
                             <i class="fas fa-redo-alt"></i> <span>Reset</span>
                         </button>
@@ -67,7 +54,7 @@ include_once __DIR__ . '/../components/header.php';
                     <div class="ai-chat-input-bar">
                         <div class="ai-input-pill-wrapper">
                             <i class="fas fa-search" style="color: #4285F4; font-size: 14px;"></i>
-                            <input type="text" id="userInput" placeholder="Ask anything like on Google (e.g. 'Difference between 3NF and BCNF', 'What is Dijkstra algorithm')..." onkeydown="if(event.key==='Enter') sendMessage()" autofocus>
+                            <input type="text" id="userInput" placeholder="Ask anything like on Google ..." onkeydown="if(event.key==='Enter') sendMessage()" autofocus>
                             <button class="ai-send-btn" id="sendBtn" onclick="sendMessage()">
                                 <i class="fas fa-search"></i> <span>Search</span>
                             </button>
