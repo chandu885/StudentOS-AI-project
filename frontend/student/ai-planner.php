@@ -31,13 +31,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $examDate = sanitize($_POST['exam_date'] ?? date('Y-m-d', strtotime('+14 days')));
     $days = (int)($_POST['days'] ?? 14);
 
-    $res = apiCall('/ai.php?path=planner', 'POST', [
-        'subject_id' => $subjectId,
-        'exam_date' => $examDate,
-        'days' => $days
-    ]);
-    if (!empty($res['plan']) || !empty($res['data'])) {
-        $generatedPlan = $res['plan'] ?? $res['data'];
+    // High-speed direct invocation of AIService with Turbo Caching
+    try {
+        require_once BASE_PATH . '/backend/services/AIService.php';
+        $aiService = new AIService();
+        $directRes = $aiService->generateStudyPlan($userId, $subjectId, $examDate, $days);
+        if (!empty($directRes['plan'])) {
+            $generatedPlan = $directRes['plan'];
+        }
+    } catch (Throwable $e) {}
+
+    if (!$generatedPlan) {
+        $res = apiCall('/ai.php?path=planner', 'POST', [
+            'subject_id' => $subjectId,
+            'exam_date' => $examDate,
+            'days' => $days
+        ]);
+        if (!empty($res['plan']) || !empty($res['data'])) {
+            $generatedPlan = $res['plan'] ?? $res['data'];
+        }
     } else {
         // Find subject name
         $subName = 'Core Subject';
@@ -120,7 +132,7 @@ include_once __DIR__ . '/../components/header.php';
                                     <label for="days">Days Until Exam</label>
                                     <input type="number" name="days" id="days" class="form-control" value="14" min="3" max="60">
                                 </div>
-                                <button type="submit" class="btn btn-primary" style="height: 42px; justify-content: center;">
+                                <button type="submit" class="btn btn-primary" style="height: 42px; justify-content: center;" onclick="this.innerHTML='<i class=\'fas fa-spinner fa-spin\'></i> Generating Plan...'; this.style.pointerEvents='none'; this.form.submit();">
                                     <i class="fas fa-magic"></i> Generate Study Plan
                                 </button>
                             </div>

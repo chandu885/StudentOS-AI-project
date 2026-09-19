@@ -14,8 +14,21 @@ $inputText = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $inputText = sanitize($_POST['text'] ?? '');
     if (!empty($inputText)) {
-        $res = apiCall('/ai.php?path=summarize', 'POST', ['text' => $inputText]);
-        $summaryOutput = $res['summary'] ?? $res['result'] ?? null;
+        // High-speed direct invocation of AIService with Turbo Caching
+        try {
+            require_once BASE_PATH . '/backend/services/AIService.php';
+            $aiService = new AIService();
+            $directRes = $aiService->summarizeText($userId, $inputText);
+            if (!empty($directRes['summary'])) {
+                $summaryOutput = $directRes['summary'];
+            }
+        } catch (Throwable $e) {}
+
+        if (!$summaryOutput) {
+            $res = apiCall('/ai.php?path=summarize', 'POST', ['text' => $inputText]);
+            $summaryOutput = $res['summary'] ?? $res['result'] ?? null;
+        }
+
         if (!$summaryOutput) {
             $sentences = preg_split('/(?<=[.?!])\s+/', trim($inputText));
             $cleanSentences = array_filter(array_map('trim', $sentences));
@@ -50,7 +63,7 @@ include_once __DIR__ . '/../components/header.php';
                                 <textarea name="text" class="form-control" rows="8" placeholder="Paste your lecture notes, textbook excerpt, or transcript here..." required><?php echo htmlspecialchars($inputText); ?></textarea>
                             </div>
                             <div style="display: flex; justify-content: flex-end;">
-                                <button type="submit" class="btn btn-primary">
+                                <button type="submit" class="btn btn-primary" onclick="this.innerHTML='<i class=\'fas fa-spinner fa-spin\'></i> Summarizing...'; this.style.pointerEvents='none'; this.form.submit();">
                                     <i class="fas fa-bolt"></i> Generate AI Summary
                                 </button>
                             </div>

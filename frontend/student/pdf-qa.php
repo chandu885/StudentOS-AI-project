@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // frontend/student/pdf-qa.php - Interactive PDF Upload & RAG Document Q&A
 session_start();
 require_once __DIR__ . '/../includes/config.php';
@@ -541,16 +541,16 @@ include_once __DIR__ . '/../components/header.php';
                 ? getAuthHeaders({ 'Content-Type': 'application/json' }) 
                 : { 'Content-Type': 'application/json' };
 
-            let apiUrl = '../../backend/api/ai.php?path=pdf-qa';
+            let apiUrl = '../../backend/api/ai.php?path=pdf-qa&stream=1';
             if (window.location.pathname.toLowerCase().includes('/studentos-ai-project/')) {
-                apiUrl = '/StudentOS-AI-project/backend/api/ai.php?path=pdf-qa';
+                apiUrl = '/StudentOS-AI-project/backend/api/ai.php?path=pdf-qa&stream=1';
             }
 
             const res = await fetch(apiUrl, {
                 method: 'POST',
                 credentials: 'same-origin',
-                headers: headers,
-                body: JSON.stringify({ document_id: currentDocId, question: question })
+                headers: Object.assign({}, headers, { 'Accept': 'text/event-stream, application/json' }),
+                body: JSON.stringify({ document_id: currentDocId, question: question, stream: 1 })
             });
 
             const botBubble = document.getElementById(typingId);
@@ -567,12 +567,46 @@ include_once __DIR__ . '/../components/header.php';
                 return;
             }
 
-            const data = await res.json();
+            const contentType = res.headers.get('content-type') || '';
 
-            if (data && data.answer) {
-                botBubble.querySelector('.ai-bubble').innerHTML = formatRagAnswer(data.answer, data.sources || []);
+            if (contentType.includes('text/event-stream') && res.body) {
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let accumulatedText = '';
+                let streamBuffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    streamBuffer += decoder.decode(value, { stream: true });
+                    const lines = streamBuffer.split('\n');
+                    streamBuffer = lines.pop();
+
+                    for (const line of lines) {
+                        const trimmed = line.trim();
+                        if (trimmed.startsWith('data: ')) {
+                            try {
+                                const parsed = JSON.parse(trimmed.substring(6));
+                                if (parsed.token) {
+                                    accumulatedText += parsed.token;
+                                    botBubble.querySelector('.ai-bubble').innerHTML = formatRagAnswer(accumulatedText, ["Verified Document Content"]);
+                                    container.scrollTop = container.scrollHeight;
+                                }
+                            } catch(e) {}
+                        }
+                    }
+                }
+
+                if (!accumulatedText.trim()) {
+                    botBubble.querySelector('.ai-bubble').innerHTML = 'Unable to retrieve answer for the specified document.';
+                }
             } else {
-                botBubble.querySelector('.ai-bubble').innerHTML = data && data.error ? escapeHTML(data.error) : 'Unable to retrieve answer for the specified document.';
+                const data = await res.json();
+                if (data && data.answer) {
+                    botBubble.querySelector('.ai-bubble').innerHTML = formatRagAnswer(data.answer, data.sources || []);
+                } else {
+                    botBubble.querySelector('.ai-bubble').innerHTML = data && data.error ? escapeHTML(data.error) : 'Unable to retrieve answer for the specified document.';
+                }
             }
         } catch (err) {
             console.error('PDF Q&A Error:', err);

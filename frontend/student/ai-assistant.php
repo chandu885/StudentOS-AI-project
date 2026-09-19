@@ -199,15 +199,16 @@ include_once __DIR__ . '/../components/header.php';
             }
 
             // Dynamically resolve API URL so it works in any directory structure
-            let apiUrl = '../../backend/api/ai.php?path=assistant';
+            let apiUrl = '../../backend/api/ai.php?path=assistant&stream=1';
             if (window.location.pathname.toLowerCase().includes('/studentos-ai-project/')) {
-                apiUrl = '/StudentOS-AI-project/backend/api/ai.php?path=assistant';
+                apiUrl = '/StudentOS-AI-project/backend/api/ai.php?path=assistant&stream=1';
             }
+            payload.stream = 1;
 
             const res = await fetch(apiUrl, {
                 method: 'POST',
                 credentials: 'same-origin',
-                headers: headers,
+                headers: Object.assign({}, headers, { 'Accept': 'text/event-stream, application/json' }),
                 body: JSON.stringify(payload)
             });
 
@@ -225,15 +226,49 @@ include_once __DIR__ . '/../components/header.php';
                 return;
             }
 
-            const data = await res.json();
+            const contentType = res.headers.get('content-type') || '';
 
-            if (data && data.answer) {
-                if (data.conversation_id) activeConversationId = data.conversation_id;
-                botBubble.querySelector('.ai-bubble').innerHTML = formatGoogleAnswer(data.answer);
-            } else if (data && data.error) {
-                botBubble.querySelector('.ai-bubble').innerHTML = `<div style="color: #EA4335;"><i class="fas fa-exclamation-triangle"></i> ${escapeHTML(data.error)}</div>`;
+            if (contentType.includes('text/event-stream') && res.body) {
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let accumulatedText = '';
+                let streamBuffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    streamBuffer += decoder.decode(value, { stream: true });
+                    const lines = streamBuffer.split('\n');
+                    streamBuffer = lines.pop(); // keep last incomplete line
+
+                    for (const line of lines) {
+                        const trimmed = line.trim();
+                        if (trimmed.startsWith('data: ')) {
+                            try {
+                                const parsed = JSON.parse(trimmed.substring(6));
+                                if (parsed.token) {
+                                    accumulatedText += parsed.token;
+                                    botBubble.querySelector('.ai-bubble').innerHTML = formatGoogleAnswer(accumulatedText);
+                                    container.scrollTop = container.scrollHeight;
+                                }
+                            } catch(e) {}
+                        }
+                    }
+                }
+
+                if (!accumulatedText.trim()) {
+                    botBubble.querySelector('.ai-bubble').innerHTML = 'I encountered an issue generating the Google-style overview. Please try rephrasing your search query.';
+                }
             } else {
-                botBubble.querySelector('.ai-bubble').innerHTML = 'I encountered an issue generating the Google-style overview. Please try rephrasing your search query.';
+                const data = await res.json();
+                if (data && data.answer) {
+                    if (data.conversation_id) activeConversationId = data.conversation_id;
+                    botBubble.querySelector('.ai-bubble').innerHTML = formatGoogleAnswer(data.answer);
+                } else if (data && data.error) {
+                    botBubble.querySelector('.ai-bubble').innerHTML = `<div style="color: #EA4335;"><i class="fas fa-exclamation-triangle"></i> ${escapeHTML(data.error)}</div>`;
+                } else {
+                    botBubble.querySelector('.ai-bubble').innerHTML = 'I encountered an issue generating the Google-style overview. Please try rephrasing your search query.';
+                }
             }
         } catch (err) {
             console.error('AI Assistant Error:', err);

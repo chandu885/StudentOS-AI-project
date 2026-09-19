@@ -17,25 +17,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $count = (int)($_POST['count'] ?? 5);
     $difficulty = sanitize($_POST['difficulty'] ?? 'medium');
 
-    $res = apiCall('/ai.php?path=quiz', 'POST', [
-        'subject_id' => 1,
-        'topic' => $topic,
-        'count' => $count,
-        'difficulty' => $difficulty
-    ]);
+    // High-speed direct invocation of AIService with Turbo Caching
+    try {
+        require_once BASE_PATH . '/backend/services/AIService.php';
+        $aiService = new AIService();
+        $directRes = $aiService->generateQuiz($userId, 1, $topic, $count, $difficulty);
+        if (!empty($directRes['questions'])) {
+            $quizQuestions = $directRes['questions'];
+        }
+    } catch (Throwable $e) {}
 
-    if (!empty($res['questions'])) {
-        $quizQuestions = $res['questions'];
-    } else {
-        // Direct invocation of AIService to retrieve questions directly from the Gemini API
-        try {
-            require_once BASE_PATH . '/backend/services/AIService.php';
-            $aiService = new AIService();
-            $directRes = $aiService->generateQuiz($userId, 1, $topic, $count, $difficulty);
-            if (!empty($directRes['questions'])) {
-                $quizQuestions = $directRes['questions'];
-            }
-        } catch (Throwable $e) {}
+    if (empty($quizQuestions)) {
+        $res = apiCall('/ai.php?path=quiz', 'POST', [
+            'subject_id' => 1,
+            'topic' => $topic,
+            'count' => $count,
+            'difficulty' => $difficulty
+        ]);
+        if (!empty($res['questions'])) {
+            $quizQuestions = $res['questions'];
+        }
     }
 
     // If still empty, check previous dynamically generated questions in DB
@@ -97,7 +98,7 @@ include_once __DIR__ . '/../components/header.php';
                                         <option value="10">10 Questions</option>
                                     </select>
                                 </div>
-                                <button type="submit" class="btn btn-primary" style="height: 42px; justify-content: center;">
+                                <button type="submit" class="btn btn-primary" id="quizGenBtn" style="height: 42px; justify-content: center;" onclick="this.innerHTML='<i class=\'fas fa-spinner fa-spin\'></i> Generating...'; this.style.pointerEvents='none'; this.form.submit();">
                                     <i class="fas fa-bolt"></i> Generate Quiz
                                 </button>
                             </div>

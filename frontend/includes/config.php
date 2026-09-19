@@ -96,9 +96,19 @@ function apiCall($endpoint, $method = 'GET', $data = null) {
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'DELETE');
     }
     
+    // Prevent Apache thread deadlock on Windows when calling localhost API while session is open
+    $sessionWasActive = (session_status() === PHP_SESSION_ACTIVE);
+    if ($sessionWasActive) {
+        session_write_close();
+    }
+
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
+
+    if ($sessionWasActive && session_status() !== PHP_SESSION_ACTIVE) {
+        @session_start();
+    }
     
     $result = json_decode($response, true);
     

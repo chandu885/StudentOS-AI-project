@@ -22,7 +22,7 @@ class AIService {
     private $projectName;
     private $projectNumber;
     private $modelName;
-    private $lastProviderUsed = 'Google Gemini 3.6 Flash';
+    private $lastProviderUsed = 'Google Gemini 3.5 Flash Lite';
     private $lastError = null;
 
     public function __construct() {
@@ -36,7 +36,7 @@ class AIService {
         
         // Configured AI Key settings with defaults specified by the user
         $this->apiKey = $config->get('gemini_api_key', '');
-        $this->modelName = $config->get('gemini_model', 'gemini-3.6-flash');
+        $this->modelName = $config->get('gemini_model', 'gemini-3.5-flash-lite');
         $this->keyName = $config->get('gemini_key_name', 'chandan');
         $this->projectName = $config->get('gemini_project_name', 'project/406491916720');
         $this->projectNumber = $config->get('gemini_project_number', '406491916720');
@@ -82,10 +82,10 @@ class AIService {
         $m = trim($model ?? '');
         $deprecated = [
             'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash', 
-            'gemini-2.5-flash', 'gemini-pro', 'gemini-flash', 'gemini-1.0-pro'
+            'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-pro', 'gemini-flash', 'gemini-1.0-pro'
         ];
         if (empty($m) || in_array(strtolower($m), $deprecated)) {
-            return 'gemini-3.6-flash';
+            return 'gemini-3.5-flash-lite';
         }
         return $m;
     }
@@ -554,7 +554,7 @@ class AIService {
     }
 
     /**
-     * Dedicated Google Gemini API caller
+     * Dedicated Google Gemini API caller with Turbo Caching & Model Cascading
      * Uses Generative Language API with configured API Key, Project Number, and Model
      */
     public function callGeminiApi($systemInstruction, $userPrompt, $customApiKey = null, $forceJson = false) {
@@ -567,14 +567,25 @@ class AIService {
             return null;
         }
 
-        $model = $this->modelName ?: 'gemini-3.6-flash';
-        $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent";
+        // 1. Check Turbo Cache (1-2ms instant response for identical/repeated requests)
+        $promptHash = hash('sha256', ($systemInstruction ?? '') . '|||' . $userPrompt . '|||' . ($forceJson ? 'json' : 'text'));
+        if ($this->aiModel) {
+            $cached = $this->aiModel->getCachedResponse($promptHash, $this->modelName);
+            if (!empty($cached)) {
+                $this->lastProviderUsed = "StudentOS AI Turbo Cache (Local In-Memory / DB)";
+                return $cached;
+            }
+        }
+
+        // 2. Cascade Models: Try primary model first, fallback to fastest available
+        $primaryModel = $this->modelName ?: 'gemini-3.5-flash-lite';
+        $fallbackModels = [$primaryModel, 'gemini-flash-lite-latest', 'gemini-3.6-flash'];
+        $candidateModels = array_values(array_unique(array_filter($fallbackModels)));
 
         $genConfig = [
             'temperature' => 0.7,
             'maxOutputTokens' => 4096
         ];
-
         if ($forceJson) {
             $genConfig['responseMimeType'] = 'application/json';
         }
@@ -595,34 +606,43 @@ class AIService {
             ];
         }
 
-        // Pass authentication via standard x-goog-api-key header (fully compatible with AQ. and AIza keys)
         $headers = [
             'Content-Type: application/json',
             'x-goog-api-key: ' . $activeKey
         ];
-
-        // Include Google Cloud Project attribution if configured
         if (!empty($this->projectNumber)) {
             $headers[] = 'X-Goog-User-Project: ' . $this->projectNumber;
         }
 
-        $response = $this->httpPostJson($url, $payload, $headers, 30);
-        if (!empty($response)) {
-            $data = json_decode($response, true);
-            if (isset($data['candidates'][0]['content']['parts'])) {
-                $text = '';
-                foreach ($data['candidates'][0]['content']['parts'] as $part) {
-                    if (isset($part['text']) && empty($part['thought'])) {
-                        $text .= $part['text'];
-                    }
-                }
-                if (empty($text) && isset($data['candidates'][0]['content']['parts'][0]['text'])) {
-                    $text = $data['candidates'][0]['content']['parts'][0]['text'];
-                }
+        foreach ($candidateModels as $modelToTry) {
+            $url = "https://generativelanguage.googleapis.com/v1beta/models/{$modelToTry}:generateContent";
+            $response = $this->httpPostJson($url, $payload, $headers, 20);
 
-                if (!empty($text)) {
-                    $this->lastProviderUsed = "Google Gemini ({$model}) (Live)";
-                    return $text;
+            if (!empty($response)) {
+                $data = json_decode($response, true);
+                if (isset($data['candidates'][0]['content']['parts'])) {
+                    $text = '';
+                    foreach ($data['candidates'][0]['content']['parts'] as $part) {
+                        if (isset($part['text']) && empty($part['thought'])) {
+                            $text .= $part['text'];
+                        }
+                    }
+                    if (empty($text) && isset($data['candidates'][0]['content']['parts'][0]['text'])) {
+                        $text = $data['candidates'][0]['content']['parts'][0]['text'];
+                    }
+
+                    if (!empty($text)) {
+                        $this->lastProviderUsed = "Google Gemini ({$modelToTry}) (Live)";
+                        $this->lastError = null;
+
+                        // Save to Turbo Cache (TTL: 3 days for static answers, 7 days for JSON quizzes)
+                        if ($this->aiModel) {
+                            $ttl = $forceJson ? 86400 * 7 : 86400 * 3;
+                            $this->aiModel->setCachedResponse($promptHash, $modelToTry, ($forceJson ? 'json' : 'text'), $userPrompt, $text, $ttl);
+                        }
+
+                        return $text;
+                    }
                 }
             }
         }
@@ -631,9 +651,247 @@ class AIService {
     }
 
     /**
-     * HTTP POST JSON with cURL
+     * Dedicated Google Gemini Streaming API caller
+     * Streams tokens incrementally in real-time via Server-Sent Events callback
      */
-    private function httpPostJson($url, $payload, $customHeaders = [], $timeout = 30) {
+    public function streamGeminiApi($systemInstruction, $userPrompt, $customApiKey = null, callable $onChunk = null) {
+        $activeKey = !empty($customApiKey) ? trim($customApiKey) : $this->apiKey;
+        if (empty($activeKey) && session_status() === PHP_SESSION_ACTIVE && !empty($_SESSION['ai_api_key'])) {
+            $activeKey = trim($_SESSION['ai_api_key']);
+        }
+        if (empty($activeKey)) {
+            return null;
+        }
+
+        // Check Turbo Cache first
+        $promptHash = hash('sha256', ($systemInstruction ?? '') . '|||' . $userPrompt . '|||stream');
+        if ($this->aiModel) {
+            $cached = $this->aiModel->getCachedResponse($promptHash, $this->modelName);
+            if (!empty($cached)) {
+                if ($onChunk) {
+                    $onChunk($cached, false);
+                    $onChunk('', true);
+                }
+                $this->lastProviderUsed = "StudentOS AI Turbo Cache (Local In-Memory / DB)";
+                return $cached;
+            }
+        }
+
+        $primaryModel = $this->modelName ?: 'gemini-3.5-flash-lite';
+        $fallbackModels = [$primaryModel, 'gemini-flash-lite-latest', 'gemini-3.6-flash'];
+        $candidateModels = array_values(array_unique(array_filter($fallbackModels)));
+
+        $payload = [
+            'contents' => [
+                [
+                    'role' => 'user',
+                    'parts' => [['text' => $userPrompt]]
+                ]
+            ],
+            'generationConfig' => [
+                'temperature' => 0.7,
+                'maxOutputTokens' => 4096
+            ]
+        ];
+        if (!empty($systemInstruction)) {
+            $payload['systemInstruction'] = [
+                'parts' => [['text' => $systemInstruction]]
+            ];
+        }
+
+        $headers = [
+            'Content-Type: application/json',
+            'x-goog-api-key: ' . $activeKey
+        ];
+        if (!empty($this->projectNumber)) {
+            $headers[] = 'X-Goog-User-Project: ' . $this->projectNumber;
+        }
+        $jsonPayload = json_encode($payload);
+
+        foreach ($candidateModels as $modelToTry) {
+            $url = "https://generativelanguage.googleapis.com/v1beta/models/{$modelToTry}:streamGenerateContent?alt=sse";
+            $fullResponseText = '';
+            $buffer = '';
+
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonPayload);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_TCP_NODELAY, true);
+            curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+
+            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($ch, $chunk) use (&$buffer, &$fullResponseText, $onChunk) {
+                $buffer .= $chunk;
+                while (($pos = strpos($buffer, "\n")) !== false) {
+                    $line = trim(substr($buffer, 0, $pos));
+                    $buffer = substr($buffer, $pos + 1);
+                    if (strpos($line, 'data: ') === 0) {
+                        $jsonStr = substr($line, 6);
+                        $data = json_decode($jsonStr, true);
+                        if (!empty($data['candidates'][0]['content']['parts'])) {
+                            foreach ($data['candidates'][0]['content']['parts'] as $p) {
+                                if (isset($p['text']) && empty($p['thought'])) {
+                                    $token = $p['text'];
+                                    $fullResponseText .= $token;
+                                    if ($onChunk) {
+                                        $onChunk($token, false);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                return strlen($chunk);
+            });
+
+            curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlErr = curl_error($ch);
+            curl_close($ch);
+
+            // Handle any residual lines in buffer
+            if (!empty($buffer)) {
+                $line = trim($buffer);
+                if (strpos($line, 'data: ') === 0) {
+                    $jsonStr = substr($line, 6);
+                    $data = json_decode($jsonStr, true);
+                    if (!empty($data['candidates'][0]['content']['parts'])) {
+                        foreach ($data['candidates'][0]['content']['parts'] as $p) {
+                            if (isset($p['text']) && empty($p['thought'])) {
+                                $token = $p['text'];
+                                $fullResponseText .= $token;
+                                if ($onChunk) {
+                                    $onChunk($token, false);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if ($httpCode === 200 && !empty($fullResponseText)) {
+                $this->lastProviderUsed = "Google Gemini ({$modelToTry}) (Stream Live)";
+                $this->lastError = null;
+
+                if ($onChunk) {
+                    $onChunk('', true);
+                }
+
+                // Cache completed response
+                if ($this->aiModel) {
+                    $this->aiModel->setCachedResponse($promptHash, $modelToTry, 'stream', $userPrompt, $fullResponseText, 86400 * 3);
+                }
+                return $fullResponseText;
+            }
+
+            $this->lastError = "HTTP $httpCode on $modelToTry: " . ($curlErr ?: 'Model busy or error');
+        }
+
+        if ($onChunk) {
+            $onChunk('', true);
+        }
+        return null;
+    }
+
+    /**
+     * Stream Academic Assistant tokens in real-time
+     */
+    public function streamAssistant($userId, $question, $conversationId = null, $customApiKey = null, callable $onChunk = null) {
+        if (!$conversationId) {
+            $title = mb_substr($question, 0, 45) . '...';
+            $conversationId = $this->aiModel->createConversation($userId, $title, 'assistant');
+        }
+
+        // Record user message
+        $this->aiModel->addMessage($conversationId, 'user', $question);
+
+        $context = $this->buildStudentContext($userId);
+        $systemPrompt = "You are StudentOS AI, an intelligent Google-style academic search and tutoring assistant.\n"
+                      . "Tone: Clear, structured, authoritative, concise, and helpful like Google Search AI Overviews and Featured Snippets.\n"
+                      . "Formatting Guidelines:\n"
+                      . "1. **Direct Answer / Overview**: Start immediately with a succinct 1-2 sentence direct answer/definition that gives the student the core answer upfront.\n"
+                      . "2. **Key Highlights**: Use clear, readable bullet points with **bold terms** explaining the primary concepts, mechanisms, or steps.\n"
+                      . "3. **Knowledge Card / Practical Example**: Provide a real-world example, comparison table, or key formula if applicable.\n"
+                      . "4. **Code / Math (if relevant)**: Provide clean, tested code blocks with language identifiers or explicit mathematical notation.\n"
+                      . "5. **People Also Ask**: Conclude with 2-3 related follow-up questions students frequently ask about this subject (format each as a bullet starting with '• ').\n\n"
+                      . "Context about this student:\n" . $context . "\n\n"
+                      . "If asked about classes, schedules, or exams, use the provided student context.";
+
+        $answer = $this->streamGeminiApi($systemPrompt, $question, $customApiKey, $onChunk);
+
+        if (empty($answer)) {
+            $errDetail = !empty($this->lastError) ? " ({$this->lastError})" : "";
+            $answer = "Unable to connect to Google Gemini API. Please ensure your API key has active Generative Language API permissions.{$errDetail}";
+            if ($onChunk) {
+                $onChunk($answer, false);
+                $onChunk('', true);
+            }
+        }
+
+        // Record assistant response in database
+        $this->aiModel->addMessage($conversationId, 'assistant', $answer);
+        $this->aiModel->recordUsage($userId, 'assistant', strlen($question)/4, strlen($answer)/4, $this->modelName);
+
+        return [
+            'success' => true,
+            'conversation_id' => $conversationId,
+            'answer' => $answer,
+            'provider' => $this->lastProviderUsed,
+            'model' => $this->modelName
+        ];
+    }
+
+    /**
+     * Stream Document RAG / PDF Q&A tokens in real-time
+     */
+    public function streamDocument($userId, $documentId, $question, $customApiKey = null, callable $onChunk = null) {
+        $words = preg_split('/[^\w]+/', strtolower($question), -1, PREG_SPLIT_NO_EMPTY);
+        $chunks = $this->aiModel->searchChunks($documentId, $words);
+
+        $chunkContext = "";
+        $sources = [];
+        foreach ($chunks as $c) {
+            $chunkContext .= "--- Section #" . $c['chunk_index'] . " ---\n" . $c['chunk_text'] . "\n\n";
+            $sources[] = "Section #" . $c['chunk_index'];
+        }
+
+        if (empty($chunkContext)) {
+            $chunkContext = "Document excerpts currently not indexed or no direct keyword match found.";
+        }
+
+        $prompt = "You are StudentOS AI Document Q&A assistant (RAG).\n"
+                . "Based on the following excerpts from the student's document, provide a structured, Google-style answer to the question.\n"
+                . "DOCUMENT EXCERPTS:\n" . $chunkContext . "\n\n"
+                . "QUESTION:\n" . $question;
+
+        $answer = $this->streamGeminiApi("You are an academic document Q&A tutor providing Google-style structured summaries.", $prompt, $customApiKey, $onChunk);
+
+        if (empty($answer)) {
+            $answer = "Unable to retrieve document answers at this moment. Please check your network connection.";
+            if ($onChunk) {
+                $onChunk($answer, false);
+                $onChunk('', true);
+            }
+        }
+
+        $this->aiModel->recordUsage($userId, 'pdf_qa', strlen($prompt)/4, strlen($answer)/4, $this->modelName);
+
+        return [
+            'success' => true,
+            'answer' => $answer,
+            'sources' => $sources,
+            'provider' => $this->lastProviderUsed
+        ];
+    }
+
+    /**
+     * HTTP POST JSON with optimized cURL keep-alive and connection settings
+     */
+    private function httpPostJson($url, $payload, $customHeaders = [], $timeout = 25) {
         $json = is_string($payload) ? $payload : json_encode($payload);
         $headers = array_merge(['Content-Type: application/json'], $customHeaders);
 
@@ -644,8 +902,11 @@ class AIService {
             curl_setopt($ch, CURLOPT_POSTFIELDS, $json);
             curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
             curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_TCP_NODELAY, true);
+            curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+            curl_setopt($ch, CURLOPT_ENCODING, '');
 
             $response = curl_exec($ch);
             $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);

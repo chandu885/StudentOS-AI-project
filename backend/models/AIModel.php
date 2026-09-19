@@ -26,7 +26,7 @@ class AIModel {
         $config = Config::getInstance();
         $defaults = [
             'gemini_api_key' => $config->get('gemini_api_key', ''),
-            'default_model' => $config->get('gemini_model', 'gemini-3.6-flash'),
+            'default_model' => $config->get('gemini_model', 'gemini-3.5-flash-lite'),
             'gemini_key_name' => $config->get('gemini_key_name', 'chandan'),
             'gemini_project_name' => $config->get('gemini_project_name', 'project/406491916720'),
             'gemini_project_number' => $config->get('gemini_project_number', '406491916720'),
@@ -408,13 +408,60 @@ class AIModel {
         } catch (Throwable $e) {}
     }
 
+    /**
+     * High-Speed Semantic / Fulltext Search for RAG
+     */
     public function searchChunks($documentId, $queryWords) {
         if (empty($queryWords)) return [];
-        try {
-            $likes = [];
-            $params = [(int)$documentId];
-            $types = "i";
+        $did = (int)$documentId;
+        if ($did <= 0) return [];
 
+        try {
+            // 1. Try FULLTEXT Natural Language / Boolean Search
+            $cleanWords = array_values(array_filter(array_map('trim', $queryWords), function($w) {
+                return strlen($w) >= 3;
+            }));
+
+            if (!empty($cleanWords)) {
+                $booleanQuery = '+' . implode(' +', array_slice($cleanWords, 0, 8));
+                $stmt = $this->db->prepare(
+                    "SELECT id, chunk_index, chunk_text, MATCH(chunk_text) AGAINST (? IN BOOLEAN MODE) AS score 
+                     FROM document_chunks 
+                     WHERE document_id = ? AND MATCH(chunk_text) AGAINST (? IN BOOLEAN MODE) 
+                     ORDER BY score DESC LIMIT 5"
+                );
+                if ($stmt) {
+                    $stmt->bind_param("sis", $booleanQuery, $did, $booleanQuery);
+                    $stmt->execute();
+                    $res = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+                    $stmt->close();
+                    if (!empty($res)) {
+                        return $res;
+                    }
+                }
+
+                $naturalQuery = implode(' ', array_slice($cleanWords, 0, 10));
+                $stmt = $this->db->prepare(
+                    "SELECT id, chunk_index, chunk_text, MATCH(chunk_text) AGAINST (?) AS score 
+                     FROM document_chunks 
+                     WHERE document_id = ? AND MATCH(chunk_text) AGAINST (?) 
+                     ORDER BY score DESC LIMIT 5"
+                );
+                if ($stmt) {
+                    $stmt->bind_param("sis", $naturalQuery, $did, $naturalQuery);
+                    $stmt->execute();
+                    $res = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+                    $stmt->close();
+                    if (!empty($res)) {
+                        return $res;
+                    }
+                }
+            }
+
+            // 2. Keyword LIKE search fallback if fulltext had no hits
+            $likes = [];
+            $params = [$did];
+            $types = "i";
             foreach ($queryWords as $w) {
                 if (strlen($w) > 2) {
                     $likes[] = "chunk_text LIKE ?";
@@ -422,29 +469,98 @@ class AIModel {
                     $types .= "s";
                 }
             }
-            if (empty($likes)) {
-                $stmt = $this->db->prepare("SELECT * FROM document_chunks WHERE document_id = ? LIMIT 5");
+
+            if (!empty($likes)) {
+                $sql = "SELECT id, chunk_index, chunk_text FROM document_chunks WHERE document_id = ? AND (" . implode(" OR ", $likes) . ") LIMIT 5";
+                $stmt = $this->db->prepare($sql);
                 if ($stmt) {
-                    $did = (int)$documentId;
-                    $stmt->bind_param("i", $did);
+                    $stmt->bind_param($types, ...$params);
                     $stmt->execute();
                     $res = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
                     $stmt->close();
-                    return $res;
+                    if (!empty($res)) {
+                        return $res;
+                    }
                 }
-                return [];
             }
 
-            $sql = "SELECT * FROM document_chunks WHERE document_id = ? AND (" . implode(" OR ", $likes) . ") LIMIT 5";
-            $stmt = $this->db->prepare($sql);
+            // 3. Fallback to first 5 chunks of the document
+            $stmt = $this->db->prepare("SELECT id, chunk_index, chunk_text FROM document_chunks WHERE document_id = ? ORDER BY chunk_index ASC LIMIT 5");
             if ($stmt) {
-                $stmt->bind_param($types, ...$params);
+                $stmt->bind_param("i", $did);
                 $stmt->execute();
                 $res = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
                 $stmt->close();
                 return $res;
             }
-        } catch (Throwable $e) {}
+        } catch (Throwable $e) {
+            error_log("searchChunks error: " . $e->getMessage());
+        }
         return [];
     }
+
+    // ------------------------------------------------------------------------
+    // AI Cache Layer (Sub-millisecond query responses)
+    // ------------------------------------------------------------------------
+
+    /**
+     * Get cached response by prompt hash and model
+     */
+    public function getCachedResponse($promptHash, $model) {
+        if (empty($promptHash) || empty($model)) return null;
+        try {
+            $stmt = $this->db->prepare(
+                "SELECT response_text FROM ai_cache 
+                 WHERE prompt_hash = ? AND model = ? AND expires_at > NOW() 
+                 LIMIT 1"
+            );
+            if ($stmt) {
+                $stmt->bind_param("ss", $promptHash, $model);
+                $stmt->execute();
+                $res = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+
+                if ($res && isset($res['response_text'])) {
+                    // Async increment hit_count
+                    $escHash = $this->db->escape($promptHash);
+                    $escModel = $this->db->escape($model);
+                    $this->db->query("UPDATE ai_cache SET hit_count = hit_count + 1 WHERE prompt_hash = '$escHash' AND model = '$escModel'");
+                    return $res['response_text'];
+                }
+            }
+        } catch (Throwable $e) {}
+        return null;
+    }
+
+    /**
+     * Save AI response to cache with TTL
+     */
+    public function setCachedResponse($promptHash, $model, $promptType, $promptText, $responseText, $ttlSeconds = 86400) {
+        if (empty($promptHash) || empty($responseText)) return false;
+        try {
+            $ttl = (int)$ttlSeconds;
+            $stmt = $this->db->prepare(
+                "INSERT INTO ai_cache (prompt_hash, model, prompt_type, prompt_text, response_text, expires_at) 
+                 VALUES (?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? SECOND)) 
+                 ON DUPLICATE KEY UPDATE response_text = VALUES(response_text), expires_at = DATE_ADD(NOW(), INTERVAL ? SECOND), hit_count = hit_count + 1"
+            );
+            if ($stmt) {
+                $stmt->bind_param("sssssii", $promptHash, $model, $promptType, $promptText, $responseText, $ttl, $ttl);
+                $res = $stmt->execute();
+                $stmt->close();
+                return $res;
+            }
+        } catch (Throwable $e) {}
+        return false;
+    }
+
+    /**
+     * Periodic garbage collection for expired cache entries
+     */
+    public function cleanExpiredCache() {
+        try {
+            $this->db->query("DELETE FROM ai_cache WHERE expires_at < NOW()");
+        } catch (Throwable $e) {}
+    }
 }
+

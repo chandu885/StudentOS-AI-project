@@ -407,7 +407,7 @@ try {
                 $name = trim($input['name'] ?? ($input['key_name'] ?? 'chandan'));
                 $projectName = trim($input['project_name'] ?? 'project/406491916720');
                 $projectNumber = trim($input['project_number'] ?? '406491916720');
-                $model = trim($input['model'] ?? 'gemini-3.6-flash');
+                $model = trim($input['model'] ?? 'gemini-3.5-flash-lite');
 
                 if (session_status() === PHP_SESSION_NONE) session_start();
                 $_SESSION['ai_api_key'] = $key;
@@ -437,10 +437,51 @@ try {
                 $q = $input['question'] ?? '';
                 $convId = !empty($input['conversation_id']) ? (int)$input['conversation_id'] : null;
                 $key = $input['api_key'] ?? ($_SESSION['ai_api_key'] ?? null);
+
+                $stream = !empty($input['stream']) || !empty($_GET['stream']) || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'text/event-stream') !== false);
+                if ($stream) {
+                    if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
+                    header('Content-Type: text/event-stream; charset=utf-8');
+                    header('Cache-Control: no-cache, no-transform');
+                    header('Connection: keep-alive');
+                    header('X-Accel-Buffering: no');
+
+                    while (ob_get_level() > 0) ob_end_flush();
+                    ob_implicit_flush(true);
+
+                    $aiService->streamAssistant($user['id'], $q, $convId, $key, function($token, $done) {
+                        echo "data: " . json_encode(['token' => $token, 'done' => $done]) . "\n\n";
+                        if (ob_get_level() > 0) ob_flush();
+                        flush();
+                    });
+                    exit;
+                }
+
                 jsonOut($aiService->askAssistant($user['id'], $q, $convId, $key));
             } elseif ($action === 'pdf-qa' && $method === 'POST') {
                 $docId = (int)($input['document_id'] ?? 1);
                 $q = $input['question'] ?? '';
+                $key = $input['api_key'] ?? ($_SESSION['ai_api_key'] ?? null);
+
+                $stream = !empty($input['stream']) || !empty($_GET['stream']) || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'text/event-stream') !== false);
+                if ($stream) {
+                    if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
+                    header('Content-Type: text/event-stream; charset=utf-8');
+                    header('Cache-Control: no-cache, no-transform');
+                    header('Connection: keep-alive');
+                    header('X-Accel-Buffering: no');
+
+                    while (ob_get_level() > 0) ob_end_flush();
+                    ob_implicit_flush(true);
+
+                    $aiService->streamDocument($user['id'], $docId, $q, $key, function($token, $done) {
+                        echo "data: " . json_encode(['token' => $token, 'done' => $done]) . "\n\n";
+                        if (ob_get_level() > 0) ob_flush();
+                        flush();
+                    });
+                    exit;
+                }
+
                 jsonOut($aiService->askDocument($user['id'], $docId, $q));
             } elseif ($action === 'planner' && $method === 'POST') {
                 $subId = (int)($input['subject_id'] ?? 1);
