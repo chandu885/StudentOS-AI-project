@@ -22,8 +22,20 @@ class PDFExtractor {
         // Fast extract from PDF content
         $text = self::parsePdfContent($content);
 
-        // Clean and normalize text
-        $text = preg_replace('/[^\P{C}\n\t]+/u', '', $text); // remove non-printable control chars except \n and \t
+        // Ensure clean, valid UTF-8 encoding and remove null bytes
+        if (function_exists('mb_convert_encoding')) {
+            $text = mb_convert_encoding($text, 'UTF-8', 'UTF-8');
+        }
+        $text = str_replace("\0", '', $text);
+
+        // Clean control chars safely with PCRE fallback
+        $cleaned = @preg_replace('/[^\P{C}\n\t]+/u', '', $text);
+        if ($cleaned !== null) {
+            $text = $cleaned;
+        } else {
+            $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $text);
+        }
+
         $text = preg_replace('/[ \t]+/', ' ', $text);
         $text = preg_replace('/\n\s*\n+/', "\n\n", $text);
         $text = trim($text);
@@ -155,10 +167,21 @@ class PDFExtractor {
             return [];
         }
 
-        // Split into words
-        $words = preg_split('/\s+/u', $text, -1, PREG_SPLIT_NO_EMPTY);
-        $totalWords = count($words);
+        if (function_exists('mb_convert_encoding')) {
+            $text = mb_convert_encoding($text, 'UTF-8', 'UTF-8');
+        }
+        $text = str_replace("\0", '', $text);
 
+        // Split into words safely with PCRE fallback
+        $words = @preg_split('/\s+/u', $text, -1, PREG_SPLIT_NO_EMPTY);
+        if ($words === false || empty($words)) {
+            $words = preg_split('/\s+/', $text, -1, PREG_SPLIT_NO_EMPTY);
+        }
+        if (empty($words)) {
+            return [$text];
+        }
+
+        $totalWords = count($words);
         if ($totalWords <= $wordsPerChunk) {
             return [$text];
         }

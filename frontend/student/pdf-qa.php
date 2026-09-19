@@ -1,6 +1,8 @@
 <?php
 // frontend/student/pdf-qa.php - Interactive PDF Upload & RAG Document Q&A
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/helpers.php';
@@ -16,8 +18,35 @@ $errorMsg = '';
 
 // Handle PDF Upload
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'upload_pdf') {
-    if (!isset($_FILES['pdf_file']) || $_FILES['pdf_file']['error'] !== UPLOAD_ERR_OK) {
-        $errorMsg = 'Please select a valid PDF file to upload.';
+    $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')
+        || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false)
+        || isset($_POST['ajax']);
+
+    if (!isset($_FILES['pdf_file'])) {
+        $errorMsg = 'No PDF file was provided. Please select a file to upload.';
+    } elseif ($_FILES['pdf_file']['error'] !== UPLOAD_ERR_OK) {
+        $errCode = (int)$_FILES['pdf_file']['error'];
+        switch ($errCode) {
+            case UPLOAD_ERR_INI_SIZE:
+            case UPLOAD_ERR_FORM_SIZE:
+                $errorMsg = 'The uploaded file exceeds the allowed upload limit (Max 25MB).';
+                break;
+            case UPLOAD_ERR_PARTIAL:
+                $errorMsg = 'The file was only partially uploaded. Please try uploading again.';
+                break;
+            case UPLOAD_ERR_NO_FILE:
+                $errorMsg = 'Please select a valid PDF file to upload.';
+                break;
+            case UPLOAD_ERR_NO_TMP_DIR:
+                $errorMsg = 'Server configuration error: Missing temporary upload directory.';
+                break;
+            case UPLOAD_ERR_CANT_WRITE:
+                $errorMsg = 'Server write error: Failed to write uploaded file to disk.';
+                break;
+            default:
+                $errorMsg = 'Upload failed with error code: ' . $errCode;
+                break;
+        }
     } else {
         $file = $_FILES['pdf_file'];
         $origName = $file['name'];
@@ -26,43 +55,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
 
         if ($ext !== 'pdf') {
-            $errorMsg = 'Invalid file type. Only PDF documents (.pdf) are allowed.';
-        } elseif ($fileSize > 15 * 1024 * 1024) {
-            $errorMsg = 'File is too large. Maximum PDF file size is 15MB.';
+            $errorMsg = 'Invalid file format. Only PDF documents (.pdf) are allowed.';
+        } elseif ($fileSize <= 0) {
+            $errorMsg = 'The selected file is empty.';
+        } elseif ($fileSize > 25 * 1024 * 1024) {
+            $errorMsg = 'File is too large. Maximum PDF file size is 25MB.';
         } else {
             // Ensure target directory exists
-            $uploadDir = realpath(__DIR__ . '/../../storage') . '/uploads/documents';
+            $baseStorage = realpath(__DIR__ . '/../../storage') ?: (__DIR__ . '/../../storage');
+            $uploadDir = rtrim($baseStorage, '/\\') . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'documents';
             if (!is_dir($uploadDir)) {
                 @mkdir($uploadDir, 0777, true);
             }
 
             $safeBase = preg_replace('/[^a-zA-Z0-9_-]/', '_', pathinfo($origName, PATHINFO_FILENAME));
             $safeName = 'doc_' . time() . '_' . substr($safeBase, 0, 20) . '_' . bin2hex(random_bytes(3)) . '.pdf';
-            $destPath = $uploadDir . '/' . $safeName;
+            $destPath = $uploadDir . DIRECTORY_SEPARATOR . $safeName;
             $dbPath = 'storage/uploads/documents/' . $safeName;
 
-            if (move_uploaded_file($tmpPath, $destPath)) {
-                // Extract plain text
-                $extractedText = PDFExtractor::extractText($destPath);
+            $moved = @move_uploaded_file($tmpPath, $destPath);
+            if (!$moved && (php_sapi_name() === 'cli' || !is_uploaded_file($tmpPath))) {
+                $moved = @copy($tmpPath, $destPath) || @rename($tmpPath, $destPath);
+            }
+
+            if ($moved) {
+                // Extract plain text safely
+                try {
+                    $extractedText = PDFExtractor::extractText($destPath);
+                } catch (Throwable $pe) {
+                    $extractedText = '';
+                    error_log('PDF Text Extraction Warning: ' . $pe->getMessage());
+                }
+
                 $title = trim($_POST['title'] ?? '');
                 if (empty($title)) {
-                    $title = str_replace(['_', '-'], ' ', pathinfo($origName, PATHINFO_FILENAME));
-                    $title = ucwords(trim($title)) . ' (PDF)';
+                    $cleanBase = pathinfo($origName, PATHINFO_FILENAME);
+                    $cleanBase = preg_replace('/[_\-]+/', ' ', $cleanBase);
+                    $title = ucwords(trim($cleanBase)) . ' (PDF)';
                 }
                 $desc = trim($_POST['description'] ?? '');
                 if (empty($desc)) {
-                    $wordCount = str_word_count($extractedText);
+                    $wordCount = !empty($extractedText) ? str_word_count($extractedText) : 0;
                     $desc = "Uploaded by student on " . date('M d, Y') . " (~$wordCount words extracted).";
                 }
 
                 if ($db) {
-                    $stmt = $db->prepare(
-                        "INSERT INTO documents (user_id, title, file_path, file_size, file_type, description, is_public, created_at, updated_at) 
-                         VALUES (?, ?, ?, ?, 'application/pdf', ?, 0, NOW(), NOW())"
-                    );
-                    if ($stmt) {
+                    try {
+                        $stmt = $db->prepare(
+                            "INSERT INTO documents (user_id, title, file_path, file_size, file_type, description, is_public, created_at, updated_at) 
+                             VALUES (?, ?, ?, ?, 'application/pdf', ?, 0, NOW(), NOW())"
+                        );
+                        if (!$stmt) {
+                            throw new Exception("Database prepare failed: " . $db->error);
+                        }
                         $stmt->bind_param("issis", $userId, $title, $dbPath, $fileSize, $desc);
-                        $stmt->execute();
+                        if (!$stmt->execute()) {
+                            throw new Exception("Database insert failed: " . $stmt->error);
+                        }
                         $newDocId = $stmt->insert_id;
                         $stmt->close();
 
@@ -70,7 +119,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         $chunks = PDFExtractor::chunkText($extractedText, 300, 40);
                         if (empty($chunks)) {
                             $chunks = [
-                                "Document: $title\n\nUploaded PDF document file ($origName). Content index ready for semantic questions and course review."
+                                "Document: $title\n\nUploaded PDF document ($origName). Content index ready for semantic questions and course review."
                             ];
                         }
 
@@ -78,6 +127,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         if ($chunkStmt) {
                             foreach ($chunks as $idx => $chunkStr) {
                                 $cIdx = $idx + 1;
+                                if (function_exists('mb_convert_encoding')) {
+                                    $chunkStr = mb_convert_encoding($chunkStr, 'UTF-8', 'UTF-8');
+                                }
+                                $chunkStr = str_replace("\0", '', $chunkStr);
                                 $chunkStmt->bind_param("iis", $newDocId, $cIdx, $chunkStr);
                                 $chunkStmt->execute();
                             }
@@ -85,17 +138,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         }
 
                         $chunkCount = count($chunks);
-                        $successMsg = "ðŸŽ‰ PDF \"$title\" uploaded successfully and indexed into $chunkCount semantic chunks! You can now ask questions based on it.";
+                        $successMsg = "PDF \"$title\" uploaded successfully and indexed into $chunkCount semantic chunks! You can now ask questions based on it.";
+
+                        if ($isAjax) {
+                            header('Content-Type: application/json; charset=utf-8');
+                            echo json_encode([
+                                'success' => true,
+                                'message' => $successMsg,
+                                'doc_id' => $newDocId,
+                                'redirect_url' => "pdf-qa.php?doc_id=$newDocId&msg=" . urlencode($successMsg)
+                            ]);
+                            exit;
+                        }
+
                         header("Location: pdf-qa.php?doc_id=$newDocId&msg=" . urlencode($successMsg));
                         exit;
-                    } else {
-                        $errorMsg = "Database error while saving document metadata.";
+                    } catch (Throwable $e) {
+                        $errorMsg = "Database error while saving document: " . $e->getMessage();
                     }
+                } else {
+                    $errorMsg = "Database connection unavailable.";
                 }
             } else {
-                $errorMsg = 'Failed to move uploaded file. Please check folder permissions.';
+                $errorMsg = 'Failed to move uploaded file. Please check folder permissions for storage/uploads/documents.';
             }
         }
+    }
+
+    if (!empty($errorMsg) && $isAjax) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'success' => false,
+            'error' => $errorMsg
+        ]);
+        exit;
     }
 }
 
@@ -209,7 +285,7 @@ include_once __DIR__ . '/../components/header.php';
                             <select class="pdf-switcher-select" onchange="window.location.href='pdf-qa.php?doc_id=' + this.value" title="Switch active PDF">
                                 <?php foreach ($documents as $d): ?>
                                     <option value="<?php echo $d['id']; ?>" <?php echo $d['id'] === $docId ? 'selected' : ''; ?>>
-                                        <?php echo ($d['user_id'] == $userId ? 'ðŸ‘¤ ' : 'ðŸ“š ') . htmlspecialchars($d['title']); ?>
+                                        <?php echo ($d['user_id'] == $userId ? '👤 ' : '📚 ') . htmlspecialchars($d['title']); ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
@@ -278,7 +354,7 @@ include_once __DIR__ . '/../components/header.php';
                                 </button>
                             </div>
                             <div class="pdf-disclaimer-subline">
-                                <span><i class="fas fa-file-pdf" style="color: #EF4444;"></i> <?php echo htmlspecialchars($activeDocTitle); ?></span> â€¢ <span>Semantic RAG Indexing</span> â€¢ <span>Answers cited directly from document text</span>
+                                <span><i class="fas fa-file-pdf" style="color: #EF4444;"></i> <?php echo htmlspecialchars($activeDocTitle); ?></span> &bull; <span>Semantic RAG Indexing</span> &bull; <span>Answers cited directly from document text</span>
                             </div>
                         </div>
                     </div>
@@ -310,20 +386,22 @@ include_once __DIR__ . '/../components/header.php';
                 <h3 style="margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px;">
                     <i class="fas fa-file-pdf" style="color: #EF4444;"></i> Upload PDF Document
                 </h3>
-                <button type="button" onclick="toggleUploadModal()" style="background:none;border:none;font-size:20px;color:var(--text-muted);cursor:pointer;">&times;</button>
+                <button type="button" onclick="toggleUploadModal()" style="background:none;border:none;font-size:20px;color:var(--text-muted);cursor:pointer;" aria-label="Close">&times;</button>
             </div>
 
             <form method="POST" action="pdf-qa.php" enctype="multipart/form-data" id="pdfUploadForm" style="padding: 20px;">
                 <input type="hidden" name="action" value="upload_pdf">
 
-                <div class="pdf-upload-box" id="dropZone" onclick="document.getElementById('pdfFileInput').click()">
-                    <i class="fas fa-cloud-upload-alt" style="font-size: 40px; color: #4285F4; margin-bottom: 10px;"></i>
+                <div id="uploadModalAlert" style="display: none; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 14px;"></div>
+
+                <label for="pdfFileInput" class="pdf-upload-box" id="dropZone" style="display: block; width: 100%; box-sizing: border-box; cursor: pointer; text-align: center; border: 2px dashed rgba(66, 133, 244, 0.4); background: rgba(66, 133, 244, 0.03); border-radius: var(--radius-lg); padding: 24px; transition: all 0.2s ease;">
+                    <i class="fas fa-cloud-upload-alt" style="font-size: 40px; color: #4285F4; margin-bottom: 10px; display: block;"></i>
                     <p style="font-weight: 600; font-size: 14px; margin-bottom: 4px; color: var(--text-primary);" id="uploadPrompt">
-                        Click or Drag & Drop PDF file here
+                        Click to browse or Drag &amp; Drop PDF file here
                     </p>
-                    <span style="font-size: 12px; color: var(--text-muted);" id="fileSelectedName">Maximum size: 15MB â€¢ PDF format only</span>
-                    <input type="file" name="pdf_file" id="pdfFileInput" accept="application/pdf,.pdf" style="display: none;" required onchange="handleFileSelected(this)">
-                </div>
+                    <span style="font-size: 12px; color: var(--text-muted); display: block;" id="fileSelectedName">Maximum size: 25MB &bull; PDF format only</span>
+                    <input type="file" name="pdf_file" id="pdfFileInput" accept="application/pdf,.pdf" class="pdf-accessible-input" required onchange="handleFileSelected(this)">
+                </label>
 
                 <div class="form-group" style="margin-top: 16px;">
                     <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">Document Title (Optional)</label>
@@ -332,17 +410,24 @@ include_once __DIR__ . '/../components/header.php';
 
                 <div class="form-group" style="margin-top: 12px;">
                     <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">Brief Description (Optional)</label>
-                    <textarea name="description" class="form-control" rows="2" placeholder="e.g., Exam unit notes covering Banker's algorithm and critical section problem."></textarea>
+                    <textarea name="description" id="pdfDescInput" class="form-control" rows="2" placeholder="e.g., Exam unit notes covering Banker's algorithm and critical section problem."></textarea>
                 </div>
 
-                <div id="uploadingSpinner" style="display: none; padding: 12px; background: rgba(66, 133, 244, 0.08); border-radius: 8px; margin-top: 14px; text-align: center; font-size: 13px; color: #4285F4;">
-                    <i class="fas fa-spinner fa-spin" style="margin-right: 6px;"></i> Extracting text & indexing semantic chunks...
+                <div id="uploadingProgressContainer" style="display: none; margin-top: 16px; padding: 14px; background: rgba(66, 133, 244, 0.06); border: 1px solid rgba(66, 133, 244, 0.2); border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 12.5px; font-weight: 600; color: #4285F4;">
+                        <span id="uploadStatusText"><i class="fas fa-spinner fa-spin" style="margin-right: 6px;"></i> Uploading PDF...</span>
+                        <span id="uploadProgressPct">0%</span>
+                    </div>
+                    <div style="width: 100%; height: 8px; background: rgba(66, 133, 244, 0.15); border-radius: 4px; overflow: hidden;">
+                        <div id="uploadProgressBar" style="width: 0%; height: 100%; background: #4285F4; border-radius: 4px; transition: width 0.2s ease;"></div>
+                    </div>
+                    <div id="uploadSubText" style="font-size: 11px; color: var(--text-muted); margin-top: 6px; text-align: center;">Extracting text &amp; creating semantic chunks for RAG AI...</div>
                 </div>
 
                 <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
-                    <button type="button" class="btn btn-secondary" onclick="toggleUploadModal()">Cancel</button>
+                    <button type="button" class="btn btn-secondary" id="uploadCancelBtn" onclick="toggleUploadModal()">Cancel</button>
                     <button type="submit" class="btn btn-primary" id="uploadSubmitBtn" style="background: #4285F4; border-color: #4285F4;">
-                        <i class="fas fa-cloud-upload-alt"></i> Upload & Index PDF
+                        <i class="fas fa-cloud-upload-alt"></i> Upload &amp; Index PDF
                     </button>
                 </div>
             </form>
@@ -368,21 +453,61 @@ include_once __DIR__ . '/../components/header.php';
 
     function toggleUploadModal() {
         const modal = document.getElementById('uploadPdfModal');
-        if (modal.style.display === 'none' || !modal.style.display) {
+        if (!modal) return;
+        const isHidden = (modal.style.display === 'none' || !modal.style.display);
+        if (isHidden) {
             modal.style.display = 'flex';
+            hideModalError();
         } else {
             modal.style.display = 'none';
         }
     }
 
+    function showModalError(msg) {
+        const alertBox = document.getElementById('uploadModalAlert');
+        if (alertBox) {
+            alertBox.className = 'pdf-alert-banner alert-danger';
+            alertBox.style.display = 'block';
+            alertBox.style.background = 'rgba(239, 68, 68, 0.1)';
+            alertBox.style.color = '#EF4444';
+            alertBox.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+            alertBox.innerHTML = '<i class="fas fa-exclamation-circle" style="margin-right: 6px;"></i> ' + escapeHTML(msg);
+        }
+    }
+
+    function hideModalError() {
+        const alertBox = document.getElementById('uploadModalAlert');
+        if (alertBox) {
+            alertBox.style.display = 'none';
+            alertBox.innerHTML = '';
+        }
+    }
+
     function handleFileSelected(input) {
-        if (input.files && input.files[0]) {
-            const file = input.files[0];
+        const files = input && input.files ? input.files : [];
+        if (files.length > 0) {
+            const file = files[0];
+            const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+            if (!isPdf) {
+                showModalError('Please select a valid PDF document (.pdf).');
+                input.value = '';
+                document.getElementById('uploadPrompt').innerText = 'Click to browse or Drag & Drop PDF file here';
+                document.getElementById('fileSelectedName').innerText = 'Maximum size: 25MB • PDF format only';
+                return;
+            }
+            if (file.size > 25 * 1024 * 1024) {
+                showModalError('File is too large (max 25MB). Please select a smaller PDF.');
+                input.value = '';
+                document.getElementById('uploadPrompt').innerText = 'Click to browse or Drag & Drop PDF file here';
+                document.getElementById('fileSelectedName').innerText = 'Maximum size: 25MB • PDF format only';
+                return;
+            }
+            hideModalError();
             document.getElementById('uploadPrompt').innerText = 'Selected: ' + file.name;
-            document.getElementById('fileSelectedName').innerText = (file.size / (1024 * 1024)).toFixed(2) + ' MB â€¢ Ready to index';
+            document.getElementById('fileSelectedName').innerText = (file.size / (1024 * 1024)).toFixed(2) + ' MB • Ready to upload & index';
             
             const titleInput = document.getElementById('pdfTitleInput');
-            if (!titleInput.value) {
+            if (titleInput && !titleInput.value) {
                 let clean = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, ' ');
                 titleInput.value = clean.charAt(0).toUpperCase() + clean.slice(1);
             }
@@ -395,6 +520,7 @@ include_once __DIR__ . '/../components/header.php';
         ['dragenter', 'dragover'].forEach(eventName => {
             dropZone.addEventListener(eventName, (e) => {
                 e.preventDefault();
+                e.stopPropagation();
                 dropZone.classList.add('dragover');
             }, false);
         });
@@ -402,28 +528,128 @@ include_once __DIR__ . '/../components/header.php';
         ['dragleave', 'drop'].forEach(eventName => {
             dropZone.addEventListener(eventName, (e) => {
                 e.preventDefault();
+                e.stopPropagation();
                 dropZone.classList.remove('dragover');
             }, false);
         });
 
         dropZone.addEventListener('drop', (e) => {
             const dt = e.dataTransfer;
-            const files = dt.files;
-            if (files && files[0] && files[0].type === 'application/pdf') {
-                document.getElementById('pdfFileInput').files = files;
-                handleFileSelected(document.getElementById('pdfFileInput'));
-            } else {
-                alert('Please drop a valid PDF file.');
+            const files = dt && dt.files ? dt.files : null;
+            if (files && files.length > 0) {
+                const file = files[0];
+                const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+                if (isPdf) {
+                    const fileInput = document.getElementById('pdfFileInput');
+                    fileInput.files = files;
+                    handleFileSelected(fileInput);
+                } else {
+                    showModalError('Please drop a valid PDF document (.pdf).');
+                }
             }
         });
     }
 
-    // Show spinner on submit
+    // AJAX Form submission with real-time progress bar
     const uploadForm = document.getElementById('pdfUploadForm');
     if (uploadForm) {
-        uploadForm.addEventListener('submit', function() {
-            document.getElementById('uploadingSpinner').style.display = 'block';
-            document.getElementById('uploadSubmitBtn').disabled = true;
+        uploadForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            hideModalError();
+
+            const fileInput = document.getElementById('pdfFileInput');
+            if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+                showModalError('Please select a PDF file first.');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+            if (!isPdf) {
+                showModalError('Invalid format. Only PDF files are supported.');
+                return;
+            }
+
+            const submitBtn = document.getElementById('uploadSubmitBtn');
+            const cancelBtn = document.getElementById('uploadCancelBtn');
+            const progressContainer = document.getElementById('uploadingProgressContainer');
+            const progressBar = document.getElementById('uploadProgressBar');
+            const progressPct = document.getElementById('uploadProgressPct');
+            const statusText = document.getElementById('uploadStatusText');
+            const subText = document.getElementById('uploadSubText');
+
+            submitBtn.disabled = true;
+            cancelBtn.disabled = true;
+            progressContainer.style.display = 'block';
+            progressBar.style.width = '0%';
+            progressPct.textContent = '0%';
+            statusText.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right: 6px;"></i> Uploading PDF document...';
+            subText.textContent = 'Sending file to server...';
+
+            const formData = new FormData(uploadForm);
+            formData.append('ajax', '1');
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', 'pdf-qa.php', true);
+            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+            xhr.upload.onprogress = function(event) {
+                if (event.lengthComputable) {
+                    const percent = Math.min(Math.round((event.loaded / event.total) * 100), 95);
+                    progressBar.style.width = percent + '%';
+                    progressPct.textContent = percent + '%';
+                    if (percent >= 90) {
+                        statusText.innerHTML = '<i class="fas fa-cog fa-spin" style="margin-right: 6px;"></i> Indexing semantic chunks...';
+                        subText.textContent = 'Extracting plain text & building RAG search index...';
+                    }
+                }
+            };
+
+            xhr.onload = function() {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        const res = JSON.parse(xhr.responseText);
+                        if (res.success) {
+                            progressBar.style.width = '100%';
+                            progressPct.textContent = '100%';
+                            statusText.innerHTML = '<i class="fas fa-check-circle" style="color: #10B981; margin-right: 6px;"></i> Upload Complete!';
+                            subText.textContent = res.message || 'PDF indexed successfully!';
+                            setTimeout(function() {
+                                window.location.href = res.redirect_url || ('pdf-qa.php?doc_id=' + res.doc_id);
+                            }, 500);
+                        } else {
+                            showModalError(res.error || res.message || 'Upload failed.');
+                            submitBtn.disabled = false;
+                            cancelBtn.disabled = false;
+                            progressContainer.style.display = 'none';
+                        }
+                    } catch(err) {
+                        // Fallback in case of raw page response
+                        if (xhr.responseText.includes('alert-success') || xhr.status === 200) {
+                            window.location.reload();
+                        } else {
+                            showModalError('Unexpected response received from server.');
+                            submitBtn.disabled = false;
+                            cancelBtn.disabled = false;
+                            progressContainer.style.display = 'none';
+                        }
+                    }
+                } else {
+                    showModalError('Upload failed (HTTP ' + xhr.status + '). Please try again.');
+                    submitBtn.disabled = false;
+                    cancelBtn.disabled = false;
+                    progressContainer.style.display = 'none';
+                }
+            };
+
+            xhr.onerror = function() {
+                showModalError('Network error occurred during upload. Please verify your connection.');
+                submitBtn.disabled = false;
+                cancelBtn.disabled = false;
+                progressContainer.style.display = 'none';
+            };
+
+            xhr.send(formData);
         });
     }
 

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * frontend/assets/css/student/pdf-qa.css
  * Dedicated stylesheet for frontend/student/pdf-qa.php (Document RAG & PDF Q&A)
  */
@@ -424,4 +424,17 @@ body.ai-app-screen-mode .ai-chat-box {
 .pdf-upload-box:hover, .pdf-upload-box.dragover {
     border-color: #4285F4;
     background: rgba(66, 133, 244, 0.08);
+}
+
+.pdf-accessible-input {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+    opacity: 0 !important;
 }
