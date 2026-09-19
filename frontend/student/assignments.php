@@ -7,7 +7,8 @@ require_once __DIR__ . '/../includes/helpers.php';
 
 requireRole('student');
 
-$userId = $_SESSION['user']['id'];
+$userId = (int)($_SESSION['user']['id'] ?? 0);
+$db = getDbConnection();
 $successMsg = '';
 $errorMsg = '';
 
@@ -23,73 +24,91 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0777, true);
         }
-        $ext = pathinfo($_FILES['submission_file']['name'], PATHINFO_EXTENSION);
-        $fileName = time() . '_' . uniqid() . '.' . $ext;
-        $targetFile = $uploadDir . $fileName;
-        if (move_uploaded_file($_FILES['submission_file']['tmp_name'], $targetFile)) {
-            $filePath = 'assignments/' . $fileName;
+        $ext = strtolower(pathinfo($_FILES['submission_file']['name'], PATHINFO_EXTENSION));
+        $allowedExts = ['pdf', 'doc', 'docx', 'txt', 'zip', 'png', 'jpg', 'jpeg'];
+        if (!in_array($ext, $allowedExts)) {
+            $errorMsg = 'Invalid file type. Allowed formats: PDF, DOC, DOCX, TXT, ZIP, PNG, JPG.';
+        } elseif ($_FILES['submission_file']['size'] > 15 * 1024 * 1024) {
+            $errorMsg = 'Uploaded file exceeds the maximum 15MB size limit.';
+        } else {
+            $fileName = time() . '_' . uniqid() . '.' . $ext;
+            $targetFile = $uploadDir . $fileName;
+            if (move_uploaded_file($_FILES['submission_file']['tmp_name'], $targetFile)) {
+                $filePath = 'assignments/' . $fileName;
+            } else {
+                $errorMsg = 'Failed to upload attachment. Please try again.';
+            }
         }
     }
 
-    if ($asgId > 0 && $userId > 0 && $db) {
-        // Fetch deadline to determine if submission is on-time or late
-        $deadline = null;
-        $asgCheck = $db->prepare("SELECT deadline, title FROM assignments WHERE id = ?");
-        if ($asgCheck) {
-            $asgCheck->bind_param("i", $asgId);
-            $asgCheck->execute();
-            $asgMeta = $asgCheck->get_result()->fetch_assoc();
-            $deadline = $asgMeta['deadline'] ?? null;
-            $asgTitle = $asgMeta['title'] ?? 'Assignment';
-            $asgCheck->close();
-        }
+    if (empty($errorMsg)) {
+        if (!$db) {
+            $errorMsg = 'Database connection issue. Please verify database server status.';
+        } elseif ($asgId <= 0) {
+            $errorMsg = 'Invalid assignment selection. Please choose an assignment to submit.';
+        } elseif (empty($text) && empty($filePath)) {
+            $errorMsg = 'Please provide written notes/solution text or upload a file for your submission.';
+        } else {
+            // Fetch deadline to determine if submission is on-time or late
+            $asgCheck = $db->prepare("SELECT deadline, title FROM assignments WHERE id = ? AND deleted_at IS NULL");
+            $asgMeta = null;
+            if ($asgCheck) {
+                $asgCheck->bind_param("i", $asgId);
+                $asgCheck->execute();
+                $asgMeta = $asgCheck->get_result()->fetch_assoc();
+                $asgCheck->close();
+            }
 
-        $isLate = ($deadline && strtotime($deadline) < time());
-        $subStatus = $isLate ? 'late' : 'submitted';
-
-        // Check if previous submission exists
-        $checkStmt = $db->prepare("SELECT id FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?");
-        if ($checkStmt) {
-            $checkStmt->bind_param("ii", $asgId, $userId);
-            $checkStmt->execute();
-            $existing = $checkStmt->get_result()->fetch_assoc();
-            $checkStmt->close();
-
-            if ($existing) {
-                // Update submission
-                if ($filePath) {
-                    $upStmt = $db->prepare("UPDATE assignment_submissions SET submission_text = ?, file_path = ?, status = 'resubmitted', submitted_at = NOW() WHERE id = ?");
-                    $upStmt->bind_param("ssi", $text, $filePath, $existing['id']);
-                } else {
-                    $upStmt = $db->prepare("UPDATE assignment_submissions SET submission_text = ?, status = 'resubmitted', submitted_at = NOW() WHERE id = ?");
-                    $upStmt->bind_param("si", $text, $existing['id']);
-                }
-                if ($upStmt->execute()) {
-                    $successMsg = 'Assignment resubmitted successfully!';
-                } else {
-                    $errorMsg = 'Failed to update assignment submission.';
-                }
-                $upStmt->close();
+            if (!$asgMeta) {
+                $errorMsg = 'The selected assignment does not exist or has been removed.';
             } else {
-                // Insert new submission
-                $insStmt = $db->prepare("INSERT INTO assignment_submissions (assignment_id, student_id, submission_text, file_path, status, submitted_at) VALUES (?, ?, ?, ?, ?, NOW())");
-                if ($insStmt) {
-                    $insStmt->bind_param("iisss", $asgId, $userId, $text, $filePath, $subStatus);
-                    if ($insStmt->execute()) {
-                        $successMsg = 'Assignment submitted successfully!';
+                $deadline = $asgMeta['deadline'] ?? null;
+                $asgTitle = $asgMeta['title'] ?? 'Assignment';
+                $isLate = ($deadline && strtotime($deadline) < time());
+                $subStatus = $isLate ? 'late' : 'submitted';
+
+                // Check if previous submission exists
+                $checkStmt = $db->prepare("SELECT id FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?");
+                if ($checkStmt) {
+                    $checkStmt->bind_param("ii", $asgId, $userId);
+                    $checkStmt->execute();
+                    $existing = $checkStmt->get_result()->fetch_assoc();
+                    $checkStmt->close();
+
+                    if ($existing) {
+                        // Update submission
+                        if ($filePath) {
+                            $upStmt = $db->prepare("UPDATE assignment_submissions SET submission_text = ?, file_path = ?, status = 'resubmitted', submitted_at = NOW() WHERE id = ?");
+                            $upStmt->bind_param("ssi", $text, $filePath, $existing['id']);
+                        } else {
+                            $upStmt = $db->prepare("UPDATE assignment_submissions SET submission_text = ?, status = 'resubmitted', submitted_at = NOW() WHERE id = ?");
+                            $upStmt->bind_param("si", $text, $existing['id']);
+                        }
+                        if ($upStmt && $upStmt->execute()) {
+                            $successMsg = 'Assignment resubmitted successfully!';
+                            $upStmt->close();
+                        } else {
+                            $errorMsg = 'Failed to update assignment submission in database.';
+                        }
                     } else {
-                        $errorMsg = 'Failed to record assignment submission in database.';
+                        // Insert new submission
+                        $insStmt = $db->prepare("INSERT INTO assignment_submissions (assignment_id, student_id, submission_text, file_path, status, submitted_at) VALUES (?, ?, ?, ?, ?, NOW())");
+                        if ($insStmt) {
+                            $insStmt->bind_param("iisss", $asgId, $userId, $text, $filePath, $subStatus);
+                            if ($insStmt->execute()) {
+                                $successMsg = 'Assignment submitted successfully!';
+                            } else {
+                                $errorMsg = 'Failed to record assignment submission in database.';
+                            }
+                            $insStmt->close();
+                        }
                     }
-                    $insStmt->close();
                 }
             }
         }
-    } else {
-        $errorMsg = 'Invalid assignment selection or database connection issue.';
     }
 }
 
-$db = getDbConnection();
 $assignments = [];
 
 if ($db && $userId > 0) {
@@ -105,7 +124,7 @@ if ($db && $userId > 0) {
          JOIN subjects s ON a.subject_id = s.id
          JOIN student_subjects ss ON ss.subject_id = s.id
          LEFT JOIN assignment_submissions sub ON sub.assignment_id = a.id AND sub.student_id = ?
-         WHERE ss.student_id = ?
+         WHERE ss.student_id = ? AND a.deleted_at IS NULL
          ORDER BY a.deadline DESC"
     );
     if ($stmt) {
@@ -113,6 +132,30 @@ if ($db && $userId > 0) {
         $stmt->execute();
         $assignments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
         $stmt->close();
+    }
+
+    // Fallback: If no assignments found for specific enrolled subjects, display active coursework
+    if (empty($assignments)) {
+        $stmtAll = $db->prepare(
+            "SELECT a.*, s.name AS subject_name, s.code AS subject_code,
+                    sub.id AS submission_id, sub.status AS submission_status, sub.marks_obtained AS sub_marks, sub.feedback, sub.submitted_at,
+                    CASE 
+                        WHEN sub.id IS NOT NULL THEN COALESCE(sub.status, 'submitted')
+                        WHEN a.deadline < NOW() THEN 'overdue'
+                        ELSE 'pending'
+                    END AS computed_status
+             FROM assignments a
+             JOIN subjects s ON a.subject_id = s.id
+             LEFT JOIN assignment_submissions sub ON sub.assignment_id = a.id AND sub.student_id = ?
+             WHERE a.deleted_at IS NULL
+             ORDER BY a.deadline DESC"
+        );
+        if ($stmtAll) {
+            $stmtAll->bind_param("i", $userId);
+            $stmtAll->execute();
+            $assignments = $stmtAll->get_result()->fetch_all(MYSQLI_ASSOC);
+            $stmtAll->close();
+        }
     }
 }
 ?>

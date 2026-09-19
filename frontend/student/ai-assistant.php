@@ -15,37 +15,12 @@ $pageTitle = 'AI Academic Assistant - StudentOS AI';
 include_once __DIR__ . '/../components/header.php';
 ?>
                 <div class="page-header">
-                    <div>
-                        <h1><i class="fab fa-google" style="color: #4285F4; margin-right: 6px;"></i><i class="fas fa-robot" style="color: var(--ai-accent);"></i> AI Academic Assistant</h1>
-                        <p class="page-subtitle">Instant Google-style search answers, AI overviews, and academic tutoring powered by Gemini</p>
-                    </div>
                     <span class="badge" style="background: rgba(66, 133, 244, 0.12); color: #4285F4; border: 1px solid rgba(66, 133, 244, 0.3); font-weight: 600; padding: 6px 12px; border-radius: 20px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
                         <i class="fab fa-google" style="color: #EA4335;"></i> Google AI Overview Mode
                     </span>
                 </div>
 
-                <!-- Quick Prompts Pill Bar -->
-                <div style="display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; padding-bottom: 4px;">
-                    <button class="btn btn-outline" style="font-size: 12px; padding: 6px 14px; white-space: nowrap; border-radius: 20px;" onclick="fillAndSend('Explain DBMS Normalization (1NF to BCNF) with simple real-world examples.')">
-                        🔍 Explain Normalization
-                    </button>
-                    <button class="btn btn-outline" style="font-size: 12px; padding: 6px 14px; white-space: nowrap; border-radius: 20px;" onclick="fillAndSend('What is the difference between Process and Thread in Operating Systems?')">
-                        ⚙️ Process vs Thread
-                    </button>
-                    <button class="btn btn-outline" style="font-size: 12px; padding: 6px 14px; white-space: nowrap; border-radius: 20px;" onclick="fillAndSend('How does Dijkstra\'s Shortest Path algorithm work? Provide step-by-step logic.')">
-                        🧭 Dijkstra Algorithm
-                    </button>
-                    <button class="btn btn-outline" style="font-size: 12px; padding: 6px 14px; white-space: nowrap; border-radius: 20px;" onclick="fillAndSend('Give me a high-yield revision strategy for upcoming Midterm exams.')">
-                        📅 7-Day Revision Plan
-                    </button>
-                    <button class="btn btn-outline" style="font-size: 12px; padding: 6px 14px; white-space: nowrap; border-radius: 20px;" onclick="fillAndSend('What classes do I have scheduled this week?')">
-                        ⏰ My Timetable
-                    </button>
-                    <button class="btn btn-outline" style="font-size: 12px; padding: 6px 14px; white-space: nowrap; border-radius: 20px;" onclick="fillAndSend('What assignments are pending?')">
-                        📝 Pending Assignments
-                    </button>
-                </div>
-
+               
                 <!-- Chat Box Container -->
                 <div class="ai-chat-box" style="height: 600px;">
                     <div class="ai-chat-messages" id="chatMessages">
@@ -62,7 +37,7 @@ include_once __DIR__ . '/../components/header.php';
 
                     <div class="ai-chat-input-bar" style="border-radius: 28px; box-shadow: 0 4px 14px rgba(0,0,0,0.06); border: 1px solid rgba(66, 133, 244, 0.25);">
                         <i class="fas fa-search" style="color: #4285F4; margin-left: 8px; font-size: 15px;"></i>
-                        <input type="text" id="userInput" placeholder="Ask anything like on Google (e.g. 'Difference between 3NF and BCNF', 'What is Dijkstra algorithm')..." onkeydown="if(event.key==='Enter') sendMessage()">
+                        <input type="text" id="userInput" placeholder="Ask anything like on Google ..." onkeydown="if(event.key==='Enter') sendMessage()">
                         <button class="btn btn-primary" id="sendBtn" onclick="sendMessage()" style="border-radius: 20px; padding: 8px 20px; background: #4285F4; border-color: #4285F4;">
                             <i class="fas fa-search"></i> Search
                         </button>
