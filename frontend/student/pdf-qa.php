@@ -163,189 +163,570 @@ $activeDoc = $documents[$docId] ?? null;
 $activeDocTitle = $activeDoc['title'] ?? 'Selected Document';
 ?>
 <?php
+$bodyClass = 'ai-app-screen-mode';
 $pageTitle = 'PDF Q&A / Document RAG - StudentOS AI';
 include_once __DIR__ . '/../components/header.php';
 ?>
 <style>
+/* Viewport lock: eliminate body scroll completely */
+html, body.ai-app-screen-mode {
+    height: 100vh;
+    max-height: 100vh;
+    overflow: hidden !important;
+}
+
+body.ai-app-screen-mode .dashboard-layout {
+    height: calc(100vh - 72px);
+    min-height: calc(100vh - 72px);
+    max-height: calc(100vh - 72px);
+    overflow: hidden !important;
+}
+
+body.ai-app-screen-mode .dashboard-main {
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+    overflow: hidden !important;
+    display: flex;
+    flex-direction: column;
+}
+
+body.ai-app-screen-mode .dashboard-content {
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 12px 20px 10px 20px !important;
+    overflow: hidden !important;
+    gap: 10px;
+}
+
+body.ai-app-screen-mode .dashboard-footer {
+    display: none !important;
+}
+
+/* Compact Topbar */
+.pdf-app-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 8px 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+    flex-shrink: 0;
+}
+
+.pdf-topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    flex: 1;
+}
+
+.pdf-icon-box {
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+    background: rgba(239, 68, 68, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    color: #EF4444;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    flex-shrink: 0;
+}
+
+.pdf-doc-meta {
+    min-width: 0;
+    flex: 1;
+}
+
+.pdf-topbar-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    line-height: 1.2;
+}
+
+.pdf-topbar-heading {
+    font-size: 14.5px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 320px;
+}
+
+.pdf-topbar-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.doc-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 12px;
+    white-space: nowrap;
+}
+
+.pdf-topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.pdf-switcher-select {
+    height: 32px;
+    padding: 3px 10px;
+    font-size: 12px;
+    border-radius: 8px;
+    max-width: 200px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.pdf-upload-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 13px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 16px;
+    background: #EF4444;
+    border: 1px solid #EF4444;
+    color: white;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.pdf-upload-btn:hover {
+    background: #DC2626;
+    border-color: #DC2626;
+}
+
+.pdf-delete-btn {
+    height: 32px;
+    padding: 0 10px;
+    font-size: 12px;
+    border-radius: 8px;
+    color: var(--danger);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    background: transparent;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.15s ease;
+}
+.pdf-delete-btn:hover {
+    background: rgba(239, 68, 68, 0.08);
+}
+
+.pdf-reset-btn {
+    height: 32px;
+    padding: 0 10px;
+    font-size: 11.5px;
+    border-radius: 14px;
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
+    background: transparent;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.15s ease;
+}
+.pdf-reset-btn:hover {
+    color: var(--danger);
+    border-color: rgba(239, 68, 68, 0.3);
+    background: rgba(239, 68, 68, 0.06);
+}
+
+/* Quick prompt pills row */
+.pdf-prompts-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+.pdf-prompts-bar::-webkit-scrollbar {
+    display: none;
+}
+
+.pdf-quick-pill {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 10px;
+    border-radius: 12px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.pdf-quick-pill:hover {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: #EF4444;
+    color: #EF4444;
+    transform: translateY(-1px);
+}
+
+/* Alert Banner */
+.pdf-alert-banner {
+    padding: 7px 14px;
+    font-size: 12px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    border: 1px solid transparent;
+}
+.pdf-alert-banner.alert-success {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.3);
+    color: var(--success);
+}
+.pdf-alert-banner.alert-danger {
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: var(--danger);
+}
+
+/* Chat Box */
+body.ai-app-screen-mode .ai-chat-box {
+    flex: 1 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.04);
+    overflow: hidden;
+}
+
+.ai-chat-messages {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    scroll-behavior: smooth;
+}
+
+.ai-chat-messages::-webkit-scrollbar {
+    width: 6px;
+}
+.ai-chat-messages::-webkit-scrollbar-track {
+    background: transparent;
+}
+.ai-chat-messages::-webkit-scrollbar-thumb {
+    background: rgba(150, 150, 150, 0.25);
+    border-radius: 4px;
+}
+.ai-chat-messages::-webkit-scrollbar-thumb:hover {
+    background: rgba(150, 150, 150, 0.45);
+}
+
+/* Input Bar */
+.ai-chat-input-bar {
+    flex-shrink: 0;
+    padding: 10px 18px 8px 18px;
+    background: var(--bg-card);
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.pdf-input-pill-wrapper {
+    display: flex;
+    align-items: center;
+    background: var(--bg-secondary);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    border-radius: 28px;
+    padding: 5px 6px 5px 16px;
+    gap: 10px;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.05);
+}
+
+.pdf-input-pill-wrapper:focus-within {
+    border-color: #EF4444;
+    background: var(--bg-card);
+    box-shadow: 0 3px 14px rgba(239, 68, 68, 0.15);
+}
+
+.pdf-input-pill-wrapper input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-size: 13.5px;
+    color: var(--text-primary);
+    outline: none;
+    padding: 6px 0;
+}
+
+.pdf-input-pill-wrapper input::placeholder {
+    color: var(--text-muted);
+}
+
+.pdf-send-btn {
+    border: none;
+    background: #EF4444;
+    color: white;
+    padding: 7px 18px;
+    border-radius: 20px;
+    font-size: 12.5px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    white-space: nowrap;
+}
+
+.pdf-send-btn:hover {
+    background: #DC2626;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+}
+
+.pdf-disclaimer-subline {
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.google-doc-overview {
+    background: var(--bg-card) !important;
+    border: 1px solid rgba(239, 68, 68, 0.25) !important;
+    border-radius: 12px !important;
+    padding: 16px 20px !important;
+    box-shadow: 0 4px 16px rgba(239, 68, 68, 0.05);
+    color: var(--text-primary) !important;
+    max-width: 85% !important;
+    line-height: 1.65;
+}
+
+.citation-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--success);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+
+.pdf-empty-card {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 30px 20px;
+    text-align: center;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.04);
+}
+
 .pdf-upload-box {
-        border: 2px dashed rgba(66, 133, 244, 0.4);
-        background: rgba(66, 133, 244, 0.03);
-        border-radius: var(--radius-lg);
-        padding: 24px;
-        text-align: center;
-        transition: all 0.2s ease;
-        cursor: pointer;
-    }
-    .pdf-upload-box:hover, .pdf-upload-box.dragover {
-        border-color: #4285F4;
-        background: rgba(66, 133, 244, 0.08);
-    }
-    .pdf-active-card {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        flex-wrap: wrap;
-        gap: 16px;
-        padding: 16px 20px;
-        background: var(--bg-card);
-        border: 1px solid var(--border-color);
-        border-radius: var(--radius-lg);
-        margin-bottom: 20px;
-    }
-    .doc-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 11px;
-        font-weight: 600;
-        padding: 3px 8px;
-        border-radius: 12px;
-    }
-    .google-doc-overview {
-        background: var(--bg-card) !important;
-        border: 1px solid rgba(66, 133, 244, 0.25) !important;
-        border-radius: 12px !important;
-        padding: 18px 22px !important;
-        box-shadow: 0 4px 16px rgba(66, 133, 244, 0.05);
-        color: var(--text-primary) !important;
-        max-width: 85% !important;
-        line-height: 1.65;
-    }
-    .citation-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        font-size: 11px;
-        background: rgba(16, 185, 129, 0.1);
-        color: var(--success);
-        border: 1px solid rgba(16, 185, 129, 0.3);
-        padding: 2px 8px;
-        border-radius: 10px;
-        margin-right: 6px;
-    }
+    border: 2px dashed rgba(66, 133, 244, 0.4);
+    background: rgba(66, 133, 244, 0.03);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    text-align: center;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+.pdf-upload-box:hover, .pdf-upload-box.dragover {
+    border-color: #4285F4;
+    background: rgba(66, 133, 244, 0.08);
+}
 </style>
-                <div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 14px;">
-                    <div>
-                        <h1><i class="fas fa-file-pdf" style="color: #EF4444; margin-right: 8px;"></i> PDF Q&A (Document RAG)</h1>
-                        <p class="page-subtitle">Upload course lecture notes or textbooks, ask questions, and receive Google-style answers with verified citations</p>
+
+                <!-- Sleek Document RAG Topbar -->
+                <div class="pdf-app-topbar">
+                    <div class="pdf-topbar-left">
+                        <div class="pdf-icon-box">
+                            <i class="fas fa-file-pdf"></i>
+                        </div>
+                        <div class="pdf-doc-meta">
+                            <?php if (!empty($activeDoc)): ?>
+                                <div class="pdf-topbar-title-row">
+                                    <h1 class="pdf-topbar-heading" title="<?php echo htmlspecialchars($activeDoc['title']); ?>">
+                                        <?php echo htmlspecialchars($activeDoc['title']); ?>
+                                    </h1>
+                                    <?php if ($activeDoc['user_id'] == $userId): ?>
+                                        <span class="doc-pill" style="background: rgba(66, 133, 244, 0.12); color: #4285F4;"><i class="fas fa-user"></i> My Upload</span>
+                                    <?php else: ?>
+                                        <span class="doc-pill" style="background: rgba(16, 185, 129, 0.12); color: var(--success);"><i class="fas fa-book"></i> Textbook</span>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="pdf-topbar-sub">
+                                    <span><i class="fas fa-layer-group"></i> <?php echo (int)($activeDoc['chunk_count'] ?? 0); ?> Chunks</span>
+                                    <span><i class="fas fa-hdd"></i> <?php echo round(((int)$activeDoc['file_size'])/1024, 1); ?> KB</span>
+                                    <span><i class="fas fa-calendar-alt"></i> Added <?php echo date('M d, Y', strtotime($activeDoc['created_at'])); ?></span>
+                                </div>
+                            <?php else: ?>
+                                <div class="pdf-topbar-title-row">
+                                    <h1 class="pdf-topbar-heading">Document RAG &amp; PDF Q&amp;A</h1>
+                                </div>
+                                <div class="pdf-topbar-sub">Grounded semantic search &amp; AI question answering</div>
+                            <?php endif; ?>
+                        </div>
                     </div>
-                    <button class="btn btn-primary" onclick="toggleUploadModal()" style="display: inline-flex; align-items: center; gap: 8px; border-radius: 20px;">
-                        <i class="fas fa-cloud-upload-alt"></i> Upload New PDF
-                    </button>
+
+                    <?php if (!empty($activeDoc)): ?>
+                        <div class="pdf-prompts-bar">
+                            <button type="button" class="pdf-quick-pill" onclick="fillAndSend('Provide a comprehensive summary of the main points covered in this document.')">
+                                📌 Summary
+                            </button>
+                            <button type="button" class="pdf-quick-pill" onclick="fillAndSend('Extract and define all key terms, definitions, and formulas mentioned in this document.')">
+                                🔍 Key Terms
+                            </button>
+                            <button type="button" class="pdf-quick-pill" onclick="fillAndSend('Generate 5 exam-style practice questions with concise answers based on this PDF.')">
+                                ❓ 5 Practice Questions
+                            </button>
+                        </div>
+                    <?php endif; ?>
+
+                    <div class="pdf-topbar-right">
+                        <?php if (count($documents) > 1): ?>
+                            <select class="pdf-switcher-select" onchange="window.location.href='pdf-qa.php?doc_id=' + this.value" title="Switch active PDF">
+                                <?php foreach ($documents as $d): ?>
+                                    <option value="<?php echo $d['id']; ?>" <?php echo $d['id'] === $docId ? 'selected' : ''; ?>>
+                                        <?php echo ($d['user_id'] == $userId ? '👤 ' : '📚 ') . htmlspecialchars($d['title']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        <?php endif; ?>
+
+                        <?php if (!empty($activeDoc) && $activeDoc['user_id'] == $userId): ?>
+                            <form method="POST" action="pdf-qa.php" onsubmit="return confirm('Delete this uploaded PDF and all its indexed chunks?')" style="display: inline; margin: 0;">
+                                <input type="hidden" name="action" value="delete_pdf">
+                                <input type="hidden" name="document_id" value="<?php echo $activeDoc['id']; ?>">
+                                <button type="submit" class="pdf-delete-btn" title="Delete this uploaded PDF">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </form>
+                        <?php endif; ?>
+
+                        <button type="button" class="pdf-upload-btn" onclick="toggleUploadModal()" title="Upload a new PDF">
+                            <i class="fas fa-cloud-upload-alt"></i> <span>Upload PDF</span>
+                        </button>
+
+                        <?php if (!empty($activeDoc)): ?>
+                            <button type="button" class="pdf-reset-btn" onclick="clearRagChat()" title="Reset chat history">
+                                <i class="fas fa-redo-alt"></i> <span>Reset</span>
+                            </button>
+                        <?php endif; ?>
+                    </div>
                 </div>
 
                 <?php if (!empty($successMsg)): ?>
-                    <div class="alert alert-success" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                    <div class="pdf-alert-banner alert-success">
                         <div><i class="fas fa-check-circle" style="margin-right: 8px;"></i> <?php echo htmlspecialchars($successMsg); ?></div>
                         <button type="button" onclick="this.parentElement.style.display='none'" style="background:none;border:none;color:inherit;cursor:pointer;font-size:16px;">&times;</button>
                     </div>
                 <?php endif; ?>
 
                 <?php if (!empty($errorMsg)): ?>
-                    <div class="alert alert-danger" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                    <div class="pdf-alert-banner alert-danger">
                         <div><i class="fas fa-exclamation-circle" style="margin-right: 8px;"></i> <?php echo htmlspecialchars($errorMsg); ?></div>
                         <button type="button" onclick="this.parentElement.style.display='none'" style="background:none;border:none;color:inherit;cursor:pointer;font-size:16px;">&times;</button>
                     </div>
                 <?php endif; ?>
 
-                <!-- Active Document Info Card -->
                 <?php if (!empty($activeDoc)): ?>
-                    <div class="pdf-active-card">
-                        <div style="display: flex; align-items: center; gap: 14px;">
-                            <div style="width: 44px; height: 44px; border-radius: 10px; background: rgba(239, 68, 68, 0.1); display: flex; align-items: center; justify-content: center; color: #EF4444; font-size: 22px;">
-                                <i class="fas fa-file-pdf"></i>
-                            </div>
-                            <div>
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <strong style="font-size: 15px; color: var(--text-primary);"><?php echo htmlspecialchars($activeDoc['title']); ?></strong>
-                                    <?php if ($activeDoc['user_id'] == $userId): ?>
-                                        <span class="doc-pill" style="background: rgba(66, 133, 244, 0.1); color: #4285F4;"><i class="fas fa-user"></i> My Upload</span>
-                                    <?php else: ?>
-                                        <span class="doc-pill" style="background: rgba(16, 185, 129, 0.1); color: var(--success);"><i class="fas fa-book"></i> Textbook Chapter</span>
-                                    <?php endif; ?>
-                                </div>
-                                <div style="font-size: 12px; color: var(--text-muted); margin-top: 3px; display: flex; gap: 14px; flex-wrap: wrap;">
-                                    <span><i class="fas fa-layer-group"></i> <?php echo (int)($activeDoc['chunk_count'] ?? 0); ?> Indexed Chunks</span>
-                                    <span><i class="fas fa-hdd"></i> <?php echo round(((int)$activeDoc['file_size'])/1024, 1); ?> KB</span>
-                                    <span><i class="fas fa-calendar-alt"></i> Added <?php echo date('M d, Y', strtotime($activeDoc['created_at'])); ?></span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                            <!-- Document Switcher Dropdown -->
-                            <div style="display: flex; align-items: center; gap: 6px;">
-                                <label style="font-size: 12px; color: var(--text-muted); font-weight: 600;">Switch PDF:</label>
-                                <select class="form-control" style="width: auto; height: 36px; padding: 4px 10px; font-size: 13px;" onchange="window.location.href='pdf-qa.php?doc_id=' + this.value">
-                                    <?php foreach ($documents as $d): ?>
-                                        <option value="<?php echo $d['id']; ?>" <?php echo $d['id'] === $docId ? 'selected' : ''; ?>>
-                                            <?php echo ($d['user_id'] == $userId ? '👤 ' : '📚 ') . htmlspecialchars($d['title']); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-
-                            <?php if ($activeDoc['user_id'] == $userId): ?>
-                                <form method="POST" action="pdf-qa.php" onsubmit="return confirm('Delete this uploaded PDF and all its indexed chunks?')" style="display: inline;">
-                                    <input type="hidden" name="action" value="delete_pdf">
-                                    <input type="hidden" name="document_id" value="<?php echo $activeDoc['id']; ?>">
-                                    <button type="submit" class="btn btn-outline" style="color: var(--danger); border-color: rgba(239, 68, 68, 0.4); padding: 6px 12px; font-size: 12px;" title="Delete this PDF">
-                                        <i class="fas fa-trash-alt"></i> Delete
-                                    </button>
-                                </form>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-
-                    <!-- Quick Sample Questions for this PDF -->
-                    <div style="display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; padding-bottom: 4px;">
-                        <button class="btn btn-outline" style="font-size: 12px; padding: 6px 14px; white-space: nowrap; border-radius: 20px;" onclick="fillAndSend('Can you summarize this entire document in 3 key takeaways?')">
-                            📄 Summarize Document
-                        </button>
-                        <button class="btn btn-outline" style="font-size: 12px; padding: 6px 14px; white-space: nowrap; border-radius: 20px;" onclick="fillAndSend('What are the core definitions and concepts explained in this PDF?')">
-                            🔍 Core Definitions
-                        </button>
-                        <button class="btn btn-outline" style="font-size: 12px; padding: 6px 14px; white-space: nowrap; border-radius: 20px;" onclick="fillAndSend('What are the important formulas, algorithms, or rules mentioned?')">
-                            💡 Key Rules & Formulas
-                        </button>
-                        <button class="btn btn-outline" style="font-size: 12px; padding: 6px 14px; white-space: nowrap; border-radius: 20px;" onclick="fillAndSend('Generate 3 exam-style revision questions based on this document.')">
-                            ❓ Exam Practice Questions
-                        </button>
-                    </div>
-
-                    <!-- Chat Box -->
-                    <div class="ai-chat-box" style="height: 520px;">
+                    <!-- Chat Box Container (Flex Full Height) -->
+                    <div class="ai-chat-box">
                         <div class="ai-chat-messages" id="ragMessages">
                             <div class="ai-message bot">
                                 <div class="ai-avatar" style="background: #EF4444; color: white;"><i class="fas fa-file-pdf"></i></div>
                                 <div class="ai-bubble google-doc-overview">
-                                    <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: #4285F4; text-transform: uppercase; margin-bottom: 8px;">
-                                        <i class="fab fa-google" style="color: #EA4335;"></i> Document RAG Engine
+                                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px;">
+                                        <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: #EF4444; text-transform: uppercase; letter-spacing: 0.5px;">
+                                            <i class="fas fa-file-pdf"></i> Grounded Document RAG Engine
+                                        </div>
+                                        <span style="font-size: 10.5px; color: var(--text-muted);"><i class="fas fa-layer-group"></i> <?php echo (int)($activeDoc['chunk_count'] ?? 0); ?> chunks indexed</span>
                                     </div>
-                                    I am ready to answer questions grounded in <strong><?php echo htmlspecialchars($activeDocTitle); ?></strong>. Ask me to explain any definitions, locate specific sections, or summarize key chapters!
+                                    I am ready to answer questions strictly grounded in <strong><?php echo htmlspecialchars($activeDocTitle); ?></strong>. You can ask me to explain definitions, locate specific sections, summarize key chapters, or generate practice questions based on this document!
                                 </div>
                             </div>
                         </div>
 
-                        <div class="ai-chat-input-bar" style="border-radius: 28px; box-shadow: 0 4px 14px rgba(0,0,0,0.06); border: 1px solid rgba(66, 133, 244, 0.25);">
-                            <i class="fas fa-search" style="color: #EF4444; margin-left: 8px;"></i>
-                            <input type="text" id="ragInput" placeholder="Ask any question based on this PDF (e.g. 'What is the definition of...', 'Explain chapter 2')..." onkeydown="if(event.key==='Enter') sendRagQuestion()">
-                            <button class="btn btn-primary" onclick="sendRagQuestion()" style="border-radius: 20px; padding: 8px 20px; background: #EF4444; border-color: #EF4444;">
-                                <i class="fas fa-paper-plane"></i> Ask PDF
-                            </button>
+                        <div class="ai-chat-input-bar">
+                            <div class="pdf-input-pill-wrapper">
+                                <i class="fas fa-search" style="color: #EF4444; font-size: 14px;"></i>
+                                <input type="text" id="ragInput" placeholder="Ask any question grounded in this PDF (e.g. 'Summarize section 2', 'Define key concepts')..." onkeydown="if(event.key==='Enter') sendRagQuestion()" autofocus>
+                                <button class="pdf-send-btn" id="ragSendBtn" onclick="sendRagQuestion()">
+                                    <i class="fas fa-paper-plane"></i> <span>Ask PDF</span>
+                                </button>
+                            </div>
+                            <div class="pdf-disclaimer-subline">
+                                <span><i class="fas fa-file-pdf" style="color: #EF4444;"></i> <?php echo htmlspecialchars($activeDocTitle); ?></span> • <span>Semantic RAG Indexing</span> • <span>Answers cited directly from document text</span>
+                            </div>
                         </div>
                     </div>
                 <?php else: ?>
                     <!-- No documents state -->
-                    <div class="card" style="text-align: center; padding: 50px 20px;">
-                        <div style="width: 70px; height: 70px; border-radius: 50%; background: rgba(239, 68, 68, 0.1); color: #EF4444; font-size: 32px; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+                    <div class="pdf-empty-card">
+                        <div style="width: 64px; height: 64px; border-radius: 50%; background: rgba(239, 68, 68, 0.1); color: #EF4444; font-size: 28px; display: flex; align-items: center; justify-content: center; margin-bottom: 14px;">
                             <i class="fas fa-file-pdf"></i>
                         </div>
-                        <h3 style="font-size: 18px; margin-bottom: 8px;">No PDF Documents Available</h3>
-                        <p style="color: var(--text-muted); max-width: 460px; margin: 0 auto 20px; font-size: 14px;">
-                            Upload your lecture notes, textbook chapters, or research papers as a PDF to ask questions and receive instant AI answers.
+                        <h3 style="font-size: 18px; margin-bottom: 8px; font-weight: 700; color: var(--text-primary);">No PDF Documents Available</h3>
+                        <p style="color: var(--text-muted); max-width: 440px; margin: 0 auto 18px; font-size: 13.5px; line-height: 1.5;">
+                            Upload your lecture notes, textbook chapters, or research papers as a PDF to ask questions and receive instant AI answers grounded in your course materials.
                         </p>
-                        <button class="btn btn-primary" onclick="toggleUploadModal()" style="border-radius: 20px;">
+                        <button class="pdf-upload-btn" onclick="toggleUploadModal()" style="height: 38px; padding: 0 20px; font-size: 13px;">
                             <i class="fas fa-cloud-upload-alt"></i> Upload Your First PDF
                         </button>
                     </div>
@@ -405,7 +786,19 @@ include_once __DIR__ . '/../components/header.php';
     <script src="../assets/js/utils.js"></script>
     <script src="../assets/js/notifications.js"></script>
     <script>
-    const currentDocId = <?php echo $docId; ?>;
+    const currentDocId = <?php echo (int)$docId; ?>;
+    const activeDocChunks = <?php echo (int)($activeDoc['chunk_count'] ?? 0); ?>;
+    const activeDocTitle = <?php echo json_encode($activeDocTitle); ?>;
+
+    function escapeHTML(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
 
     function toggleUploadModal() {
         const modal = document.getElementById('uploadPdfModal');
@@ -468,6 +861,31 @@ include_once __DIR__ . '/../components/header.php';
         });
     }
 
+    function clearRagChat() {
+        const container = document.getElementById('ragMessages');
+        if (!container) return;
+        const safeTitle = escapeHTML(activeDocTitle);
+        container.innerHTML = `
+            <div class="ai-message bot">
+                <div class="ai-avatar" style="background: #EF4444; color: white;"><i class="fas fa-file-pdf"></i></div>
+                <div class="ai-bubble google-doc-overview">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px;">
+                        <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: #EF4444; text-transform: uppercase; letter-spacing: 0.5px;">
+                            <i class="fas fa-file-pdf"></i> Grounded Document RAG Engine
+                        </div>
+                        <span style="font-size: 10.5px; color: var(--text-muted);"><i class="fas fa-layer-group"></i> ${activeDocChunks} chunks indexed</span>
+                    </div>
+                    I am ready to answer questions strictly grounded in <strong>${safeTitle}</strong>. You can ask me to explain definitions, locate specific sections, summarize key chapters, or generate practice questions based on this document!
+                </div>
+            </div>
+        `;
+        const input = document.getElementById('ragInput');
+        if (input) {
+            input.value = '';
+            input.focus();
+        }
+    }
+
     function fillAndSend(text) {
         const input = document.getElementById('ragInput');
         if (input) {
@@ -520,10 +938,17 @@ include_once __DIR__ . '/../components/header.php';
 
     async function sendRagQuestion() {
         const input = document.getElementById('ragInput');
+        const sendBtn = document.getElementById('ragSendBtn');
         const question = input.value.trim();
         if (!question) return;
 
         input.value = '';
+        input.disabled = true;
+        if (sendBtn) {
+            sendBtn.disabled = true;
+            sendBtn.style.opacity = '0.7';
+        }
+
         const container = document.getElementById('ragMessages');
 
         // Add user bubble
@@ -590,8 +1015,15 @@ include_once __DIR__ . '/../components/header.php';
                 const msg = err && err.message ? err.message : 'Unable to connect to Document AI service';
                 botBubble.querySelector('.ai-bubble').innerHTML = `<div style="color: #EF4444;"><i class="fas fa-exclamation-circle"></i> Error: ${escapeHTML(msg)}. Please verify your connection.</div>`;
             }
+        } finally {
+            input.disabled = false;
+            if (sendBtn) {
+                sendBtn.disabled = false;
+                sendBtn.style.opacity = '1';
+            }
+            input.focus();
+            container.scrollTop = container.scrollHeight;
         }
-        container.scrollTop = container.scrollHeight;
     }
     </script>
 </body>

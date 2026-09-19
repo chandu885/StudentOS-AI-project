@@ -9,20 +9,49 @@ requireRole('student');
 
 $userId = $_SESSION['user']['id'];
 $initialSubject = sanitize($_GET['subject'] ?? '');
-?>
-<?php
+
+$bodyClass = 'ai-app-screen-mode';
 $pageTitle = 'AI Academic Assistant - StudentOS AI';
 include_once __DIR__ . '/../components/header.php';
 ?>
-                <div class="page-header">
-                    <span class="badge" style="background: rgba(66, 133, 244, 0.12); color: #4285F4; border: 1px solid rgba(66, 133, 244, 0.3); font-weight: 600; padding: 6px 12px; border-radius: 20px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
-                        <i class="fab fa-google" style="color: #EA4335;"></i> Google AI Overview Mode
-                    </span>
+                <!-- Compact AI Assistant Topbar -->
+                <div class="ai-app-topbar">
+                    <div class="ai-topbar-left">
+                        <div class="ai-google-icon-box">
+                            <i class="fab fa-google"></i>
+                        </div>
+                        <div>
+                            <h1 class="ai-topbar-heading">
+                                AI Academic Assistant
+                                <span class="ai-mode-pill"><i class="fab fa-google" style="color: #EA4335;"></i> Google AI Overview</span>
+                            </h1>
+                            <div class="ai-topbar-sub">Synthesizing instant structured overviews, practical examples, and core academic concepts</div>
+                        </div>
+                    </div>
+
+                    <div class="ai-topbar-right">
+                        <div class="ai-prompts-scroller">
+                            <button type="button" class="ai-quick-pill" onclick="fillAndSend('Explain DBMS Normalization (1NF to BCNF) with simple examples.')">
+                                🔍 Normalization
+                            </button>
+                            <button type="button" class="ai-quick-pill" onclick="fillAndSend('What is the difference between Process and Thread in Operating Systems?')">
+                                ⚙️ Process vs Thread
+                            </button>
+                            <button type="button" class="ai-quick-pill" onclick="fillAndSend('How does Dijkstra\'s Shortest Path algorithm work? Provide step-by-step logic.')">
+                                🧭 Dijkstra Algorithm
+                            </button>
+                            <button type="button" class="ai-quick-pill" onclick="fillAndSend('Give me a high-yield revision strategy for upcoming Midterm exams.')">
+                                📅 7-Day Plan
+                            </button>
+                        </div>
+                        <button type="button" class="ai-reset-btn" onclick="clearChat()" title="Start fresh conversation">
+                            <i class="fas fa-redo-alt"></i> <span>Reset</span>
+                        </button>
+                    </div>
                 </div>
 
-               
-                <!-- Chat Box Container -->
-                <div class="ai-chat-box" style="height: 600px;">
+                <!-- Chat Box Container (Flex Full Height) -->
+                <div class="ai-chat-box">
                     <div class="ai-chat-messages" id="chatMessages">
                         <div class="ai-message bot">
                             <div class="ai-avatar" style="background: linear-gradient(135deg, #4285F4, #34A853); color: white;"><i class="fab fa-google"></i></div>
@@ -35,12 +64,17 @@ include_once __DIR__ . '/../components/header.php';
                         </div>
                     </div>
 
-                    <div class="ai-chat-input-bar" style="border-radius: 28px; box-shadow: 0 4px 14px rgba(0,0,0,0.06); border: 1px solid rgba(66, 133, 244, 0.25);">
-                        <i class="fas fa-search" style="color: #4285F4; margin-left: 8px; font-size: 15px;"></i>
-                        <input type="text" id="userInput" placeholder="Ask anything like on Google ..." onkeydown="if(event.key==='Enter') sendMessage()">
-                        <button class="btn btn-primary" id="sendBtn" onclick="sendMessage()" style="border-radius: 20px; padding: 8px 20px; background: #4285F4; border-color: #4285F4;">
-                            <i class="fas fa-search"></i> Search
-                        </button>
+                    <div class="ai-chat-input-bar">
+                        <div class="ai-input-pill-wrapper">
+                            <i class="fas fa-search" style="color: #4285F4; font-size: 14px;"></i>
+                            <input type="text" id="userInput" placeholder="Ask anything like on Google (e.g. 'Difference between 3NF and BCNF', 'What is Dijkstra algorithm')..." onkeydown="if(event.key==='Enter') sendMessage()" autofocus>
+                            <button class="ai-send-btn" id="sendBtn" onclick="sendMessage()">
+                                <i class="fas fa-search"></i> <span>Search</span>
+                            </button>
+                        </div>
+                        <div class="ai-disclaimer-subline">
+                            <span><i class="fab fa-google" style="color: #4285F4;"></i> Google Gemini 3.6 Flash</span> • <span>StudentOS AI Model</span> • <span>Verify critical academic concepts with core syllabus</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -49,89 +83,306 @@ include_once __DIR__ . '/../components/header.php';
     </div>
 
     <style>
-    .google-overview-bubble {
-        background: var(--bg-card) !important;
-        border: 1px solid rgba(66, 133, 244, 0.25) !important;
-        border-radius: 12px !important;
-        padding: 16px 20px !important;
-        box-shadow: 0 4px 16px rgba(66, 133, 244, 0.05);
-        color: var(--text-primary) !important;
-        max-width: 85% !important;
-        line-height: 1.65;
+    /* Viewport lock: eliminate body scroll completely */
+    html, body.ai-app-screen-mode {
+        height: 100vh;
+        max-height: 100vh;
+        overflow: hidden !important;
     }
-    .google-overview-card {
-        background: rgba(66, 133, 244, 0.04);
-        border-left: 4px solid #4285F4;
-        padding: 12px 16px;
-        border-radius: 0 8px 8px 0;
-        margin: 10px 0 14px 0;
-        font-size: 14px;
+
+    body.ai-app-screen-mode .dashboard-layout {
+        height: calc(100vh - 72px);
+        min-height: calc(100vh - 72px);
+        max-height: calc(100vh - 72px);
+        overflow: hidden !important;
     }
-    .google-header-tag {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 11px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        color: #4285F4;
-        background: rgba(66, 133, 244, 0.08);
-        padding: 3px 8px;
-        border-radius: 12px;
-        margin-bottom: 8px;
-    }
-    .paa-container {
-        margin-top: 14px;
-        padding-top: 12px;
-        border-top: 1px solid var(--border-color);
-    }
-    .paa-title {
-        font-size: 12px;
-        font-weight: 700;
-        color: var(--text-muted);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-bottom: 8px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-    .paa-chips-grid {
+
+    body.ai-app-screen-mode .dashboard-main {
+        height: 100%;
+        max-height: 100%;
+        min-height: 0;
+        overflow: hidden !important;
         display: flex;
         flex-direction: column;
-        gap: 6px;
     }
-    .paa-chip-btn {
+
+    body.ai-app-screen-mode .dashboard-content {
+        height: 100%;
+        max-height: 100%;
+        min-height: 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 12px 20px 10px 20px !important;
+        overflow: hidden !important;
+        gap: 10px;
+    }
+
+    body.ai-app-screen-mode .dashboard-footer {
+        display: none !important;
+    }
+
+    /* Compact Topbar */
+    .ai-app-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 8px 16px;
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+        flex-shrink: 0;
+    }
+
+    .ai-topbar-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .ai-google-icon-box {
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        background: linear-gradient(135deg, rgba(66, 133, 244, 0.12), rgba(52, 168, 83, 0.12));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        color: #4285F4;
+        border: 1px solid rgba(66, 133, 244, 0.25);
+    }
+
+    .ai-topbar-heading {
+        font-size: 14.5px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin: 0;
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 8px 12px;
-        border-radius: 8px;
-        background: var(--bg-primary);
-        border: 1px solid var(--border-color);
-        color: var(--text-primary);
-        font-size: 13px;
-        cursor: pointer;
-        text-align: left;
-        transition: all 0.2s ease;
+        line-height: 1.2;
     }
-    .paa-chip-btn:hover {
+
+    .ai-topbar-sub {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 1px;
+    }
+
+    .ai-mode-pill {
+        background: rgba(66, 133, 244, 0.1);
+        color: #4285F4;
+        border: 1px solid rgba(66, 133, 244, 0.25);
+        font-weight: 600;
+        padding: 2px 7px;
+        border-radius: 12px;
+        font-size: 10.5px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .ai-topbar-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+    }
+
+    .ai-prompts-scroller {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        overflow-x: auto;
+        max-width: 580px;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+    .ai-prompts-scroller::-webkit-scrollbar {
+        display: none;
+    }
+
+    .ai-quick-pill {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        color: var(--text-secondary);
+        font-size: 11.5px;
+        font-weight: 500;
+        padding: 4px 10px;
+        border-radius: 14px;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .ai-quick-pill:hover {
         background: rgba(66, 133, 244, 0.08);
         border-color: #4285F4;
         color: #4285F4;
-        transform: translateX(3px);
+        transform: translateY(-1px);
     }
-    .paa-chip-btn i {
-        color: #4285F4;
+
+    .ai-reset-btn {
+        border-radius: 14px;
         font-size: 11px;
+        padding: 4px 10px;
+        height: 26px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        white-space: nowrap;
+        color: var(--text-muted);
+        border: 1px solid var(--border-color);
+        background: transparent;
+        cursor: pointer;
+        transition: all 0.15s ease;
     }
-    </style>
+    .ai-reset-btn:hover {
+        color: var(--danger);
+        border-color: rgba(239, 68, 68, 0.3);
+        background: rgba(239, 68, 68, 0.06);
+    }
+
+    /* Chat Box Container */
+    body.ai-app-screen-mode .ai-chat-box {
+        flex: 1 !important;
+        min-height: 0 !important;
+        height: auto !important;
+        display: flex !important;
+        flex-direction: column !important;
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.04);
+        overflow: hidden;
+    }
+
+    .ai-chat-messages {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 18px 22px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        scroll-behavior: smooth;
+    }
+
+    .ai-chat-messages::-webkit-scrollbar {
+        width: 6px;
+    }
+    .ai-chat-messages::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .ai-chat-messages::-webkit-scrollbar-thumb {
+        background: rgba(150, 150, 150, 0.25);
+        border-radius: 4px;
+    }
+    .ai-chat-messages::-webkit-scrollbar-thumb:hover {
+        background: rgba(150, 150, 150, 0.45);
+    }
+
+    /* Input Bar Docked At Bottom */
+    .ai-chat-input-bar {
+        flex-shrink: 0;
+        padding: 10px 18px 8px 18px;
+        background: var(--bg-card);
+        border-top: 1px solid var(--border-color);
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .ai-input-pill-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: var(--bg-secondary);
+        border: 1.5px solid rgba(66, 133, 244, 0.3);
+        border-radius: 28px;
+        padding: 4px 6px 4px 16px;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+    }
+    .ai-input-pill-wrapper:focus-within {
+        border-color: #4285F4;
+        box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.15);
+        background: var(--bg-card);
+    }
+    .ai-input-pill-wrapper input {
+        flex: 1;
+        background: transparent;
+        border: none;
+        outline: none;
+        color: var(--text-primary);
+        font-size: 13.5px;
+        padding: 6px 0;
+    }
+    .ai-input-pill-wrapper input::placeholder {
+        color: var(--text-muted);
+    }
+
+    .ai-send-btn {
+        border-radius: 20px;
+        padding: 7px 16px;
+        background: #4285F4;
+        border: none;
+        color: white;
+        font-size: 12.5px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 8px rgba(66, 133, 244, 0.3);
+    }
+    .ai-send-btn:hover {
+        background: #3367D6;
+        transform: translateY(-1px);
+    }
+
+    .ai-disclaimer-subline {
+        font-size: 11px;
+        color: var(--text-muted);
+        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        opacity: 0.85;
+    }
 
     <script src="../assets/js/utils.js"></script>
     <script src="../assets/js/notifications.js"></script>
     <script>
     let activeConversationId = null;
+
+    function clearChat() {
+        activeConversationId = null;
+        const container = document.getElementById('chatMessages');
+        container.innerHTML = `
+            <div class="ai-message bot">
+                <div class="ai-avatar" style="background: linear-gradient(135deg, #4285F4, #34A853); color: white;"><i class="fab fa-google"></i></div>
+                <div class="ai-bubble google-overview-bubble">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; font-weight: 700; color: #4285F4; text-transform: uppercase; letter-spacing: 0.5px;">
+                        <i class="fab fa-google" style="color: #EA4335;"></i> Google-Style AI Overview
+                    </div>
+                    Hello <strong><?php echo htmlspecialchars($_SESSION['user']['first_name']); ?></strong>! Conversation reset. Ask any question below to get an instant, structured Google-style AI overview!
+                </div>
+            </div>
+        `;
+        const input = document.getElementById('userInput');
+        input.value = '';
+        input.focus();
+    }
 
     function fillAndSend(text) {
         const input = document.getElementById('userInput');
