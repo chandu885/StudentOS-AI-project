@@ -549,14 +549,34 @@ include_once __DIR__ . '/../components/header.php';
             const headers = typeof getAuthHeaders === 'function' 
                 ? getAuthHeaders({ 'Content-Type': 'application/json' }) 
                 : { 'Content-Type': 'application/json' };
-            const res = await fetch('/StudentOS-AI-project/backend/api/ai.php?path=pdf-qa', {
+
+            let apiUrl = '../../backend/api/ai.php?path=pdf-qa';
+            if (window.location.pathname.toLowerCase().includes('/studentos-ai-project/')) {
+                apiUrl = '/StudentOS-AI-project/backend/api/ai.php?path=pdf-qa';
+            }
+
+            const res = await fetch(apiUrl, {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: headers,
                 body: JSON.stringify({ document_id: currentDocId, question: question })
             });
-            const data = await res.json();
+
             const botBubble = document.getElementById(typingId);
+
+            if (!res.ok) {
+                let errMsg = 'Server error (' + res.status + ')';
+                try {
+                    const errData = await res.json();
+                    if (errData && errData.error) errMsg = errData.error;
+                } catch(e) {}
+                if (botBubble) {
+                    botBubble.querySelector('.ai-bubble').innerHTML = `<div style="color: #EF4444;"><i class="fas fa-exclamation-triangle"></i> ${escapeHTML(errMsg)}</div>`;
+                }
+                return;
+            }
+
+            const data = await res.json();
 
             if (data && data.answer) {
                 botBubble.querySelector('.ai-bubble').innerHTML = formatRagAnswer(data.answer, data.sources || []);
@@ -564,9 +584,11 @@ include_once __DIR__ . '/../components/header.php';
                 botBubble.querySelector('.ai-bubble').innerHTML = data && data.error ? escapeHTML(data.error) : 'Unable to retrieve answer for the specified document.';
             }
         } catch (err) {
+            console.error('PDF Q&A Error:', err);
             const botBubble = document.getElementById(typingId);
             if (botBubble) {
-                botBubble.querySelector('.ai-bubble').innerHTML = 'Unable to connect to Document AI service. Please verify your connection.';
+                const msg = err && err.message ? err.message : 'Unable to connect to Document AI service';
+                botBubble.querySelector('.ai-bubble').innerHTML = `<div style="color: #EF4444;"><i class="fas fa-exclamation-circle"></i> Error: ${escapeHTML(msg)}. Please verify your connection.</div>`;
             }
         }
         container.scrollTop = container.scrollHeight;

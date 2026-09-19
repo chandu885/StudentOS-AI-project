@@ -395,10 +395,49 @@ try {
             $aiService = new AIService();
             $aiModel = new AIModel();
 
-            if ($action === 'assistant' && $method === 'POST') {
+            if ($action === 'assignment-assist' && $method === 'POST') {
+                $asgId = (int)($input['assignment_id'] ?? 0);
+                $q = $input['question'] ?? '';
+                $taskType = $input['task_type'] ?? 'solve';
+                $draftText = $input['draft_text'] ?? '';
+                $key = $input['api_key'] ?? ($_SESSION['ai_api_key'] ?? null);
+                jsonOut($aiService->askAssignmentAssist($user['id'], $asgId, $q, $taskType, $draftText, $key));
+            } elseif (($action === 'save-key' || $action === 'save-settings' || $action === 'update-settings') && $method === 'POST') {
+                $key = trim($input['api_key'] ?? Config::getInstance()->get('gemini_api_key', ''));
+                $name = trim($input['name'] ?? ($input['key_name'] ?? 'chandan'));
+                $projectName = trim($input['project_name'] ?? 'project/406491916720');
+                $projectNumber = trim($input['project_number'] ?? '406491916720');
+                $model = trim($input['model'] ?? 'gemini-3.6-flash');
+
+                if (session_status() === PHP_SESSION_NONE) session_start();
+                $_SESSION['ai_api_key'] = $key;
+                $_SESSION['ai_key_name'] = $name;
+                $_SESSION['ai_project_name'] = $projectName;
+                $_SESSION['ai_project_number'] = $projectNumber;
+
+                $aiService->updateKeySettings($key, $name, $projectName, $projectNumber, $model);
+                jsonOut([
+                    'success' => true,
+                    'message' => 'AI Key settings successfully configured and active.',
+                    'settings' => $aiService->getKeySettings()
+                ]);
+            } elseif ($action === 'settings' || $action === 'key-settings' || $action === 'get-settings') {
+                jsonOut([
+                    'success' => true,
+                    'settings' => $aiService->getKeySettings()
+                ]);
+            } elseif ($action === 'questions' || $action === 'fetch-questions') {
+                $topic = $input['topic'] ?? ($_GET['topic'] ?? 'Operating Systems & Database Systems');
+                $count = (int)($input['count'] ?? ($_GET['count'] ?? 5));
+                $type = $input['type'] ?? ($_GET['type'] ?? 'mcq');
+                $difficulty = $input['difficulty'] ?? ($_GET['difficulty'] ?? 'medium');
+                $subjectName = $input['subject'] ?? ($_GET['subject'] ?? 'Computer Science');
+                jsonOut($aiService->fetchQuestionsFromAI($topic, $count, $type, $difficulty, $subjectName));
+            } elseif ($action === 'assistant' && $method === 'POST') {
                 $q = $input['question'] ?? '';
                 $convId = !empty($input['conversation_id']) ? (int)$input['conversation_id'] : null;
-                jsonOut($aiService->askAssistant($user['id'], $q, $convId));
+                $key = $input['api_key'] ?? ($_SESSION['ai_api_key'] ?? null);
+                jsonOut($aiService->askAssistant($user['id'], $q, $convId, $key));
             } elseif ($action === 'pdf-qa' && $method === 'POST') {
                 $docId = (int)($input['document_id'] ?? 1);
                 $q = $input['question'] ?? '';
@@ -413,7 +452,8 @@ try {
                 $topic = $input['topic'] ?? 'General Engineering';
                 $count = (int)($input['count'] ?? 5);
                 $difficulty = $input['difficulty'] ?? 'medium';
-                jsonOut($aiService->generateQuiz($user['id'], $subId, $topic, $count, $difficulty));
+                $key = $input['api_key'] ?? null;
+                jsonOut($aiService->generateQuiz($user['id'], $subId, $topic, $count, $difficulty, $key));
             } elseif ($action === 'summarize' && $method === 'POST') {
                 $text = $input['text'] ?? '';
                 jsonOut($aiService->summarizeText($user['id'], $text));

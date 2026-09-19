@@ -47,8 +47,11 @@ class Config {
             'lockout_time' => 900, // 15 mins
             
             // AI Configuration
-            'gemini_api_key' => '',
-            'gemini_model' => 'gemini-1.5-flash',
+            'gemini_api_key' => getenv('GEMINI_API_KEY') ?: '',
+            'gemini_model' => 'gemini-3.6-flash',
+            'gemini_key_name' => 'chandan',
+            'gemini_project_name' => 'project/406491916720',
+            'gemini_project_number' => '406491916720',
             'enable_rag' => true,
             
             // Mail settings

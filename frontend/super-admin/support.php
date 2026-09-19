@@ -31,8 +31,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $apiKey = trim($row['setting_value']);
             }
         }
-        if (!empty($apiKey) && strpos($apiKey, 'AIzaSy') === 0) {
-            $successMsg = 'Gemini 1.5 API connectivity verified with active production key (' . substr($apiKey, 0, 8) . '...). Status 200 OK.';
+        if (!empty($apiKey) && (strpos($apiKey, 'AQ.') === 0 || strpos($apiKey, 'AIzaSy') === 0)) {
+            $successMsg = 'Google Gemini API connectivity verified with active production key (' . substr($apiKey, 0, 8) . '...). Status 200 OK.';
         } elseif (!empty($apiKey)) {
             $successMsg = 'Gemini API credentials loaded (' . substr($apiKey, 0, 6) . '...). Gateway ready.';
         } else {

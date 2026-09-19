@@ -251,28 +251,61 @@ include_once __DIR__ . '/../components/header.php';
         container.scrollTop = container.scrollHeight;
 
         try {
+            const savedKey = localStorage.getItem('user_ai_api_key') || '';
             const headers = typeof getAuthHeaders === 'function' 
                 ? getAuthHeaders({ 'Content-Type': 'application/json' }) 
                 : { 'Content-Type': 'application/json' };
-            const res = await fetch('/StudentOS-AI-project/backend/api/ai.php?path=assistant', {
+            const payload = { 
+                question: question, 
+                conversation_id: activeConversationId
+            };
+            if (savedKey && savedKey.trim().length > 10) {
+                payload.api_key = savedKey.trim();
+            }
+
+            // Dynamically resolve API URL so it works in any directory structure
+            let apiUrl = '../../backend/api/ai.php?path=assistant';
+            if (window.location.pathname.toLowerCase().includes('/studentos-ai-project/')) {
+                apiUrl = '/StudentOS-AI-project/backend/api/ai.php?path=assistant';
+            }
+
+            const res = await fetch(apiUrl, {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: headers,
-                body: JSON.stringify({ question: question, conversation_id: activeConversationId })
+                body: JSON.stringify(payload)
             });
-            const data = await res.json();
+
             const botBubble = document.getElementById(typingId);
+
+            if (!res.ok) {
+                let errMsg = 'Server error (' + res.status + ')';
+                try {
+                    const errData = await res.json();
+                    if (errData && errData.error) errMsg = errData.error;
+                } catch(e) {}
+                if (botBubble) {
+                    botBubble.querySelector('.ai-bubble').innerHTML = `<div style="color: #EA4335;"><i class="fas fa-exclamation-triangle"></i> ${escapeHTML(errMsg)}</div>`;
+                }
+                return;
+            }
+
+            const data = await res.json();
 
             if (data && data.answer) {
                 if (data.conversation_id) activeConversationId = data.conversation_id;
                 botBubble.querySelector('.ai-bubble').innerHTML = formatGoogleAnswer(data.answer);
+            } else if (data && data.error) {
+                botBubble.querySelector('.ai-bubble').innerHTML = `<div style="color: #EA4335;"><i class="fas fa-exclamation-triangle"></i> ${escapeHTML(data.error)}</div>`;
             } else {
                 botBubble.querySelector('.ai-bubble').innerHTML = 'I encountered an issue generating the Google-style overview. Please try rephrasing your search query.';
             }
         } catch (err) {
+            console.error('AI Assistant Error:', err);
             const botBubble = document.getElementById(typingId);
             if (botBubble) {
-                botBubble.querySelector('.ai-bubble').innerHTML = 'Sorry, could not connect to AI service. Please check your network or server status.';
+                const msg = err && err.message ? err.message : 'Could not connect to AI service';
+                botBubble.querySelector('.ai-bubble').innerHTML = `<div style="color: #EA4335;"><i class="fas fa-exclamation-circle"></i> Error: ${escapeHTML(msg)}. Please check your network or server status.</div>`;
             }
         }
         container.scrollTop = container.scrollHeight;

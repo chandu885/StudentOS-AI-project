@@ -1,170 +1,450 @@
 <?php
 // backend/models/AIModel.php
 
+require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 
 class AIModel {
     private $db;
 
     public function __construct() {
-        $this->db = Database::getInstance();
-    }
-
-    // Conversations
-    public function getConversations($userId, $mode = 'assistant') {
-        $stmt = $this->db->prepare("SELECT * FROM ai_conversations WHERE user_id = ? AND mode = ? ORDER BY updated_at DESC");
-        $stmt->bind_param("is", $userId, $mode);
-        $stmt->execute();
-        return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    }
-
-    public function createConversation($userId, $title, $mode = 'assistant') {
-        $stmt = $this->db->prepare("INSERT INTO ai_conversations (user_id, title, mode) VALUES (?, ?, ?)");
-        $stmt->bind_param("iss", $userId, $title, $mode);
-        if ($stmt->execute()) {
-            return $this->db->lastInsertId();
+        try {
+            $this->db = Database::getInstance();
+        } catch (Throwable $e) {
+            $this->db = null;
         }
+    }
+
+    // ------------------------------------------------------------------------
+    // AI Settings & Configuration
+    // ------------------------------------------------------------------------
+
+    /**
+     * Retrieve all AI settings from database with system defaults
+     */
+    public function getAISettings() {
+        $config = Config::getInstance();
+        $defaults = [
+            'gemini_api_key' => $config->get('gemini_api_key', ''),
+            'default_model' => $config->get('gemini_model', 'gemini-3.6-flash'),
+            'gemini_key_name' => $config->get('gemini_key_name', 'chandan'),
+            'gemini_project_name' => $config->get('gemini_project_name', 'project/406491916720'),
+            'gemini_project_number' => $config->get('gemini_project_number', '406491916720'),
+            'temperature' => '0.7',
+            'max_output_tokens' => '4096',
+            'enable_rag' => '1'
+        ];
+
+        try {
+            $res = $this->db->query("SELECT setting_key, setting_value FROM ai_settings");
+            if ($res) {
+                while ($row = $res->fetch_assoc()) {
+                    if (!empty($row['setting_value'])) {
+                        $defaults[$row['setting_key']] = $row['setting_value'];
+                    }
+                }
+            }
+        } catch (Throwable $e) {}
+
+        return $defaults;
+    }
+
+    /**
+     * Update or insert a single AI setting
+     */
+    public function updateAISetting($key, $value, $description = null) {
+        try {
+            if ($description !== null) {
+                $stmt = $this->db->prepare(
+                    "INSERT INTO ai_settings (setting_key, setting_value, description, updated_at) 
+                     VALUES (?, ?, ?, NOW()) 
+                     ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), description = VALUES(description), updated_at = NOW()"
+                );
+                if ($stmt) {
+                    $stmt->bind_param("sss", $key, $value, $description);
+                    $res = $stmt->execute();
+                    $stmt->close();
+                    return $res;
+                }
+            } else {
+                $stmt = $this->db->prepare(
+                    "INSERT INTO ai_settings (setting_key, setting_value, updated_at) 
+                     VALUES (?, ?, NOW()) 
+                     ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = NOW()"
+                );
+                if ($stmt) {
+                    $stmt->bind_param("ss", $key, $value);
+                    $res = $stmt->execute();
+                    $stmt->close();
+                    return $res;
+                }
+            }
+        } catch (Throwable $e) {}
         return false;
     }
 
+    /**
+     * Save comprehensive AI Key settings
+     */
+    public function saveAIKeySettings($apiKey, $keyName = 'chandan', $projectName = 'project/406491916720', $projectNumber = '406491916720', $model = 'gemini-3.6-flash') {
+        $ok = true;
+        if (!empty($apiKey)) {
+            $ok = $this->updateAISetting('gemini_api_key', trim($apiKey), 'Google Gemini API key for AI Tutor & Question Generation') && $ok;
+        }
+        if (!empty($keyName)) {
+            $ok = $this->updateAISetting('gemini_key_name', trim($keyName), 'Gemini Key Identifier Name') && $ok;
+        }
+        if (!empty($projectName)) {
+            $ok = $this->updateAISetting('gemini_project_name', trim($projectName), 'Google Cloud Project Name') && $ok;
+        }
+        if (!empty($projectNumber)) {
+            $ok = $this->updateAISetting('gemini_project_number', trim($projectNumber), 'Google Cloud Project Number') && $ok;
+        }
+        if (!empty($model)) {
+            $ok = $this->updateAISetting('default_model', trim($model), 'Primary LLM model') && $ok;
+        }
+        return $ok;
+    }
+
+    /**
+     * Get active AI configuration object
+     */
+    public function getAIConfig() {
+        $settings = $this->getAISettings();
+        $apiKey = $settings['gemini_api_key'] ?? Config::getInstance()->get('gemini_api_key', '');
+        $masked = !empty($apiKey) ? substr($apiKey, 0, 6) . '...' . substr($apiKey, -4) : '';
+
+        return [
+            'api_key' => $apiKey,
+            'api_key_masked' => $masked,
+            'name' => $settings['gemini_key_name'] ?? 'chandan',
+            'project_name' => $settings['gemini_project_name'] ?? 'project/406491916720',
+            'project_number' => $settings['gemini_project_number'] ?? '406491916720',
+            'model' => $settings['default_model'] ?? 'gemini-3.6-flash',
+            'provider' => 'Google Gemini (Generative Language API)',
+            'endpoint' => 'https://generativelanguage.googleapis.com/v1beta/models',
+            'status' => !empty($apiKey) ? 'configured' : 'missing_key'
+        ];
+    }
+
+    // ------------------------------------------------------------------------
+    // Conversations & Messages
+    // ------------------------------------------------------------------------
+
+    public function getConversations($userId, $mode = 'assistant') {
+        try {
+            $stmt = $this->db->prepare("SELECT * FROM ai_conversations WHERE user_id = ? AND mode = ? ORDER BY updated_at DESC");
+            if ($stmt) {
+                $uid = (int)$userId;
+                $stmt->bind_param("is", $uid, $mode);
+                $stmt->execute();
+                $res = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+                $stmt->close();
+                return $res;
+            }
+        } catch (Throwable $e) {}
+        return [];
+    }
+
+    public function createConversation($userId, $title, $mode = 'assistant') {
+        if (empty($userId) || (int)$userId <= 0) return null;
+        try {
+            $stmt = $this->db->prepare("INSERT INTO ai_conversations (user_id, title, mode) VALUES (?, ?, ?)");
+            if ($stmt) {
+                $uid = (int)$userId;
+                $stmt->bind_param("iss", $uid, $title, $mode);
+                if ($stmt->execute()) {
+                    $insertId = $this->db->lastInsertId();
+                    $stmt->close();
+                    return $insertId;
+                }
+                $stmt->close();
+            }
+        } catch (Throwable $e) {}
+        return null;
+    }
+
     public function getMessages($conversationId) {
-        $stmt = $this->db->prepare("SELECT * FROM ai_messages WHERE conversation_id = ? ORDER BY id ASC");
-        $stmt->bind_param("i", $conversationId);
-        $stmt->execute();
-        return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        try {
+            $stmt = $this->db->prepare("SELECT * FROM ai_messages WHERE conversation_id = ? ORDER BY id ASC");
+            if ($stmt) {
+                $cid = (int)$conversationId;
+                $stmt->bind_param("i", $cid);
+                $stmt->execute();
+                $res = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+                $stmt->close();
+                return $res;
+            }
+        } catch (Throwable $e) {}
+        return [];
     }
 
     public function addMessage($conversationId, $role, $content, $sources = null, $tokens = 0) {
-        $sourcesJson = $sources ? json_encode($sources) : null;
-        $stmt = $this->db->prepare("INSERT INTO ai_messages (conversation_id, role, content, sources_json, tokens_used) VALUES (?, ?, ?, ?, ?)");
-        $stmt->bind_param("isssi", $conversationId, $role, $content, $sourcesJson, $tokens);
-        $stmt->execute();
+        if (empty($conversationId) || (int)$conversationId <= 0) return false;
+        try {
+            $sourcesJson = $sources ? json_encode($sources) : null;
+            $stmt = $this->db->prepare("INSERT INTO ai_messages (conversation_id, role, content, sources_json, tokens_used) VALUES (?, ?, ?, ?, ?)");
+            if ($stmt) {
+                $cid = (int)$conversationId;
+                $tok = (int)$tokens;
+                $stmt->bind_param("isssi", $cid, $role, $content, $sourcesJson, $tok);
+                $stmt->execute();
+                $stmt->close();
+            }
 
-        // Update conversation updated_at
-        $up = $this->db->prepare("UPDATE ai_conversations SET updated_at = NOW() WHERE id = ?");
-        $up->bind_param("i", $conversationId);
-        $up->execute();
-
-        return $this->db->lastInsertId();
+            // Update conversation timestamp
+            $up = $this->db->prepare("UPDATE ai_conversations SET updated_at = NOW() WHERE id = ?");
+            if ($up) {
+                $cid = (int)$conversationId;
+                $up->bind_param("i", $cid);
+                $up->execute();
+                $up->close();
+            }
+            return true;
+        } catch (Throwable $e) {}
+        return false;
     }
 
-    // Study Plans
-    public function getStudyPlans($userId) {
-        $stmt = $this->db->prepare(
-            "SELECT p.*, s.name AS subject_name 
-             FROM ai_study_plans p 
-             LEFT JOIN subjects s ON p.subject_id = s.id 
-             WHERE p.user_id = ? 
-             ORDER BY p.created_at DESC"
-        );
-        $stmt->bind_param("i", $userId);
-        $stmt->execute();
-        return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    }
+    // ------------------------------------------------------------------------
+    // Dynamic AI Quizzes & Questions
+    // ------------------------------------------------------------------------
 
-    public function saveStudyPlan($userId, $subjectId, $title, $content, $startDate, $endDate) {
-        $stmt = $this->db->prepare("INSERT INTO ai_study_plans (user_id, subject_id, title, plan_content, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("iissss", $userId, $subjectId, $title, $content, $startDate, $endDate);
-        return $stmt->execute();
-    }
-
-    // Recommendations
-    public function getRecommendations($userId) {
-        $stmt = $this->db->prepare("SELECT * FROM ai_recommendations WHERE user_id = ? ORDER BY FIELD(priority, 'urgent', 'high', 'medium', 'low'), created_at DESC");
-        $stmt->bind_param("i", $userId);
-        $stmt->execute();
-        return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    }
-
-    public function addRecommendation($userId, $title, $category, $suggestion, $priority = 'medium') {
-        $stmt = $this->db->prepare("INSERT INTO ai_recommendations (user_id, title, category, suggestion, priority) VALUES (?, ?, ?, ?, ?)");
-        $stmt->bind_param("issss", $userId, $title, $category, $suggestion, $priority);
-        return $stmt->execute();
-    }
-
-    // Quizzes
     public function getQuizzes($userId) {
-        $stmt = $this->db->prepare("SELECT q.*, s.name AS subject_name FROM ai_quizzes q LEFT JOIN subjects s ON q.subject_id = s.id WHERE q.user_id = ? ORDER BY q.created_at DESC");
-        $stmt->bind_param("i", $userId);
-        $stmt->execute();
-        return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        try {
+            $stmt = $this->db->prepare(
+                "SELECT q.*, s.name AS subject_name 
+                 FROM ai_quizzes q 
+                 LEFT JOIN subjects s ON q.subject_id = s.id 
+                 WHERE q.user_id = ? 
+                 ORDER BY q.created_at DESC"
+            );
+            if ($stmt) {
+                $uid = (int)$userId;
+                $stmt->bind_param("i", $uid);
+                $stmt->execute();
+                $res = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+                $stmt->close();
+                return $res;
+            }
+        } catch (Throwable $e) {}
+        return [];
     }
 
+    /**
+     * Persist AI generated questions into database
+     */
     public function createQuiz($userId, $subjectId, $topic, $difficulty, $questions) {
-        $stmt = $this->db->prepare("INSERT INTO ai_quizzes (user_id, subject_id, topic, total_questions, difficulty) VALUES (?, ?, ?, ?, ?)");
-        $total = count($questions);
-        $stmt->bind_param("iisis", $userId, $subjectId, $topic, $total, $difficulty);
-        if (!$stmt->execute()) {
+        if (empty($questions) || !is_array($questions)) {
             return false;
         }
-        $quizId = $this->db->lastInsertId();
 
-        foreach ($questions as $q) {
-            $qStmt = $this->db->prepare("INSERT INTO ai_quiz_questions (quiz_id, question_text, options_json, correct_answer, explanation) VALUES (?, ?, ?, ?, ?)");
-            $optionsJson = json_encode($q['options']);
-            $qStmt->bind_param("issss", $quizId, $q['question'], $optionsJson, $q['correct_answer'], $q['explanation']);
-            $qStmt->execute();
-        }
+        try {
+            $stmt = $this->db->prepare("INSERT INTO ai_quizzes (user_id, subject_id, topic, total_questions, difficulty) VALUES (?, ?, ?, ?, ?)");
+            if (!$stmt) return false;
 
-        return $quizId;
+            $total = count($questions);
+            $subId = !empty($subjectId) ? (int)$subjectId : null;
+            $uid = (int)$userId;
+            $stmt->bind_param("iisis", $uid, $subId, $topic, $total, $difficulty);
+            if (!$stmt->execute()) {
+                $stmt->close();
+                return false;
+            }
+            $quizId = $this->db->lastInsertId();
+            $stmt->close();
+
+            foreach ($questions as $q) {
+                $qStmt = $this->db->prepare("INSERT INTO ai_quiz_questions (quiz_id, question_text, options_json, correct_answer, explanation) VALUES (?, ?, ?, ?, ?)");
+                if ($qStmt) {
+                    $optionsJson = json_encode($q['options'] ?? []);
+                    $qText = $q['question'] ?? '';
+                    $cAnswer = $q['correct_answer'] ?? '';
+                    $explanation = $q['explanation'] ?? '';
+                    $qStmt->bind_param("issss", $quizId, $qText, $optionsJson, $cAnswer, $explanation);
+                    $qStmt->execute();
+                    $qStmt->close();
+                }
+            }
+
+            return $quizId;
+        } catch (Throwable $e) {}
+        return false;
     }
 
     public function getQuizWithQuestions($quizId, $userId) {
-        $stmt = $this->db->prepare("SELECT * FROM ai_quizzes WHERE id = ? AND user_id = ?");
-        $stmt->bind_param("ii", $quizId, $userId);
-        $stmt->execute();
-        $quiz = $stmt->get_result()->fetch_assoc();
-        if (!$quiz) return null;
-
-        $qStmt = $this->db->prepare("SELECT * FROM ai_quiz_questions WHERE quiz_id = ?");
-        $qStmt->bind_param("i", $quizId);
-        $qStmt->execute();
-        $quiz['questions'] = $qStmt->get_result()->fetch_all(MYSQLI_ASSOC);
-        foreach ($quiz['questions'] as &$item) {
-            $item['options'] = json_decode($item['options_json'], true);
-        }
-        return $quiz;
-    }
-
-    public function recordUsage($userId, $feature, $promptTokens, $responseTokens, $model = 'gemini-1.5-flash') {
-        $stmt = $this->db->prepare("INSERT INTO ai_usage_logs (user_id, feature, prompt_tokens, response_tokens, model) VALUES (?, ?, ?, ?, ?)");
-        $stmt->bind_param("isiis", $userId, $feature, $promptTokens, $responseTokens, $model);
-        return $stmt->execute();
-    }
-
-    // RAG Document Chunks
-    public function storeDocumentChunks($documentId, $chunks) {
-        foreach ($chunks as $index => $text) {
-            $stmt = $this->db->prepare("INSERT INTO document_chunks (document_id, chunk_index, chunk_text) VALUES (?, ?, ?)");
-            $stmt->bind_param("iis", $documentId, $index, $text);
+        try {
+            $stmt = $this->db->prepare("SELECT * FROM ai_quizzes WHERE id = ? AND user_id = ?");
+            if (!$stmt) return null;
+            $qid = (int)$quizId;
+            $uid = (int)$userId;
+            $stmt->bind_param("ii", $qid, $uid);
             $stmt->execute();
-        }
+            $quiz = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            if (!$quiz) return null;
+
+            $qStmt = $this->db->prepare("SELECT * FROM ai_quiz_questions WHERE quiz_id = ? ORDER BY id ASC");
+            if ($qStmt) {
+                $qStmt->bind_param("i", $qid);
+                $qStmt->execute();
+                $quiz['questions'] = $qStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+                $qStmt->close();
+                foreach ($quiz['questions'] as &$item) {
+                    $item['options'] = json_decode($item['options_json'], true) ?: [];
+                }
+                unset($item);
+            }
+            return $quiz;
+        } catch (Throwable $e) {}
+        return null;
+    }
+
+    // ------------------------------------------------------------------------
+    // Study Plans & Recommendations
+    // ------------------------------------------------------------------------
+
+    public function getStudyPlans($userId) {
+        try {
+            $stmt = $this->db->prepare(
+                "SELECT p.*, s.name AS subject_name 
+                 FROM ai_study_plans p 
+                 LEFT JOIN subjects s ON p.subject_id = s.id 
+                 WHERE p.user_id = ? 
+                 ORDER BY p.created_at DESC"
+            );
+            if ($stmt) {
+                $uid = (int)$userId;
+                $stmt->bind_param("i", $uid);
+                $stmt->execute();
+                $res = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+                $stmt->close();
+                return $res;
+            }
+        } catch (Throwable $e) {}
+        return [];
+    }
+
+    public function saveStudyPlan($userId, $subjectId, $title, $content, $startDate, $endDate) {
+        try {
+            $stmt = $this->db->prepare("INSERT INTO ai_study_plans (user_id, subject_id, title, plan_content, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?)");
+            if ($stmt) {
+                $uid = (int)$userId;
+                $subId = !empty($subjectId) ? (int)$subjectId : null;
+                $stmt->bind_param("iissss", $uid, $subId, $title, $content, $startDate, $endDate);
+                $res = $stmt->execute();
+                $stmt->close();
+                return $res;
+            }
+        } catch (Throwable $e) {}
+        return false;
+    }
+
+    public function getRecommendations($userId) {
+        try {
+            $stmt = $this->db->prepare("SELECT * FROM ai_recommendations WHERE user_id = ? ORDER BY FIELD(priority, 'urgent', 'high', 'medium', 'low'), created_at DESC");
+            if ($stmt) {
+                $uid = (int)$userId;
+                $stmt->bind_param("i", $uid);
+                $stmt->execute();
+                $res = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+                $stmt->close();
+                return $res;
+            }
+        } catch (Throwable $e) {}
+        return [];
+    }
+
+    public function addRecommendation($userId, $title, $category, $suggestion, $priority = 'medium') {
+        try {
+            $stmt = $this->db->prepare("INSERT INTO ai_recommendations (user_id, title, category, suggestion, priority) VALUES (?, ?, ?, ?, ?)");
+            if ($stmt) {
+                $uid = (int)$userId;
+                $stmt->bind_param("issss", $uid, $title, $category, $suggestion, $priority);
+                $res = $stmt->execute();
+                $stmt->close();
+                return $res;
+            }
+        } catch (Throwable $e) {}
+        return false;
+    }
+
+    // ------------------------------------------------------------------------
+    // AI Usage Logging
+    // ------------------------------------------------------------------------
+
+    public function recordUsage($userId, $feature, $promptTokens, $responseTokens, $model = 'gemini-3.6-flash') {
+        if (empty($userId) || (int)$userId <= 0) return false;
+        try {
+            $stmt = $this->db->prepare("INSERT INTO ai_usage_logs (user_id, feature, prompt_tokens, response_tokens, model) VALUES (?, ?, ?, ?, ?)");
+            if ($stmt) {
+                $uid = (int)$userId;
+                $pt = (int)$promptTokens;
+                $rt = (int)$responseTokens;
+                $stmt->bind_param("isiis", $uid, $feature, $pt, $rt, $model);
+                $res = $stmt->execute();
+                $stmt->close();
+                return $res;
+            }
+        } catch (Throwable $e) {}
+        return false;
+    }
+
+    // ------------------------------------------------------------------------
+    // Document RAG Storage and Search
+    // ------------------------------------------------------------------------
+
+    public function storeDocumentChunks($documentId, $chunks) {
+        try {
+            foreach ($chunks as $index => $text) {
+                $stmt = $this->db->prepare("INSERT INTO document_chunks (document_id, chunk_index, chunk_text) VALUES (?, ?, ?)");
+                if ($stmt) {
+                    $did = (int)$documentId;
+                    $idx = (int)$index;
+                    $stmt->bind_param("iis", $did, $idx, $text);
+                    $stmt->execute();
+                    $stmt->close();
+                }
+            }
+        } catch (Throwable $e) {}
     }
 
     public function searchChunks($documentId, $queryWords) {
         if (empty($queryWords)) return [];
-        $likes = [];
-        $params = [$documentId];
-        $types = "i";
+        try {
+            $likes = [];
+            $params = [(int)$documentId];
+            $types = "i";
 
-        foreach ($queryWords as $w) {
-            if (strlen($w) > 2) {
-                $likes[] = "chunk_text LIKE ?";
-                $params[] = '%' . $w . '%';
-                $types .= "s";
+            foreach ($queryWords as $w) {
+                if (strlen($w) > 2) {
+                    $likes[] = "chunk_text LIKE ?";
+                    $params[] = '%' . $w . '%';
+                    $types .= "s";
+                }
             }
-        }
-        if (empty($likes)) {
-            $stmt = $this->db->prepare("SELECT * FROM document_chunks WHERE document_id = ? LIMIT 5");
-            $stmt->bind_param("i", $documentId);
-            $stmt->execute();
-            return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-        }
+            if (empty($likes)) {
+                $stmt = $this->db->prepare("SELECT * FROM document_chunks WHERE document_id = ? LIMIT 5");
+                if ($stmt) {
+                    $did = (int)$documentId;
+                    $stmt->bind_param("i", $did);
+                    $stmt->execute();
+                    $res = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+                    $stmt->close();
+                    return $res;
+                }
+                return [];
+            }
 
-        $sql = "SELECT * FROM document_chunks WHERE document_id = ? AND (" . implode(" OR ", $likes) . ") LIMIT 5";
-        $stmt = $this->db->prepare($sql);
-        $stmt->bind_param($types, ...$params);
-        $stmt->execute();
-        return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+            $sql = "SELECT * FROM document_chunks WHERE document_id = ? AND (" . implode(" OR ", $likes) . ") LIMIT 5";
+            $stmt = $this->db->prepare($sql);
+            if ($stmt) {
+                $stmt->bind_param($types, ...$params);
+                $stmt->execute();
+                $res = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+                $stmt->close();
+                return $res;
+            }
+        } catch (Throwable $e) {}
+        return [];
     }
 }

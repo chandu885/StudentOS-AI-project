@@ -26,9 +26,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!empty($res['questions'])) {
         $quizQuestions = $res['questions'];
-    } elseif ($db) {
-        // Query database ai_quiz_questions
-        $qStmt = $db->query("SELECT q.* FROM `ai_quiz_questions` q JOIN `ai_quizzes` z ON q.quiz_id = z.id ORDER BY q.id ASC LIMIT $count");
+    } else {
+        // Direct invocation of AIService to retrieve questions directly from the Gemini API
+        try {
+            require_once BASE_PATH . '/backend/services/AIService.php';
+            $aiService = new AIService();
+            $directRes = $aiService->generateQuiz($userId, 1, $topic, $count, $difficulty);
+            if (!empty($directRes['questions'])) {
+                $quizQuestions = $directRes['questions'];
+            }
+        } catch (Throwable $e) {}
+    }
+
+    // If still empty, check previous dynamically generated questions in DB
+    if (empty($quizQuestions) && $db) {
+        $qStmt = $db->query("SELECT q.* FROM `ai_quiz_questions` q JOIN `ai_quizzes` z ON q.quiz_id = z.id ORDER BY q.id DESC LIMIT $count");
         if ($qStmt && $qStmt->num_rows > 0) {
             $quizQuestions = [];
             while ($row = $qStmt->fetch_assoc()) {

@@ -12,15 +12,32 @@ $successMsg = '';
 $errorMsg = '';
 $db = getDbConnection();
 
-// Auto-seed initial questions if empty
+require_once BASE_PATH . '/backend/services/AIService.php';
+
+// Dynamically populate initial questions from Gemini AI if empty (no hardcoded questions)
 if ($db) {
     $chkQ = $db->query("SELECT COUNT(*) as cnt FROM questions");
-    if ($chkQ && $chkQ->fetch_assoc()['cnt'] == 0) {
-        $db->query("INSERT INTO questions (exam_id, question_text, question_type, marks, created_at) VALUES 
-            (1, 'State and prove Armstrong axioms for functional dependencies.', 'descriptive', 5, NOW()),
-            (1, 'Which normal form is strictly free from transitive dependencies?', 'mcq', 2, NOW()),
-            (1, 'Explain the Two-Phase Locking (2PL) protocol and prove that it guarantees conflict serializability.', 'descriptive', 10, NOW()),
-            (2, 'Explain the divide-and-conquer paradigm with recurrence relation for Merge Sort.', 'descriptive', 8, NOW())");
+    if ($chkQ && (int)$chkQ->fetch_assoc()['cnt'] === 0) {
+        try {
+            $aiService = new AIService();
+            $aiRes = $aiService->fetchQuestionsFromAI('Database Systems & Software Engineering', 4, 'mcq', 'medium');
+            if (!empty($aiRes['questions']) && is_array($aiRes['questions'])) {
+                $qStmt = $db->prepare("INSERT INTO questions (exam_id, question_text, question_type, marks, created_at) VALUES (?, ?, ?, ?, NOW())");
+                if ($qStmt) {
+                    foreach ($aiRes['questions'] as $aiQ) {
+                        $qTxt = $aiQ['question'] ?? '';
+                        $qType = 'mcq';
+                        $qMarks = 2;
+                        $examId = 1;
+                        if (!empty($qTxt)) {
+                            $qStmt->bind_param("issi", $examId, $qTxt, $qType, $qMarks);
+                            $qStmt->execute();
+                        }
+                    }
+                    $qStmt->close();
+                }
+            }
+        } catch (Throwable $t) {}
     }
 }
 

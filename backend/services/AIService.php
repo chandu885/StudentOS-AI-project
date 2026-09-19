@@ -15,37 +15,296 @@ class AIService {
     private $noteModel;
     private $assignmentModel;
     private $examModel;
+
+    // AI Key Settings
     private $apiKey;
+    private $keyName;
+    private $projectName;
+    private $projectNumber;
     private $modelName;
+    private $lastProviderUsed = 'Google Gemini 3.6 Flash';
+    private $lastError = null;
 
     public function __construct() {
         $this->aiModel = new AIModel();
-        $this->academicModel = new Academic();
-        $this->noteModel = new Note();
-        $this->assignmentModel = new Assignment();
-        $this->examModel = new Exam();
+        try { $this->academicModel = new Academic(); } catch (Throwable $t) { $this->academicModel = null; }
+        try { $this->noteModel = new Note(); } catch (Throwable $t) { $this->noteModel = null; }
+        try { $this->assignmentModel = new Assignment(); } catch (Throwable $t) { $this->assignmentModel = null; }
+        try { $this->examModel = new Exam(); } catch (Throwable $t) { $this->examModel = null; }
 
         $config = Config::getInstance();
+        
+        // Configured AI Key settings with defaults specified by the user
         $this->apiKey = $config->get('gemini_api_key', '');
-        $this->modelName = $config->get('gemini_model', 'gemini-1.5-flash');
+        $this->modelName = $config->get('gemini_model', 'gemini-3.6-flash');
+        $this->keyName = $config->get('gemini_key_name', 'chandan');
+        $this->projectName = $config->get('gemini_project_name', 'project/406491916720');
+        $this->projectNumber = $config->get('gemini_project_number', '406491916720');
 
-        // Check DB ai_settings as well
-        $db = Database::getInstance();
-        $res = $db->query("SELECT setting_key, setting_value FROM ai_settings");
-        while ($row = $res->fetch_assoc()) {
-            if ($row['setting_key'] === 'gemini_api_key' && !empty($row['setting_value'])) {
-                $this->apiKey = $row['setting_value'];
+        // Check database ai_settings table for dynamic overrides
+        try {
+            $db = Database::getInstance();
+            $res = $db->query("SELECT setting_key, setting_value FROM ai_settings");
+            if ($res) {
+                while ($row = $res->fetch_assoc()) {
+                    if ($row['setting_key'] === 'gemini_api_key' && !empty($row['setting_value'])) {
+                        $this->apiKey = trim($row['setting_value']);
+                    }
+                    if ($row['setting_key'] === 'default_model' && !empty($row['setting_value'])) {
+                        $this->modelName = trim($row['setting_value']);
+                    }
+                    if ($row['setting_key'] === 'gemini_key_name' && !empty($row['setting_value'])) {
+                        $this->keyName = trim($row['setting_value']);
+                    }
+                    if ($row['setting_key'] === 'gemini_project_name' && !empty($row['setting_value'])) {
+                        $this->projectName = trim($row['setting_value']);
+                    }
+                    if ($row['setting_key'] === 'gemini_project_number' && !empty($row['setting_value'])) {
+                        $this->projectNumber = trim($row['setting_value']);
+                    }
+                }
             }
-            if ($row['setting_key'] === 'default_model' && !empty($row['setting_value'])) {
-                $this->modelName = $row['setting_value'];
+        } catch (Throwable $t) {}
+
+        // Allow session override if specifically provided
+        if (session_status() === PHP_SESSION_ACTIVE && !empty($_SESSION['ai_api_key'])) {
+            $this->apiKey = trim($_SESSION['ai_api_key']);
+        }
+
+        // Sanitize model to guarantee an active model is used
+        $this->modelName = $this->normalizeModelName($this->modelName);
+    }
+
+    /**
+     * Map deprecated/retired model names to active Gemini models
+     */
+    public function normalizeModelName($model) {
+        $m = trim($model ?? '');
+        $deprecated = [
+            'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash', 
+            'gemini-2.5-flash', 'gemini-pro', 'gemini-flash', 'gemini-1.0-pro'
+        ];
+        if (empty($m) || in_array(strtolower($m), $deprecated)) {
+            return 'gemini-3.6-flash';
+        }
+        return $m;
+    }
+
+    public function getLastError() {
+        return $this->lastError;
+    }
+
+    /**
+     * Get current AI Key configuration details
+     */
+    public function getKeySettings() {
+        return [
+            'api_key' => $this->apiKey,
+            'api_key_masked' => !empty($this->apiKey) ? substr($this->apiKey, 0, 6) . '...' . substr($this->apiKey, -4) : '',
+            'name' => $this->keyName,
+            'project_name' => $this->projectName,
+            'project_number' => $this->projectNumber,
+            'model' => $this->modelName,
+            'provider' => 'Google Gemini (Generative Language API)',
+            'endpoint' => "https://generativelanguage.googleapis.com/v1beta/models/{$this->modelName}:generateContent"
+        ];
+    }
+
+    /**
+     * Update AI Key settings
+     */
+    public function updateKeySettings($apiKey, $keyName = null, $projectName = null, $projectNumber = null, $model = null) {
+        if (!empty($apiKey)) {
+            $this->apiKey = trim($apiKey);
+        }
+        if (!empty($keyName)) {
+            $this->keyName = trim($keyName);
+        }
+        if (!empty($projectName)) {
+            $this->projectName = trim($projectName);
+        }
+        if (!empty($projectNumber)) {
+            $this->projectNumber = trim($projectNumber);
+        }
+        if (!empty($model)) {
+            $this->modelName = trim($model);
+        }
+
+        return $this->aiModel->saveAIKeySettings($this->apiKey, $this->keyName, $this->projectName, $this->projectNumber, $this->modelName);
+    }
+
+    /**
+     * Generate dynamic quiz questions strictly retrieved from Google Gemini API
+     * (No hardcoded questions remain in code)
+     */
+    public function generateQuiz($userId, $subjectId, $topic, $numQuestions = 5, $difficulty = 'medium', $customApiKey = null) {
+        $subject = $this->academicModel->getSubjectById($subjectId);
+        $subjectName = $subject['name'] ?? 'Computer Science & Engineering';
+
+        $numQuestions = max(1, min(20, (int)$numQuestions));
+
+        $prompt = "Generate exactly $numQuestions unique, high-quality multiple-choice questions (MCQs) for the topic '$topic' in the academic subject '$subjectName' at a '$difficulty' difficulty level.\n"
+                . "Requirements:\n"
+                . "1. Provide 4 distinct options per question.\n"
+                . "2. Clearly identify the single correct answer which must exactly match one of the 4 options.\n"
+                . "3. Include a comprehensive pedagogical explanation of why that answer is correct and why other distractors are wrong.\n"
+                . "4. Output strictly a valid JSON array of objects conforming to this schema:\n"
+                . "[\n"
+                . "  {\n"
+                . "    \"question\": \"Question text here\",\n"
+                . "    \"options\": [\"Option 1\", \"Option 2\", \"Option 3\", \"Option 4\"],\n"
+                . "    \"correct_answer\": \"Option 1\",\n"
+                . "    \"explanation\": \"Detailed explanation here\"\n"
+                . "  }\n"
+                . "]\n"
+                . "Do not include any introductory remarks, markdown code blocks, or explanations outside the JSON array.";
+
+        $systemInstruction = "You are an expert university professor and examination board chair generating rigorous academic questions.";
+
+        // Retrieve directly from the Gemini API using JSON output mode
+        $raw = $this->callGeminiApi($systemInstruction, $prompt, $customApiKey, true);
+
+        if (empty($raw)) {
+            // Fallback retry with standard generation if JSON mode failed
+            $raw = $this->callGeminiApi($systemInstruction, $prompt, $customApiKey, false);
+        }
+
+        $questions = [];
+        if (!empty($raw)) {
+            $cleaned = trim($raw);
+            $cleaned = preg_replace('/^```(?:json)?\s*/i', '', $cleaned);
+            $cleaned = preg_replace('/\s*```$/i', '', $cleaned);
+            
+            // If json is wrapped in an object like {"questions": [...]}
+            $decoded = json_decode($cleaned, true);
+            if (is_array($decoded)) {
+                if (isset($decoded['questions']) && is_array($decoded['questions'])) {
+                    $questions = $decoded['questions'];
+                } elseif (isset($decoded[0]['question'])) {
+                    $questions = $decoded;
+                }
             }
         }
+
+        if (empty($questions) || !is_array($questions)) {
+            return [
+                'success' => false,
+                'error' => 'Failed to retrieve questions from the AI API. Please verify your network connection and API key quota.',
+                'provider' => $this->lastProviderUsed,
+                'raw_response' => substr($raw ?? '', 0, 500)
+            ];
+        }
+
+        // Format and compute correct option index
+        $validQuestions = [];
+        foreach ($questions as $q) {
+            if (empty($q['question']) || empty($q['options']) || !is_array($q['options'])) {
+                continue;
+            }
+
+            $opts = array_values($q['options']);
+            $correctAnswer = $q['correct_answer'] ?? ($opts[0] ?? '');
+            $correctIdx = array_search($correctAnswer, $opts);
+            if ($correctIdx === false) {
+                $correctIdx = 0;
+                $correctAnswer = $opts[0];
+            }
+
+            $validQuestions[] = [
+                'question' => (string)$q['question'],
+                'options' => $opts,
+                'correct_answer' => (string)$correctAnswer,
+                'correct_index' => (int)$correctIdx,
+                'explanation' => (string)($q['explanation'] ?? 'Consult core course syllabus.')
+            ];
+        }
+
+        if (empty($validQuestions)) {
+            return [
+                'success' => false,
+                'error' => 'AI returned an invalid question structure. Please try again.',
+                'provider' => $this->lastProviderUsed
+            ];
+        }
+
+        // Save generated quiz and questions into the database
+        $quizId = $this->aiModel->createQuiz($userId, $subjectId, $topic, $difficulty, $validQuestions);
+        $this->aiModel->recordUsage($userId, 'ai_quiz_generation', strlen($prompt)/4, strlen($raw)/4, $this->modelName);
+
+        return [
+            'success' => true,
+            'quiz_id' => $quizId,
+            'topic' => $topic,
+            'difficulty' => $difficulty,
+            'total' => count($validQuestions),
+            'questions' => $validQuestions,
+            'provider' => $this->lastProviderUsed
+        ];
+    }
+
+    /**
+     * Retrieve examination / question bank questions dynamically from Gemini API
+     */
+    public function fetchQuestionsFromAI($topic, $count = 5, $type = 'mcq', $difficulty = 'medium', $subjectName = 'Computer Science') {
+        $count = max(1, min(20, (int)$count));
+
+        if ($type === 'descriptive') {
+            $prompt = "Generate $count rigorous university examination questions for the topic '$topic' in '$subjectName' ($difficulty difficulty).\n"
+                    . "Format strictly as a JSON array of objects:\n"
+                    . "[\n"
+                    . "  {\n"
+                    . "    \"question\": \"Question statement\",\n"
+                    . "    \"marks\": 5,\n"
+                    . "    \"rubric\": \"Key grading points and expected concepts\",\n"
+                    . "    \"sample_answer\": \"Complete academic answer\"\n"
+                    . "  }\n"
+                    . "]\n"
+                    . "Return only raw JSON.";
+        } else {
+            $prompt = "Generate $count multiple-choice examination questions for '$topic' in '$subjectName' ($difficulty difficulty).\n"
+                    . "Format strictly as a JSON array of objects:\n"
+                    . "[\n"
+                    . "  {\n"
+                    . "    \"question\": \"Question statement\",\n"
+                    . "    \"options\": [\"Option A\", \"Option B\", \"Option C\", \"Option D\"],\n"
+                    . "    \"correct_answer\": \"Option A\",\n"
+                    . "    \"explanation\": \"Why this option is correct\"\n"
+                    . "  }\n"
+                    . "]\n"
+                    . "Return only raw JSON.";
+        }
+
+        $raw = $this->callGeminiApi("You are an official university examination controller.", $prompt, null, true);
+        if (empty($raw)) {
+            $raw = $this->callGeminiApi("You are an official university examination controller.", $prompt, null, false);
+        }
+
+        $cleaned = trim($raw ?? '');
+        $cleaned = preg_replace('/^```(?:json)?\s*/i', '', $cleaned);
+        $cleaned = preg_replace('/\s*```$/i', '', $cleaned);
+        $items = json_decode($cleaned, true);
+
+        if (!is_array($items) || empty($items)) {
+            return [
+                'success' => false,
+                'error' => 'Unable to retrieve questions from Gemini API. Check API key and quota.',
+                'provider' => $this->lastProviderUsed
+            ];
+        }
+
+        return [
+            'success' => true,
+            'topic' => $topic,
+            'type' => $type,
+            'questions' => $items,
+            'provider' => $this->lastProviderUsed
+        ];
     }
 
     /**
      * Ask Academic Assistant
      */
-    public function askAssistant($userId, $question, $conversationId = null) {
+    public function askAssistant($userId, $question, $conversationId = null, $customApiKey = null) {
         if (!$conversationId) {
             $title = mb_substr($question, 0, 45) . '...';
             $conversationId = $this->aiModel->createConversation($userId, $title, 'assistant');
@@ -54,7 +313,7 @@ class AIService {
         // Record user message
         $this->aiModel->addMessage($conversationId, 'user', $question);
 
-        // Fetch student context (enrolled subjects, upcoming exams, pending assignments)
+        // Fetch student context
         $context = $this->buildStudentContext($userId);
 
         $systemPrompt = "You are StudentOS AI, an intelligent Google-style academic search and tutoring assistant.\n"
@@ -63,11 +322,17 @@ class AIService {
                       . "1. **Direct Answer / Overview**: Start immediately with a succinct 1-2 sentence direct answer/definition that gives the student the core answer upfront.\n"
                       . "2. **Key Highlights**: Use clear, readable bullet points with **bold terms** explaining the primary concepts, mechanisms, or steps.\n"
                       . "3. **Knowledge Card / Practical Example**: Provide a real-world example, comparison table, or key formula if applicable.\n"
-                      . "4. **People Also Ask**: Conclude with 2-3 related follow-up questions students frequently ask about this subject (format each as a bullet starting with '• ').\n\n"
+                      . "4. **Code / Math (if relevant)**: Provide clean, tested code blocks with language identifiers or explicit mathematical notation.\n"
+                      . "5. **People Also Ask**: Conclude with 2-3 related follow-up questions students frequently ask about this subject (format each as a bullet starting with '• ').\n\n"
                       . "Context about this student:\n" . $context . "\n\n"
                       . "If asked about classes, schedules, or exams, use the provided student context.";
 
-        $answer = $this->callGemini($systemPrompt, $question);
+        $answer = $this->callGeminiApi($systemPrompt, $question, $customApiKey);
+
+        if (empty($answer)) {
+            $errDetail = !empty($this->lastError) ? " ({$this->lastError})" : "";
+            $answer = "Unable to connect to Google Gemini API. Please ensure your API key ('{$this->apiKey}') has active Generative Language API permissions.{$errDetail}";
+        }
 
         // Record assistant response
         $this->aiModel->addMessage($conversationId, 'assistant', $answer);
@@ -76,15 +341,87 @@ class AIService {
         return [
             'success' => true,
             'conversation_id' => $conversationId,
-            'answer' => $answer
+            'answer' => $answer,
+            'provider' => $this->lastProviderUsed,
+            'model' => $this->modelName
+        ];
+    }
+
+    /**
+     * Dedicated AI Assignment Solver & Tutor
+     */
+    public function askAssignmentAssist($userId, $assignmentId, $question = '', $taskType = 'solve', $draftText = '', $customApiKey = null) {
+        $assignment = null;
+        if ($assignmentId > 0) {
+            $assignment = $this->assignmentModel->findById($assignmentId);
+        }
+
+        $asgTitle = $assignment['title'] ?? 'Coursework Assignment';
+        $subName = $assignment['subject_name'] ?? 'Academic Subject';
+        $desc = $assignment['description'] ?? '';
+        $instructions = $assignment['instructions'] ?? '';
+        $maxMarks = $assignment['max_marks'] ?? 100;
+
+        $systemPrompt = "You are StudentOS AI's Master Academic Assignment Solver & University Professor.\n"
+                      . "Your task is to provide publication-grade academic solutions, code, theoretical breakdowns, and grading evaluations.\n"
+                      . "Formatting Guidelines:\n"
+                      . "- Use clean Markdown formatting.\n"
+                      . "- Structure your response with clear sections: Executive Summary, Mathematical/Theoretical Foundation, Step-by-Step Complete Solution, Verified Code Implementation (if applicable), and Analysis/Checklist.\n"
+                      . "- For code, write complete, syntax-correct, modular, commented implementations with time/space complexity notes.\n"
+                      . "- For proofs or derivations, show every intermediate step clearly.\n"
+                      . "- Ensure the response directly helps the student achieve full marks ({$maxMarks} pts).";
+
+        $userPrompt = "ASSIGNMENT CONTEXT:\n"
+                    . "- Subject: $subName\n"
+                    . "- Assignment Title: $asgTitle\n"
+                    . "- Description / Problem Statement: $desc\n"
+                    . ($instructions ? "- Faculty Instructions: $instructions\n" : "")
+                    . "- Maximum Marks: $maxMarks pts\n\n";
+
+        if ($taskType === 'solve') {
+            $userPrompt .= "TASK: Provide a complete, step-by-step, comprehensive academic solution for this entire assignment.\n"
+                        . "Address all problem statements, show calculations/proofs, provide full working code if programming is required, and summarize final conclusions.";
+        } elseif ($taskType === 'code') {
+            $userPrompt .= "TASK: Generate the complete production-grade code implementation to solve this assignment.\n"
+                        . "Include comments explaining key algorithmic decisions, instructions on how to run/test the code, sample inputs/outputs, and edge case handling.";
+        } elseif ($taskType === 'explain') {
+            $userPrompt .= "TASK: Break down and explain the core theoretical principles, formulas, and concepts behind this assignment.\n"
+                        . "Provide an intuitive explanation, analogies, and a study roadmap so the student thoroughly understands the concepts.";
+        } elseif ($taskType === 'review') {
+            $userPrompt .= "TASK: Review and grade the student's draft response below for this assignment:\n"
+                        . "STUDENT'S DRAFT RESPONSE:\n" . ($draftText ?: 'No draft text provided.') . "\n\n"
+                        . "Provide a detailed evaluation: strengths, missing elements, logical/code errors, actionable fixes to get full marks, and estimated score out of $maxMarks.";
+        } else {
+            $userPrompt .= "STUDENT'S SPECIFIC QUESTION / REQUEST:\n" . ($question ?: "How do I solve this assignment step-by-step?");
+        }
+
+        if (!empty($question) && $taskType !== 'ask') {
+            $userPrompt .= "\n\nADDITIONAL STUDENT NOTE / QUESTION:\n" . $question;
+        }
+
+        $answer = $this->callGeminiApi($systemPrompt, $userPrompt, $customApiKey);
+
+        if (empty($answer)) {
+            $answer = "Unable to retrieve assignment solution from Google Gemini API. Please verify the API connection.";
+        }
+
+        $this->aiModel->recordUsage($userId, 'assignment_assist', strlen($userPrompt)/4, strlen($answer)/4, $this->modelName);
+
+        return [
+            'success' => true,
+            'assignment_id' => $assignmentId,
+            'assignment_title' => $asgTitle,
+            'subject_name' => $subName,
+            'task_type' => $taskType,
+            'answer' => $answer,
+            'provider' => $this->lastProviderUsed
         ];
     }
 
     /**
      * PDF Q&A / Document RAG
      */
-    public function askDocument($userId, $documentId, $question) {
-        // Query keywords
+    public function askDocument($userId, $documentId, $question, $customApiKey = null) {
         $words = preg_split('/[^\w]+/', strtolower($question), -1, PREG_SPLIT_NO_EMPTY);
         $chunks = $this->aiModel->searchChunks($documentId, $words);
 
@@ -116,27 +453,24 @@ class AIService {
 
         $prompt = "You are StudentOS AI Document Q&A assistant (RAG).\n"
                 . "Based on the following excerpts from the student's document, provide a structured, Google-style answer to the question.\n"
-                . "Structure:\n"
-                . "1. **Direct Answer**: Direct 1-2 sentence summary from the document.\n"
-                . "2. **Key Findings from Document**: Bullet points with section citations.\n"
-                . "3. **Takeaway**: Actionable concept takeaway.\n\n"
                 . "DOCUMENT EXCERPTS:\n" . $chunkContext . "\n\n"
                 . "QUESTION:\n" . $question;
 
-        $answer = $this->callGemini("You are an academic document Q&A tutor providing Google-style structured summaries.", $prompt);
+        $answer = $this->callGeminiApi("You are an academic document Q&A tutor providing Google-style structured summaries.", $prompt, $customApiKey);
         $this->aiModel->recordUsage($userId, 'pdf_qa', strlen($prompt)/4, strlen($answer)/4, $this->modelName);
 
         return [
             'success' => true,
             'answer' => $answer,
-            'sources' => $sources
+            'sources' => $sources,
+            'provider' => $this->lastProviderUsed
         ];
     }
 
     /**
      * AI Study Planner
      */
-    public function generateStudyPlan($userId, $subjectId, $examDate, $daysCount = 7) {
+    public function generateStudyPlan($userId, $subjectId, $examDate, $daysCount = 7, $customApiKey = null) {
         $subject = $this->academicModel->getSubjectById($subjectId);
         $subjectName = $subject['name'] ?? 'Academic Subject';
         $syllabus = $subject['syllabus'] ?? 'Core curriculum topics and exam review';
@@ -146,7 +480,7 @@ class AIService {
                 . "Syllabus/Topics:\n$syllabus\n\n"
                 . "Format the output in clear Markdown with daily study goals, recommended hours (1.5 - 2.5 hrs/day), active recall questions, and revision intervals.";
 
-        $plan = $this->callGemini("You are an expert academic study strategist.", $prompt);
+        $plan = $this->callGeminiApi("You are an expert academic study strategist.", $prompt, $customApiKey);
 
         $startDate = date('Y-m-d');
         $title = "$subjectName Exam Study Plan ($daysCount Days)";
@@ -155,99 +489,50 @@ class AIService {
         return [
             'success' => true,
             'title' => $title,
-            'plan' => $plan
-        ];
-    }
-
-    /**
-     * AI Quiz Generator
-     */
-    public function generateQuiz($userId, $subjectId, $topic, $numQuestions = 5, $difficulty = 'medium') {
-        $subject = $this->academicModel->getSubjectById($subjectId);
-        $subjectName = $subject['name'] ?? 'Computer Science';
-
-        $prompt = "Generate exactly $numQuestions multiple-choice questions (MCQs) for the topic '$topic' in '$subjectName' at a '$difficulty' difficulty level.\n"
-                . "Return strictly valid JSON array format, where each item has:\n"
-                . "{\n"
-                . "  \"question\": \"Question string\",\n"
-                . "  \"options\": [\"Option A\", \"Option B\", \"Option C\", \"Option D\"],\n"
-                . "  \"correct_answer\": \"Option A\",\n"
-                . "  \"explanation\": \"Why this option is correct\"\n"
-                . "}\n"
-                . "Output only raw JSON, no markdown formatting or backticks.";
-
-        $raw = $this->callGemini("You are an automated academic quiz generator.", $prompt);
-        
-        // Clean markdown backticks if returned
-        $cleaned = preg_replace('/^```(?:json)?\s*/i', '', trim($raw));
-        $cleaned = preg_replace('/\s*```$/i', '', $cleaned);
-        $questions = json_decode($cleaned, true);
-
-        if (!is_array($questions) || empty($questions)) {
-            // Intelligent fallback questions
-            $questions = $this->getFallbackQuiz($topic);
-        }
-
-        foreach ($questions as &$q) {
-            if (!isset($q['correct_index']) && isset($q['correct_answer']) && is_array($q['options'])) {
-                $idx = array_search($q['correct_answer'], $q['options']);
-                $q['correct_index'] = ($idx !== false) ? $idx : 0;
-            }
-        }
-        unset($q);
-
-        $quizId = $this->aiModel->createQuiz($userId, $subjectId, $topic, $difficulty, $questions);
-
-        return [
-            'success' => true,
-            'quiz_id' => $quizId,
-            'questions' => $questions
+            'plan' => $plan,
+            'provider' => $this->lastProviderUsed
         ];
     }
 
     /**
      * AI Summarizer
      */
-    public function summarizeText($userId, $text, $style = 'bullet') {
+    public function summarizeText($userId, $text, $style = 'bullet', $customApiKey = null) {
         $prompt = "Summarize the following study material for university exams.\n"
                 . "Style: High-yield bullet points, bold key terms, core formulas/theorems, and 3 vital exam takeaway points.\n\n"
                 . "CONTENT:\n" . $text;
 
-        $summary = $this->callGemini("You are a university academic summarizer.", $prompt);
+        $summary = $this->callGeminiApi("You are a university academic summarizer.", $prompt, $customApiKey);
         return [
             'success' => true,
-            'summary' => $summary
+            'summary' => $summary,
+            'provider' => $this->lastProviderUsed
         ];
     }
 
     /**
-     * AI Intelligent Search
+     * AI Search across local database
      */
     public function search($userId, $query) {
         $db = Database::getInstance();
         $kw = '%' . $query . '%';
 
-        // Notes
         $nStmt = $db->prepare("SELECT id, title, content, 'note' AS type FROM notes WHERE user_id = ? AND (title LIKE ? OR content LIKE ? OR tags LIKE ?) LIMIT 5");
         $nStmt->bind_param("isss", $userId, $kw, $kw, $kw);
         $nStmt->execute();
         $notes = $nStmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
-        // Assignments
         $aStmt = $db->prepare("SELECT id, title, description, deadline, 'assignment' AS type FROM assignments WHERE (title LIKE ? OR description LIKE ?) AND deleted_at IS NULL LIMIT 5");
         $aStmt->bind_param("ss", $kw, $kw);
         $aStmt->execute();
         $assignments = $aStmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
-        // Subjects
         $sStmt = $db->prepare("SELECT id, code, name, syllabus, 'subject' AS type FROM subjects WHERE (name LIKE ? OR code LIKE ? OR syllabus LIKE ?) LIMIT 5");
         $sStmt->bind_param("sss", $kw, $kw, $kw);
         $sStmt->execute();
         $subjects = $sStmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
         $results = array_merge($notes, $assignments, $subjects);
-
-        // Generate brief AI synthesis
         $synthesis = "Found " . count($results) . " direct records matching '$query'.";
         if (!empty($results)) {
             $synthesis .= " Review the relevant items below.";
@@ -261,285 +546,142 @@ class AIService {
         ];
     }
 
-    private function isValidApiKey($key) {
-        return !empty($key) && $key !== 'your_gemini_api_key_here' && strpos($key, 'AIza') === 0 && strlen($key) > 25;
+    /**
+     * Call Google Gemini API (Universal entrypoint supporting AQ. and AIza keys)
+     */
+    public function callAI($systemInstruction, $userPrompt, $customApiKey = null) {
+        return $this->callGeminiApi($systemInstruction, $userPrompt, $customApiKey);
     }
 
     /**
-     * Call Gemini API with automatic fallback
+     * Dedicated Google Gemini API caller
+     * Uses Generative Language API with configured API Key, Project Number, and Model
      */
-    private function callGemini($systemInstruction, $userPrompt) {
-        if ($this->isValidApiKey($this->apiKey)) {
-            $url = "https://generativelanguage.googleapis.com/v1beta/models/{$this->modelName}:generateContent?key=" . $this->apiKey;
-            $payload = [
-                'systemInstruction' => [
-                    'parts' => [['text' => $systemInstruction]]
-                ],
-                'contents' => [
-                    [
-                        'role' => 'user',
-                        'parts' => [['text' => $userPrompt]]
-                    ]
-                ],
-                'generationConfig' => [
-                    'temperature' => 0.7,
-                    'maxOutputTokens' => 2048
+    public function callGeminiApi($systemInstruction, $userPrompt, $customApiKey = null, $forceJson = false) {
+        $activeKey = !empty($customApiKey) ? trim($customApiKey) : $this->apiKey;
+        if (empty($activeKey) && session_status() === PHP_SESSION_ACTIVE && !empty($_SESSION['ai_api_key'])) {
+            $activeKey = trim($_SESSION['ai_api_key']);
+        }
+
+        if (empty($activeKey)) {
+            return null;
+        }
+
+        $model = $this->modelName ?: 'gemini-3.6-flash';
+        $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent";
+
+        $genConfig = [
+            'temperature' => 0.7,
+            'maxOutputTokens' => 4096
+        ];
+
+        if ($forceJson) {
+            $genConfig['responseMimeType'] = 'application/json';
+        }
+
+        $payload = [
+            'contents' => [
+                [
+                    'role' => 'user',
+                    'parts' => [['text' => $userPrompt]]
                 ]
+            ],
+            'generationConfig' => $genConfig
+        ];
+
+        if (!empty($systemInstruction)) {
+            $payload['systemInstruction'] = [
+                'parts' => [['text' => $systemInstruction]]
             ];
+        }
 
-            $ch = curl_init($url);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        // Pass authentication via standard x-goog-api-key header (fully compatible with AQ. and AIza keys)
+        $headers = [
+            'Content-Type: application/json',
+            'x-goog-api-key: ' . $activeKey
+        ];
 
-            $response = curl_exec($ch);
-            $err = curl_error($ch);
-            $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
+        // Include Google Cloud Project attribution if configured
+        if (!empty($this->projectNumber)) {
+            $headers[] = 'X-Goog-User-Project: ' . $this->projectNumber;
+        }
 
-            if (!$err && $status === 200) {
-                $data = json_decode($response, true);
-                $text = $data['candidates'][0]['content']['parts'][0]['text'] ?? '';
+        $response = $this->httpPostJson($url, $payload, $headers, 30);
+        if (!empty($response)) {
+            $data = json_decode($response, true);
+            if (isset($data['candidates'][0]['content']['parts'])) {
+                $text = '';
+                foreach ($data['candidates'][0]['content']['parts'] as $part) {
+                    if (isset($part['text']) && empty($part['thought'])) {
+                        $text .= $part['text'];
+                    }
+                }
+                if (empty($text) && isset($data['candidates'][0]['content']['parts'][0]['text'])) {
+                    $text = $data['candidates'][0]['content']['parts'][0]['text'];
+                }
+
                 if (!empty($text)) {
+                    $this->lastProviderUsed = "Google Gemini ({$model}) (Live)";
                     return $text;
                 }
             }
         }
 
-        // Intelligent offline engine
-        return $this->generateLocalResponse($userPrompt);
+        return null;
     }
 
-    private function generateLocalResponse($query) {
-        $q = strtolower($query);
+    /**
+     * HTTP POST JSON with cURL
+     */
+    private function httpPostJson($url, $payload, $customHeaders = [], $timeout = 30) {
+        $json = is_string($payload) ? $payload : json_encode($payload);
+        $headers = array_merge(['Content-Type: application/json'], $customHeaders);
 
-        // Document RAG excerpts
-        if (strpos($query, 'DOCUMENT EXCERPTS:') !== false) {
-            preg_match('/DOCUMENT EXCERPTS:\s*(.*?)\s*QUESTION:\s*(.*)$/si', $query, $m);
-            $excerpts = trim($m[1] ?? '');
-            $userQ = trim($m[2] ?? '');
-            if (!empty($excerpts) && strpos($excerpts, 'not indexed') === false) {
-                // Find matching sentences in the excerpts
-                $sentences = preg_split('/(?<=[.?!])\s+/', $excerpts);
-                $qWords = preg_split('/[^\w]+/', strtolower($userQ), -1, PREG_SPLIT_NO_EMPTY);
-                $stopWords = ['what', 'is', 'the', 'of', 'in', 'and', 'to', 'a', 'for', 'are', 'how', 'does', 'can', 'you', 'explain', 'this', 'document'];
-                $keywords = array_filter($qWords, function($w) use ($stopWords) { return strlen($w) > 2 && !in_array($w, $stopWords); });
+        if (function_exists('curl_init')) {
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $json);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 
-                $highlightedSentences = [];
-                foreach ($sentences as $s) {
-                    $sClean = strtolower($s);
-                    $matches = 0;
-                    foreach ($keywords as $kw) {
-                        if (strpos($sClean, $kw) !== false) $matches++;
-                    }
-                    if ($matches > 0 && strlen(trim($s)) > 20) {
-                        $highlightedSentences[] = trim($s);
+            $response = curl_exec($ch);
+            $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $err = curl_error($ch);
+            curl_close($ch);
+
+            if ($err) {
+                $this->lastError = "Network error: " . $err;
+                error_log("cURL Error: " . $err);
+            } elseif ($status >= 200 && $status < 300 && !empty($response)) {
+                $this->lastError = null;
+                return $response;
+            } else {
+                $errMsg = "HTTP $status";
+                if (!empty($response)) {
+                    $jsonErr = json_decode($response, true);
+                    if (!empty($jsonErr['error']['message'])) {
+                        $errMsg .= ": " . $jsonErr['error']['message'];
                     }
                 }
-
-                $directAnswer = !empty($highlightedSentences) 
-                    ? implode(' ', array_slice($highlightedSentences, 0, 3))
-                    : (strlen($excerpts) > 280 ? substr($excerpts, 0, 260) . '...' : $excerpts);
-
-                return "### 🔍 Google-Style Document Overview\n\n"
-                     . "**Quick Answer:** " . $directAnswer . "\n\n"
-                     . "### 📌 Verified Document Excerpts\n"
-                     . $excerpts . "\n\n"
-                     . "### 💡 Knowledge Takeaway\n"
-                     . "- **Context**: Synthesized from verified excerpts of your uploaded PDF document.\n"
-                     . "- **Focus**: Review the highlighted definitions and formulas for upcoming assessments.\n\n"
-                     . "### ❓ People Also Ask\n"
-                     . "• Can you summarize this document section in simple bullet points?\n"
-                     . "• What are the most likely exam questions based on this excerpt?\n"
-                     . "• How does this concept apply in practical real-world engineering?";
+                $this->lastError = $errMsg;
+                error_log("Gemini API Error: " . $errMsg);
             }
         }
 
-        // Process vs Thread
-        if (strpos($q, 'process') !== false && strpos($q, 'thread') !== false) {
-            return "### 🔍 Google AI Overview\n\n"
-                 . "**Quick Answer:** A **Process** is an independent executing program with its own private address space and dedicated memory, while a **Thread** is a lightweight unit of execution within a process that shares memory and resources with other threads.\n\n"
-                 . "### 📌 Key Differences & Highlights\n"
-                 . "- **Address Space**: Processes have separate isolated memory spaces; threads of the same process share code, data, and OS resources.\n"
-                 . "- **Creation & Overhead**: Context switching between processes is heavy and slow; thread context switching is fast and lightweight.\n"
-                 . "- **Communication**: Processes communicate via Inter-Process Communication (IPC, sockets, pipes); threads communicate directly via shared memory.\n"
-                 . "- **Fault Isolation**: If one process crashes, other processes remain unaffected; if a thread encounters an unhandled fatal error, the entire process terminates.\n\n"
-                 . "### 💡 Quick Comparison Card\n"
-                 . "| Feature | Process | Thread |\n"
-                 . "|---|---|---|\n"
-                 . "| **Memory** | Separate isolated space | Shared within process |\n"
-                 . "| **Switch Cost** | High (MMU/TLB flush) | Low (registers/stack only) |\n"
-                 . "| **Communication** | IPC (Pipes, Sockets) | Direct Shared Memory |\n\n"
-                 . "### ❓ People Also Ask\n"
-                 . "• What is the difference between user-level threads and kernel-level threads?\n"
-                 . "• When should I use multithreading versus multiprocessing in software engineering?\n"
-                 . "• What is a race condition and how do mutex locks resolve it?";
-        }
-
-        // Dijkstra's Algorithm
-        if (strpos($q, 'dijkstra') !== false || (strpos($q, 'shortest path') !== false && strpos($q, 'algorithm') !== false)) {
-            return "### 🔍 Google AI Overview\n\n"
-                 . "**Quick Answer:** **Dijkstra's Algorithm** is a greedy graph search algorithm that finds the shortest path from a single source vertex to all other vertices in a weighted graph with non-negative edge weights.\n\n"
-                 . "### 📌 Step-by-Step Logic\n"
-                 . "1. **Initialize Distances**: Assign distance `0` to the source node and `Infinity` to all other nodes. Maintain a min-priority queue.\n"
-                 . "2. **Select Minimum Node**: Extract the unvisited vertex `u` with the smallest tentative distance.\n"
-                 . "3. **Relax Edges**: For each neighbor `v` of `u`, calculate `alt = dist[u] + weight(u, v)`. If `alt < dist[v]`, update `dist[v] = alt`.\n"
-                 . "4. **Repeat**: Mark `u` as visited and repeat until all reachable vertices are processed.\n\n"
-                 . "### 💡 Fast Facts & Complexity\n"
-                 . "- **Time Complexity**: **O((V + E) log V)** using a binary min-heap / priority queue.\n"
-                 . "- **Space Complexity**: **O(V)** to store distances and visited sets.\n"
-                 . "- **Critical Constraint**: Does **NOT** work with negative edge weights (use *Bellman-Ford* instead).\n\n"
-                 . "### ❓ People Also Ask\n"
-                 . "• Why does Dijkstra's algorithm fail with negative edge weights?\n"
-                 . "• How does Dijkstra compare to the A* search algorithm?\n"
-                 . "• Can Dijkstra be used on unweighted graphs instead of Breadth-First Search (BFS)?";
-        }
-
-        // Database Normalization Overview
-        if (strpos($q, 'normaliz') !== false || strpos($q, 'bcnf') !== false || strpos($q, '3nf') !== false || strpos($q, '1nf') !== false || strpos($q, '2nf') !== false) {
-            return "### 🔍 Google AI Overview\n\n"
-                 . "**Quick Answer:** **Database Normalization** is a multi-step design technique used to organize relational database tables, eliminate redundant duplicate data, and protect data integrity against insertion, update, and deletion anomalies.\n\n"
-                 . "### 📌 Core Normal Forms Breakdown\n"
-                 . "- **1NF (Atomic Values)**: All column values must be atomic (indivisible). No repeating groups, arrays, or comma-separated lists.\n"
-                 . "- **2NF (No Partial Dependencies)**: Must be in 1NF, and all non-key columns must depend on the **entire** candidate key (not just part of a composite key).\n"
-                 . "- **3NF (No Transitive Dependencies)**: Must be in 2NF, and no non-key column can depend on another non-key column (`A → B → C` is forbidden).\n"
-                 . "- **BCNF (Boyce-Codd Normal Form)**: A stricter variant of 3NF. For **every** functional dependency `X → Y`, `X` **must be a superkey**.\n\n"
-                 . "### 💡 Knowledge Card: Anomaly Prevention\n"
-                 . "- **Insert Anomaly**: Cannot record an entity without creating a dummy record for another entity.\n"
-                 . "- **Delete Anomaly**: Deleting one piece of data inadvertently deletes critical unrelated data.\n"
-                 . "- **Update Anomaly**: Changing an attribute requires updating dozens of redundant rows.\n\n"
-                 . "### ❓ People Also Ask\n"
-                 . "• What is the difference between 3NF and BCNF with a real-world example?\n"
-                 . "• Is BCNF always dependency-preserving during decomposition?\n"
-                 . "• When is denormalization recommended in production databases?";
-        }
-
-        // Study plan requests
-        if (strpos($q, 'day-by-day') !== false || strpos($q, 'study plan') !== false || strpos($q, 'revision') !== false) {
-            return "### 🔍 Google AI Overview\n\n"
-                 . "**Quick Answer:** A high-yield academic study strategy divides exam preparation into spaced active recall phases: foundation review, timed problem solving, and targeted mock exam iterations.\n\n"
-                 . "### 📌 Structured Revision Roadmap\n"
-                 . "- **Phase 1 (Day 1–2: Theoretical Mastery)**: Review lecture summaries, definitions, and core theorems in 45-minute Pomodoro cycles.\n"
-                 . "- **Phase 2 (Day 3–4: Hands-On Problems)**: Solve 10-15 mid-term examination questions and edge-case algorithm proofs.\n"
-                 . "- **Phase 3 (Day 5–6: Active Recall & Lab Practice)**: Implement core algorithms, review formulas, and teach concepts to a peer without looking at notes.\n"
-                 . "- **Phase 4 (Day 7: Full Mock Simulation)**: Complete a timed AI mock exam to uncover and remediate any remaining knowledge gaps.\n\n"
-                 . "### 💡 Top Exam Preparation Rule\n"
-                 . "- **Spaced Testing Effect**: Practicing retrieval via self-testing improves long-term exam scores by over 40% compared to passive rereading.\n\n"
-                 . "### ❓ People Also Ask\n"
-                 . "• What is the Feynman Technique and how does it help in engineering subjects?\n"
-                 . "• How many hours a day should a university student dedicate to revision?\n"
-                 . "• How can I create an AI study schedule for multiple simultaneous exam deadlines?";
-        }
-
-        // Schedule / Classes
-        if (strpos($q, 'class') !== false || strpos($q, 'tomorrow') !== false || strpos($q, 'today') !== false || strpos($q, 'schedule') !== false) {
-            return "### 🔍 Google AI Overview\n\n"
-                 . "**Quick Answer:** Here is your verified academic class schedule for the current semester cycle, optimized by lecture hall and time slots.\n\n"
-                 . "### 📌 Weekly Class Timetable\n"
-                 . "- **Monday**: 09:00 - 10:00 (DBMS • LH-201) | 10:15 - 11:15 (Algorithms • LH-201)\n"
-                 . "- **Tuesday**: 09:00 - 10:00 (Operating Systems • LH-203) | 11:30 - 12:30 (Web Eng Lab • Lab-3)\n"
-                 . "- **Wednesday**: 09:00 - 10:00 (DBMS • LH-201)\n"
-                 . "- **Thursday**: 10:00 - 11:00 (Algorithms • LH-201)\n"
-                 . "- **Friday**: 14:00 - 16:00 (Web Eng Project Lab • Lab-3)\n\n"
-                 . "### 💡 Quick Campus Tip\n"
-                 . "- Lecture halls LH-201 and LH-203 are in Academic Block A. Arrive 5 minutes early for attendance logging.\n\n"
-                 . "### ❓ People Also Ask\n"
-                 . "• What is my current attendance percentage for DBMS and Algorithms?\n"
-                 . "• Where can I find syllabus notes for my upcoming Web Engineering lab?\n"
-                 . "• How do I apply for an authorized absence leave?";
-        }
-
-        // Assignments
-        if (strpos($q, 'assignment') !== false || strpos($q, 'deadline') !== false || strpos($q, 'pending') !== false) {
-            return "### 🔍 Google AI Overview\n\n"
-                 . "**Quick Answer:** You have **3 active coursework assignments** registered in your academic portal with upcoming deadlines.\n\n"
-                 . "### 📌 Pending Assignments List\n"
-                 . "1. **DBMS Normalization & BCNF Case Study** • *Due: Sept 12* • 50 Marks • [Status: Open]\n"
-                 . "2. **Dynamic Programming: Knapsack & Edit Distance** • *Due: Sept 15* • 50 Marks • [Status: In Progress]\n"
-                 . "3. **Secure REST API in PHP/Flask** • *Due: Sept 20* • 100 Marks • [Status: Pending Review]\n\n"
-                 . "### 💡 Next Recommended Action\n"
-                 . "- Complete the BCNF Case Study first. Dedicate 45 minutes today to verify the functional dependency matrix.\n\n"
-                 . "### ❓ People Also Ask\n"
-                 . "• How do I upload my assignment file submission in the portal?\n"
-                 . "• What are the formatting guidelines for code submissions?\n"
-                 . "• What penalties apply to late coursework submissions?";
-        }
-
-        // Attendance
-        if (strpos($q, 'attendance') !== false) {
-            return "### 🔍 Google AI Overview\n\n"
-                 . "**Quick Answer:** Your cumulative academic attendance is **94.2%**, well above the mandatory 75.0% institutional examination threshold.\n\n"
-                 . "### 📌 Subject-Wise Attendance Breakdown\n"
-                 . "- **Database Management Systems (DBMS)**: 80.0% (Eligible)\n"
-                 . "- **Design & Analysis of Algorithms**: 87.5% (Eligible)\n"
-                 . "- **Operating Systems**: 100.0% (Perfect Standing)\n"
-                 . "- **Web Engineering**: 100.0% (Perfect Standing)\n\n"
-                 . "### 💡 Standing Badge\n"
-                 . "- **Status**: ✅ Good Standing — Fully qualified for all Mid-Term and End-Semester examinations.\n\n"
-                 . "### ❓ People Also Ask\n"
-                 . "• How many classes can I safely miss without dropping below 75%?\n"
-                 . "• How are medical certificate exemptions processed by the administration?\n"
-                 . "• What is the attendance requirement for scholarship eligibility?";
-        }
-
-        // Generic academic fallback with Google structure
-        $cleanTopic = htmlspecialchars(substr($query, 0, 80));
-        return "### 🔍 Google AI Overview\n\n"
-             . "**Quick Answer:** Comprehensive academic analysis for **\"{$cleanTopic}\"**. Master this topic through fundamental definitions, conceptual breakdown, and active problem-solving.\n\n"
-             . "### 📌 Key Highlights & Concepts\n"
-             . "- **Foundational Principles**: Focus on formal definitions, boundary conditions, and primary constraints.\n"
-             . "- **Application & Implementation**: Practice practical end-of-chapter problems to cement theoretical knowledge.\n"
-             . "- **Verification**: Cross-reference lecture notes in the Notes portal and verify with your course syllabus.\n\n"
-             . "### 💡 Knowledge Card\n"
-             . "- **Recommendation**: For advanced interactive queries, configure a live Google Gemini API Key in Super Admin -> AI Settings.\n\n"
-             . "### ❓ People Also Ask\n"
-             . "• What are the most common exam questions asked about {$cleanTopic}?\n"
-             . "• Can you provide a step-by-step example with a detailed solution?\n"
-             . "• What textbook chapters or PDF notes cover this topic?";
-    }
-
-    private function getFallbackQuiz($topic) {
-        return [
-            [
-                'question' => "Which normal form requires eliminating partial dependencies on a candidate key?",
-                'options' => ["First Normal Form (1NF)", "Second Normal Form (2NF)", "Third Normal Form (3NF)", "Boyce-Codd Normal Form (BCNF)"],
-                'correct_answer' => "Second Normal Form (2NF)",
-                'explanation' => "2NF requires that every non-prime attribute is fully functionally dependent on the entire candidate key."
-            ],
-            [
-                'question' => "In BCNF, for every functional dependency X -> Y, what condition must X satisfy?",
-                'options' => ["X must be a prime attribute", "X must be a superkey", "Y must be a superkey", "X must have only atomic values"],
-                'correct_answer' => "X must be a superkey",
-                'explanation' => "BCNF strictly dictates that the determinant X in any non-trivial functional dependency must be a superkey."
-            ],
-            [
-                'question' => "What is an anomaly prevented by 3NF?",
-                'options' => ["Transitive dependency anomaly", "Partial dependency anomaly", "Non-atomic domain anomaly", "Cyclic dependency anomaly"],
-                'correct_answer' => "Transitive dependency anomaly",
-                'explanation' => "3NF explicitly removes transitive dependencies between non-prime attributes."
-            ],
-            [
-                'question' => "Which of the following decomposition properties is strictly guaranteed by BCNF?",
-                'options' => ["Lossless join decomposition", "Dependency preservation in all cases", "Minimal key cardinality", "Equi-join redundancy"],
-                'correct_answer' => "Lossless join decomposition",
-                'explanation' => "BCNF always guarantees a lossless join decomposition, though dependency preservation is not always achievable without 3NF."
-            ],
-            [
-                'question' => "A relation is in 1NF if and only if:",
-                'options' => ["All attribute domains contain only atomic values", "There are no foreign keys", "Every column has a unique name", "All candidate keys have size 1"],
-                'correct_answer' => "All attribute domains contain only atomic values",
-                'explanation' => "1NF disallows multi-valued attributes and composite repeating groups."
-            ]
-        ];
+        return null;
     }
 
     private function buildStudentContext($userId) {
-        $subs = $this->academicModel->getStudentSubjects($userId);
-        $subList = implode(', ', array_map(function($s) { return $s['name'] . ' (' . $s['code'] . ')'; }, $subs));
-        return "Student Enrolled Subjects: " . ($subList ?: 'Computer Science Semester 5 Core Subjects');
+        try {
+            $subs = $this->academicModel->getStudentSubjects($userId);
+            if (!empty($subs)) {
+                $subList = implode(', ', array_map(function($s) { return ($s['name'] ?? '') . ' (' . ($s['code'] ?? '') . ')'; }, $subs));
+                return "Student Enrolled Subjects: " . $subList;
+            }
+        } catch (Throwable $e) {}
+        return "Student Enrolled Subjects: Computer Science Core Subjects";
     }
 }
