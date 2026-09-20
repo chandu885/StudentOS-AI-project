@@ -846,6 +846,389 @@ class AIService {
     }
 
     /**
+     * Dedicated Google Gemini Multimodal API caller (Supports text, photos, PDFs, documents)
+     */
+    public function callGeminiMultimodal($systemInstruction, $userPrompt, $attachments = [], $customApiKey = null, $forceJson = false) {
+        $activeKey = !empty($customApiKey) ? trim($customApiKey) : $this->apiKey;
+        if (empty($activeKey) && session_status() === PHP_SESSION_ACTIVE && !empty($_SESSION['ai_api_key'])) {
+            $activeKey = trim($_SESSION['ai_api_key']);
+        }
+        if (empty($activeKey)) {
+            return null;
+        }
+
+        // Build contents parts
+        $parts = [['text' => $userPrompt]];
+        $attHashParts = '';
+
+        if (!empty($attachments)) {
+            if (!isset($attachments[0]) || !is_array($attachments[0])) {
+                $attachments = [$attachments];
+            }
+            foreach ($attachments as $att) {
+                $mime = strtolower($att['mimeType'] ?? ($att['mime'] ?? ''));
+                $b64 = $att['data'] ?? ($att['base64'] ?? '');
+                $name = $att['name'] ?? ($att['fileName'] ?? 'file');
+                $attHashParts .= $mime . '|' . strlen($b64) . '|' . $name . '||';
+
+                $isImage = strpos($mime, 'image/') === 0;
+                $isPdf = ($mime === 'application/pdf' || strtolower(substr($name, -4)) === '.pdf');
+
+                if ($isImage || $isPdf) {
+                    $parts[] = [
+                        'inlineData' => [
+                            'mimeType' => $isPdf ? 'application/pdf' : $mime,
+                            'data' => $b64
+                        ]
+                    ];
+                } else {
+                    $raw = base64_decode($b64);
+                    if ($raw !== false && !empty($raw)) {
+                        if (function_exists('mb_convert_encoding')) {
+                            $raw = mb_convert_encoding($raw, 'UTF-8', 'UTF-8');
+                        }
+                        $parts[0]['text'] .= "\n\n--- Attached Document (" . htmlspecialchars($name) . ") ---\n" . substr($raw, 0, 60000) . "\n--- End Document ---\n";
+                    }
+                }
+            }
+        }
+
+        $promptHash = hash('sha256', ($systemInstruction ?? '') . '|||' . $userPrompt . '|||' . $attHashParts . ($forceJson ? 'json' : 'text'));
+        if ($this->aiModel) {
+            $cached = $this->aiModel->getCachedResponse($promptHash, $this->modelName);
+            if (!empty($cached)) {
+                $this->lastProviderUsed = "StudentOS AI Turbo Cache (Local In-Memory / DB)";
+                return $cached;
+            }
+        }
+
+        $primaryModel = $this->modelName ?: 'gemini-3.6-flash';
+        $fallbackModels = [$primaryModel, 'gemini-3.5-flash-lite', 'gemini-flash-lite-latest'];
+        $candidateModels = array_values(array_unique(array_filter($fallbackModels)));
+
+        $genConfig = [
+            'temperature' => 0.7,
+            'maxOutputTokens' => 4096
+        ];
+        if ($forceJson) {
+            $genConfig['responseMimeType'] = 'application/json';
+        }
+
+        $payload = [
+            'contents' => [
+                [
+                    'role' => 'user',
+                    'parts' => $parts
+                ]
+            ],
+            'generationConfig' => $genConfig
+        ];
+
+        if (!empty($systemInstruction)) {
+            $payload['systemInstruction'] = [
+                'parts' => [['text' => $systemInstruction]]
+            ];
+        }
+
+        $headers = [
+            'Content-Type: application/json',
+            'x-goog-api-key: ' . $activeKey
+        ];
+        if (!empty($this->projectNumber)) {
+            $headers[] = 'X-Goog-User-Project: ' . $this->projectNumber;
+        }
+
+        foreach ($candidateModels as $modelToTry) {
+            $url = "https://generativelanguage.googleapis.com/v1beta/models/{$modelToTry}:generateContent";
+            $response = $this->httpPostJson($url, $payload, $headers, 40);
+
+            if (!empty($response)) {
+                $data = json_decode($response, true);
+                if (isset($data['candidates'][0]['content']['parts'])) {
+                    $text = '';
+                    foreach ($data['candidates'][0]['content']['parts'] as $part) {
+                        if (isset($part['text']) && empty($part['thought'])) {
+                            $text .= $part['text'];
+                        }
+                    }
+                    if (empty($text) && isset($data['candidates'][0]['content']['parts'][0]['text'])) {
+                        $text = $data['candidates'][0]['content']['parts'][0]['text'];
+                    }
+
+                    if (!empty($text)) {
+                        $this->lastProviderUsed = "Google Gemini ({$modelToTry}) (Multimodal Live)";
+                        $this->lastError = null;
+
+                        if ($this->aiModel) {
+                            $ttl = $forceJson ? 86400 * 7 : 86400 * 3;
+                            $this->aiModel->setCachedResponse($promptHash, $modelToTry, ($forceJson ? 'json' : 'text'), $userPrompt, $text, $ttl);
+                        }
+
+                        return $text;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Dedicated Google Gemini Streaming Multimodal API caller
+     */
+    public function streamGeminiMultimodal($systemInstruction, $userPrompt, $attachments = [], $customApiKey = null, callable $onChunk = null) {
+        $activeKey = !empty($customApiKey) ? trim($customApiKey) : $this->apiKey;
+        if (empty($activeKey) && session_status() === PHP_SESSION_ACTIVE && !empty($_SESSION['ai_api_key'])) {
+            $activeKey = trim($_SESSION['ai_api_key']);
+        }
+        if (empty($activeKey)) {
+            return null;
+        }
+
+        $parts = [['text' => $userPrompt]];
+        $attHashParts = '';
+
+        if (!empty($attachments)) {
+            if (!isset($attachments[0]) || !is_array($attachments[0])) {
+                $attachments = [$attachments];
+            }
+            foreach ($attachments as $att) {
+                $mime = strtolower($att['mimeType'] ?? ($att['mime'] ?? ''));
+                $b64 = $att['data'] ?? ($att['base64'] ?? '');
+                $name = $att['name'] ?? ($att['fileName'] ?? 'file');
+                $attHashParts .= $mime . '|' . strlen($b64) . '|' . $name . '||';
+
+                $isImage = strpos($mime, 'image/') === 0;
+                $isPdf = ($mime === 'application/pdf' || strtolower(substr($name, -4)) === '.pdf');
+
+                if ($isImage || $isPdf) {
+                    $parts[] = [
+                        'inlineData' => [
+                            'mimeType' => $isPdf ? 'application/pdf' : $mime,
+                            'data' => $b64
+                        ]
+                    ];
+                } else {
+                    $raw = base64_decode($b64);
+                    if ($raw !== false && !empty($raw)) {
+                        if (function_exists('mb_convert_encoding')) {
+                            $raw = mb_convert_encoding($raw, 'UTF-8', 'UTF-8');
+                        }
+                        $parts[0]['text'] .= "\n\n--- Attached Document (" . htmlspecialchars($name) . ") ---\n" . substr($raw, 0, 60000) . "\n--- End Document ---\n";
+                    }
+                }
+            }
+        }
+
+        $primaryModel = $this->modelName ?: 'gemini-3.6-flash';
+        $fallbackModels = [$primaryModel, 'gemini-3.5-flash-lite', 'gemini-flash-lite-latest'];
+        $candidateModels = array_values(array_unique(array_filter($fallbackModels)));
+
+        $payload = [
+            'contents' => [
+                [
+                    'role' => 'user',
+                    'parts' => $parts
+                ]
+            ],
+            'generationConfig' => [
+                'temperature' => 0.7,
+                'maxOutputTokens' => 4096
+            ]
+        ];
+        if (!empty($systemInstruction)) {
+            $payload['systemInstruction'] = [
+                'parts' => [['text' => $systemInstruction]]
+            ];
+        }
+
+        $headers = [
+            'Content-Type: application/json',
+            'x-goog-api-key: ' . $activeKey
+        ];
+        if (!empty($this->projectNumber)) {
+            $headers[] = 'X-Goog-User-Project: ' . $this->projectNumber;
+        }
+        $jsonPayload = json_encode($payload);
+
+        foreach ($candidateModels as $modelToTry) {
+            $url = "https://generativelanguage.googleapis.com/v1beta/models/{$modelToTry}:streamGenerateContent?alt=sse";
+            $fullResponseText = '';
+            $buffer = '';
+
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonPayload);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 90);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 6);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_TCP_NODELAY, true);
+            curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+
+            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($ch, $chunk) use (&$buffer, &$fullResponseText, $onChunk) {
+                $buffer .= $chunk;
+                while (($pos = strpos($buffer, "\n")) !== false) {
+                    $line = trim(substr($buffer, 0, $pos));
+                    $buffer = substr($buffer, $pos + 1);
+                    if (strpos($line, 'data: ') === 0) {
+                        $jsonStr = substr($line, 6);
+                        $data = json_decode($jsonStr, true);
+                        if (!empty($data['candidates'][0]['content']['parts'])) {
+                            foreach ($data['candidates'][0]['content']['parts'] as $p) {
+                                if (isset($p['text']) && empty($p['thought'])) {
+                                    $token = $p['text'];
+                                    $fullResponseText .= $token;
+                                    if ($onChunk) {
+                                        $onChunk($token, false);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                return strlen($chunk);
+            });
+
+            curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($httpCode >= 200 && $httpCode < 300 && !empty($fullResponseText)) {
+                $this->lastProviderUsed = "Google Gemini ({$modelToTry}) (Streaming Multimodal Live)";
+                if ($onChunk) {
+                    $onChunk('', true);
+                }
+                return $fullResponseText;
+            }
+        }
+
+        // Fallback to direct multimodal call
+        $direct = $this->callGeminiMultimodal($systemInstruction, $userPrompt, $attachments, $customApiKey);
+        if (!empty($direct) && $onChunk) {
+            $onChunk($direct, false);
+            $onChunk('', true);
+        }
+        return $direct;
+    }
+
+    /**
+     * Ask Academic Assistant with Photo / PDF / File Attachment
+     */
+    public function askAssistantWithAttachment($userId, $question, $attachment, $conversationId = null, $customApiKey = null) {
+        $fileName = $attachment['name'] ?? 'Uploaded File';
+        $fileSize = (int)($attachment['size'] ?? 0);
+        $cleanQuestion = trim($question ?? '');
+
+        if (empty($cleanQuestion)) {
+            $cleanQuestion = "Please examine and explain this uploaded file in detail. Solve any problems shown, outline key takeaways, and provide a complete structured explanation.";
+        }
+
+        if (!$conversationId) {
+            $title = "📎 " . $fileName . ": " . mb_substr($cleanQuestion, 0, 35) . '...';
+            $conversationId = $this->aiModel->createConversation($userId, $title, 'assistant');
+        }
+
+        // Record user message with attachment notice
+        $userMsg = $cleanQuestion . "\n\n📎 Attached: " . $fileName . ($fileSize > 0 ? " (" . round($fileSize / 1024, 1) . " KB)" : "");
+        $this->aiModel->addMessage($conversationId, 'user', $userMsg);
+
+        $context = $this->buildStudentContext($userId);
+        $systemPrompt = "You are StudentOS AI, an intelligent Google-style academic multimodal assistant.\n"
+                      . "Tone: Clear, structured, authoritative, concise, and helpful like Google Search AI Overviews.\n"
+                      . "Formatting Guidelines:\n"
+                      . "1. **Direct Answer / Overview**: Start immediately with a succinct 1-2 sentence direct answer/definition or overview of what is in the image/PDF/file.\n"
+                      . "2. **Detailed Analysis / Step-by-Step Solution**: If there are mathematical formulas, code, exam questions, or diagrams, provide rigorous step-by-step solutions or clear architectural breakdowns.\n"
+                      . "3. **Key Concepts & Highlights**: Highlight important definitions, theorems, or takeaways using bold bullet points.\n"
+                      . "4. **Code / Math**: Use formatted Markdown code blocks with syntax highlighting or clear mathematical notation.\n"
+                      . "5. **People Also Ask**: Conclude with 2-3 related questions students frequently ask about this topic (format each as a bullet starting with '• ').\n\n"
+                      . "Context about this student:\n" . $context;
+
+        $attachments = [$attachment];
+        $answer = $this->callGeminiMultimodal($systemPrompt, $cleanQuestion, $attachments, $customApiKey);
+
+        if (empty($answer)) {
+            $errDetail = !empty($this->lastError) ? " ({$this->lastError})" : "";
+            $answer = "I received the file '{$fileName}', but was unable to complete the analysis via Google Gemini API. Please check your file format or API connection.{$errDetail}";
+        }
+
+        // Record assistant response
+        $this->aiModel->addMessage($conversationId, 'assistant', $answer);
+        $this->aiModel->recordUsage($userId, 'assistant_multimodal', strlen($cleanQuestion)/4, strlen($answer)/4, $this->modelName);
+
+        return [
+            'success' => true,
+            'conversation_id' => $conversationId,
+            'answer' => $answer,
+            'file_name' => $fileName,
+            'file_size' => $fileSize,
+            'provider' => $this->lastProviderUsed,
+            'model' => $this->modelName
+        ];
+    }
+
+    /**
+     * Stream Academic Assistant with Photo / PDF / File Attachment in real-time
+     */
+    public function streamAssistantWithAttachment($userId, $question, $attachment, $conversationId = null, $customApiKey = null, callable $onChunk = null) {
+        $fileName = $attachment['name'] ?? 'Uploaded File';
+        $fileSize = (int)($attachment['size'] ?? 0);
+        $cleanQuestion = trim($question ?? '');
+
+        if (empty($cleanQuestion)) {
+            $cleanQuestion = "Please examine and explain this uploaded file in detail. Solve any problems shown, outline key takeaways, and provide a complete structured explanation.";
+        }
+
+        if (!$conversationId) {
+            $title = "📎 " . $fileName . ": " . mb_substr($cleanQuestion, 0, 35) . '...';
+            $conversationId = $this->aiModel->createConversation($userId, $title, 'assistant');
+        }
+
+        // Record user message with attachment notice
+        $userMsg = $cleanQuestion . "\n\n📎 Attached: " . $fileName . ($fileSize > 0 ? " (" . round($fileSize / 1024, 1) . " KB)" : "");
+        $this->aiModel->addMessage($conversationId, 'user', $userMsg);
+
+        $context = $this->buildStudentContext($userId);
+        $systemPrompt = "You are StudentOS AI, an intelligent Google-style academic multimodal assistant.\n"
+                      . "Tone: Clear, structured, authoritative, concise, and helpful like Google Search AI Overviews.\n"
+                      . "Formatting Guidelines:\n"
+                      . "1. **Direct Answer / Overview**: Start immediately with a succinct 1-2 sentence direct answer/definition or overview of what is in the image/PDF/file.\n"
+                      . "2. **Detailed Analysis / Step-by-Step Solution**: If there are mathematical formulas, code, exam questions, or diagrams, provide rigorous step-by-step solutions or clear architectural breakdowns.\n"
+                      . "3. **Key Concepts & Highlights**: Highlight important definitions, theorems, or takeaways using bold bullet points.\n"
+                      . "4. **Code / Math**: Use formatted Markdown code blocks with syntax highlighting or clear mathematical notation.\n"
+                      . "5. **People Also Ask**: Conclude with 2-3 related questions students frequently ask about this topic (format each as a bullet starting with '• ').\n\n"
+                      . "Context about this student:\n" . $context;
+
+        $attachments = [$attachment];
+        $answer = $this->streamGeminiMultimodal($systemPrompt, $cleanQuestion, $attachments, $customApiKey, $onChunk);
+
+        if (empty($answer)) {
+            $errDetail = !empty($this->lastError) ? " ({$this->lastError})" : "";
+            $answer = "I received the file '{$fileName}', but was unable to complete the analysis via Google Gemini API. Please check your file format or API connection.{$errDetail}";
+            if ($onChunk) {
+                $onChunk($answer, false);
+                $onChunk('', true);
+            }
+        }
+
+        // Record assistant response
+        $this->aiModel->addMessage($conversationId, 'assistant', $answer);
+        $this->aiModel->recordUsage($userId, 'assistant_multimodal', strlen($cleanQuestion)/4, strlen($answer)/4, $this->modelName);
+
+        return [
+            'success' => true,
+            'conversation_id' => $conversationId,
+            'answer' => $answer,
+            'file_name' => $fileName,
+            'file_size' => $fileSize,
+            'provider' => $this->lastProviderUsed,
+            'model' => $this->modelName
+        ];
+    }
+
+
+    /**
      * Stream Document RAG / PDF Q&A tokens in real-time
      */
     public function streamDocument($userId, $documentId, $question, $customApiKey = null, callable $onChunk = null) {

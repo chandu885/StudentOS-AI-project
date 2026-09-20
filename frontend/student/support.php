@@ -96,7 +96,7 @@ include_once __DIR__ . '/../components/header.php';
                     <div class="support-quick-card">
                         <div class="support-quick-icon" style="color: var(--warning);"><i class="fas fa-phone-alt"></i></div>
                         <h4 style="color: var(--text-primary); font-size: 16px;">Emergency Academic Hotline</h4>
-                        <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5;">Contact Academic Dean office at <strong>ext. 4022</strong> or email <code>support@studentos.ai</code> for urgent examination disputes.</p>
+                        <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5;">Contact Academic Dean office at <strong>ext. 4022</strong> or email <code>student@gmail.com</code> for urgent examination disputes.</p>
                     </div>
                 </div>
 

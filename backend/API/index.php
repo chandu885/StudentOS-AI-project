@@ -433,12 +433,71 @@ try {
                 $difficulty = $input['difficulty'] ?? ($_GET['difficulty'] ?? 'medium');
                 $subjectName = $input['subject'] ?? ($_GET['subject'] ?? 'Computer Science');
                 jsonOut($aiService->fetchQuestionsFromAI($topic, $count, $type, $difficulty, $subjectName));
-            } elseif ($action === 'assistant' && $method === 'POST') {
-                $q = $input['question'] ?? '';
-                $convId = !empty($input['conversation_id']) ? (int)$input['conversation_id'] : null;
-                $key = $input['api_key'] ?? ($_SESSION['ai_api_key'] ?? null);
+            } elseif (($action === 'assistant' || $action === 'upload-ask' || $action === 'assistant-upload') && $method === 'POST') {
+                $q = $input['question'] ?? ($_POST['question'] ?? '');
+                $convId = !empty($input['conversation_id']) ? (int)$input['conversation_id'] : (!empty($_POST['conversation_id']) ? (int)$_POST['conversation_id'] : null);
+                $key = $input['api_key'] ?? ($_POST['api_key'] ?? ($_SESSION['ai_api_key'] ?? null));
 
-                $stream = !empty($input['stream']) || !empty($_GET['stream']) || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'text/event-stream') !== false);
+                // Process file attachment if present (from $_FILES or JSON base64)
+                $attachment = null;
+                $uploadedFile = $_FILES['file'] ?? ($_FILES['attachment'] ?? ($_FILES['photo'] ?? null));
+                if ($uploadedFile && !empty($uploadedFile['tmp_name']) && $uploadedFile['error'] === UPLOAD_ERR_OK) {
+                    $origName = $uploadedFile['name'];
+                    $tmpPath = $uploadedFile['tmp_name'];
+                    $fileSize = (int)$uploadedFile['size'];
+                    $mimeType = function_exists('mime_content_type') ? mime_content_type($tmpPath) : 'application/octet-stream';
+                    $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+
+                    if ($ext === 'pdf') $mimeType = 'application/pdf';
+                    elseif (in_array($ext, ['jpg', 'jpeg'])) $mimeType = 'image/jpeg';
+                    elseif ($ext === 'png') $mimeType = 'image/png';
+                    elseif ($ext === 'webp') $mimeType = 'image/webp';
+                    elseif ($ext === 'gif') $mimeType = 'image/gif';
+
+                    $destDir = __DIR__ . '/../../storage/uploads/ai_attachments';
+                    if (!is_dir($destDir)) {
+                        @mkdir($destDir, 0777, true);
+                    }
+                    $safeName = 'att_' . time() . '_' . substr(md5($origName . uniqid()), 0, 10) . '.' . $ext;
+                    $destPath = $destDir . DIRECTORY_SEPARATOR . $safeName;
+                    @copy($tmpPath, $destPath);
+
+                    $rawBytes = @file_get_contents($tmpPath);
+                    $attachment = [
+                        'name' => $origName,
+                        'mimeType' => $mimeType,
+                        'size' => $fileSize,
+                        'data' => base64_encode($rawBytes),
+                        'path' => 'storage/uploads/ai_attachments/' . $safeName
+                    ];
+                } elseif (!empty($input['file_base64'])) {
+                    $b64 = $input['file_base64'];
+                    $origName = $input['file_name'] ?? 'uploaded_file';
+                    $mimeType = $input['file_mime'] ?? ($input['file_type'] ?? 'image/jpeg');
+                    $rawBytes = base64_decode($b64);
+                    $fileSize = strlen($rawBytes);
+
+                    $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION)) ?: 'bin';
+                    $destDir = __DIR__ . '/../../storage/uploads/ai_attachments';
+                    if (!is_dir($destDir)) {
+                        @mkdir($destDir, 0777, true);
+                    }
+                    $safeName = 'att_' . time() . '_' . substr(md5($origName . uniqid()), 0, 10) . '.' . $ext;
+                    $destPath = $destDir . DIRECTORY_SEPARATOR . $safeName;
+                    if ($rawBytes !== false) {
+                        @file_put_contents($destPath, $rawBytes);
+                    }
+
+                    $attachment = [
+                        'name' => $origName,
+                        'mimeType' => $mimeType,
+                        'size' => $fileSize,
+                        'data' => $b64,
+                        'path' => 'storage/uploads/ai_attachments/' . $safeName
+                    ];
+                }
+
+                $stream = !empty($input['stream']) || !empty($_GET['stream']) || !empty($_POST['stream']) || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'text/event-stream') !== false);
                 if ($stream) {
                     if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
                     header('Content-Type: text/event-stream; charset=utf-8');
@@ -449,15 +508,27 @@ try {
                     while (ob_get_level() > 0) ob_end_flush();
                     ob_implicit_flush(true);
 
-                    $aiService->streamAssistant($user['id'], $q, $convId, $key, function($token, $done) {
-                        echo "data: " . json_encode(['token' => $token, 'done' => $done]) . "\n\n";
-                        if (ob_get_level() > 0) ob_flush();
-                        flush();
-                    });
+                    if ($attachment) {
+                        $aiService->streamAssistantWithAttachment($user['id'], $q, $attachment, $convId, $key, function($token, $done) {
+                            echo "data: " . json_encode(['token' => $token, 'done' => $done]) . "\n\n";
+                            if (ob_get_level() > 0) ob_flush();
+                            flush();
+                        });
+                    } else {
+                        $aiService->streamAssistant($user['id'], $q, $convId, $key, function($token, $done) {
+                            echo "data: " . json_encode(['token' => $token, 'done' => $done]) . "\n\n";
+                            if (ob_get_level() > 0) ob_flush();
+                            flush();
+                        });
+                    }
                     exit;
                 }
 
-                jsonOut($aiService->askAssistant($user['id'], $q, $convId, $key));
+                if ($attachment) {
+                    jsonOut($aiService->askAssistantWithAttachment($user['id'], $q, $attachment, $convId, $key));
+                } else {
+                    jsonOut($aiService->askAssistant($user['id'], $q, $convId, $key));
+                }
             } elseif ($action === 'pdf-qa' && $method === 'POST') {
                 $docId = (int)($input['document_id'] ?? 1);
                 $q = $input['question'] ?? '';
