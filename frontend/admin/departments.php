@@ -18,35 +18,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $deleteMode = sanitize($_POST['delete_mode'] ?? 'deactivate'); // 'deactivate' or 'permanent'
 
         if ($delId > 0 && $db) {
-            // Check faculty and courses dependencies
+            // Check faculty, courses, and student dependencies
             $depInfoStmt = $db->prepare("SELECT d.name, d.code,
                                                 (SELECT COUNT(*) FROM faculty_profiles fp JOIN users fu ON fp.user_id = fu.id WHERE fp.department_id = ? AND fu.deleted_at IS NULL) AS fac_count,
-                                                (SELECT COUNT(*) FROM courses c WHERE c.department_id = ? AND c.status = 'active') AS courses_count
+                                                (SELECT COUNT(*) FROM courses c WHERE c.department_id = ? AND c.status = 'active') AS courses_count,
+                                                (SELECT COUNT(*) FROM student_profiles sp JOIN users su ON sp.user_id = su.id WHERE sp.department_id = ? AND su.deleted_at IS NULL) AS stu_count
                                          FROM departments d
                                          WHERE d.id = ?");
-            $depInfoStmt->bind_param("iii", $delId, $delId, $delId);
+            $depInfoStmt->bind_param("iiii", $delId, $delId, $delId, $delId);
             $depInfoStmt->execute();
             $depInfo = $depInfoStmt->get_result()->fetch_assoc();
             $depInfoStmt->close();
 
             $deptName = $depInfo['name'] ?? 'Department';
-            $stuCount = 0;
+            $stuCount = (int)($depInfo['stu_count'] ?? 0);
             $facCount = (int)($depInfo['fac_count'] ?? 0);
             $coursesCount = (int)($depInfo['courses_count'] ?? 0);
-            $phoneCount = (int)($depInfo['phone_count'] ?? 0);
 
             if ($deleteMode === 'deactivate') {
                 $stmt = $db->prepare("UPDATE departments SET status = 'inactive', updated_at = NOW() WHERE id = ?");
                 $stmt->bind_param("i", $delId);
                 if ($stmt->execute()) {
-                    $successMsg = "Department '$deptName' ($delId) has been deactivated successfully. Enrolled students ($stuCount) across section(s) '$sections' with $phoneCount phone number(s) have been safely preserved.";
+                    $successMsg = "Department '$deptName' ($delId) has been deactivated successfully. Enrolled students ($stuCount) and faculty members ($facCount) have been safely preserved.";
                 } else {
                     $errorMsg = 'Failed to deactivate department: ' . $db->error;
                 }
                 $stmt->close();
             } elseif ($deleteMode === 'permanent') {
-                if ($stuCount > 0 || $facCount > 0) {
-                    $errorMsg = "Cannot permanently delete '$deptName': It contains $stuCount student(s) across section(s) '$sections' with $phoneCount registered phone number(s), and $facCount faculty member(s). Please deactivate the department instead or reassign the students.";
+                if ($stuCount > 0 || $facCount > 0 || $coursesCount > 0) {
+                    $errorMsg = "Cannot permanently delete '$deptName': It contains $stuCount student(s), $facCount faculty member(s), and $coursesCount course(s). Please deactivate the department instead or reassign its members.";
                 } else {
                     $del = $db->prepare("DELETE FROM departments WHERE id = ?");
                     $del->bind_param("i", $delId);
@@ -143,7 +143,8 @@ if ($db) {
     $q = "SELECT d.*, 
                  CONCAT(u.first_name, ' ', u.last_name) AS hod_name,
                  (SELECT COUNT(*) FROM faculty_profiles fp JOIN users fu ON fp.user_id = fu.id WHERE fp.department_id = d.id AND fu.deleted_at IS NULL) AS faculty_count,
-                 (SELECT COUNT(*) FROM courses c WHERE c.department_id = d.id AND c.status = 'active') AS courses_count
+                 (SELECT COUNT(*) FROM courses c WHERE c.department_id = d.id AND c.status = 'active') AS courses_count,
+                 (SELECT COUNT(*) FROM student_profiles sp JOIN users su ON sp.user_id = su.id WHERE sp.department_id = d.id AND su.deleted_at IS NULL) AS student_count
           FROM departments d
           LEFT JOIN users u ON d.head_id = u.id
           ORDER BY d.id ASC";
@@ -193,6 +194,7 @@ include_once __DIR__ . '/../components/header.php';
                                         <th>Code</th>
                                         <th>Department Name</th>
                                         <th>Head of Department (HOD)</th>
+                                        <th>Enrolled Students</th>
                                         <th>Faculty Staff</th>
                                         <th>Degree Programs</th>
                                         <th>Status</th>
@@ -202,7 +204,7 @@ include_once __DIR__ . '/../components/header.php';
                                 <tbody>
                                     <?php if (empty($departments)): ?>
                                         <tr>
-                                            <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 32px;">
+                                            <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 32px;">
                                                 No departments found. Click "Add Department" to create one.
                                             </td>
                                         </tr>
@@ -223,6 +225,7 @@ include_once __DIR__ . '/../components/header.php';
                                                         <span style="color: var(--text-muted); font-style: italic;">Not Appointed</span>
                                                     <?php endif; ?>
                                                 </td>
+                                                <td><span class="badge badge-purple"><?php echo (int)($dept['student_count'] ?? 0); ?> Students</span></td>
                                                 <td><?php echo (int)$dept['faculty_count']; ?> Professors</td>
                                                 <td><span class="badge badge-info"><?php echo (int)($dept['courses_count'] ?? 0); ?> Programs</span></td>
                                                 <td>
@@ -366,9 +369,10 @@ include_once __DIR__ . '/../components/header.php';
                         <div style="font-size: 12px; font-weight: 700; color: var(--primary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
                             <i class="fas fa-database"></i> Associated Academic Records
                         </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12.5px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; font-size: 12.5px;">
                             <div><strong>Degree Programs:</strong> <span id="delDeptCourses" class="badge badge-primary">0</span></div>
                             <div><strong>Faculty Staff:</strong> <span id="delDeptFaculty" class="badge badge-info">0</span></div>
+                            <div><strong>Enrolled Students:</strong> <span id="delDeptStudents" class="badge badge-purple">0</span></div>
                         </div>
                     </div>
 
@@ -390,7 +394,7 @@ include_once __DIR__ . '/../components/header.php';
                                 <div>
                                     <strong style="color: var(--danger); font-size: 13px;">Permanent Delete</strong>
                                     <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">
-                                        Permanently removes the department record from the database. Allowed only when 0 faculty and 0 degree programs are assigned.
+                                        Permanently removes the department record from the database. Allowed only when 0 students, 0 faculty, and 0 degree programs are assigned.
                                     </div>
                                 </div>
                             </label>
@@ -427,6 +431,7 @@ include_once __DIR__ . '/../components/header.php';
         document.getElementById('delDeptCode').textContent = dept.code || '';
         document.getElementById('delDeptCourses').textContent = (dept.courses_count || 0) + ' Programs';
         document.getElementById('delDeptFaculty').textContent = (dept.faculty_count || 0) + ' Faculty';
+        document.getElementById('delDeptStudents').textContent = (dept.student_count || 0) + ' Students';
         openModal('deleteDeptModal');
     }
     </script>

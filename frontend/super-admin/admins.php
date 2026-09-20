@@ -62,6 +62,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $email = sanitize($_POST['email'] ?? '');
         $password = $_POST['password'] ?? '';
         $roleId = (int)($_POST['role_id'] ?? 2); // 2 = Admin, 1 = Super Admin
+        $departmentId = !empty($_POST['department_id']) ? (int)$_POST['department_id'] : null;
+        $designation = sanitize($_POST['designation'] ?? ($roleId === 1 ? 'Super Administrator' : 'Department Administrator'));
 
         if (empty($firstName) || empty($lastName) || empty($email) || empty($password)) {
             $errorMsg = 'Please complete all required fields for admin provisioning.';
@@ -80,8 +82,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $ins->bind_param("issss", $roleId, $email, $hash, $firstName, $lastName);
                     if ($ins->execute()) {
                         $newId = $conn->insert_id;
+                        $empId = 'ADM-' . str_pad($newId, 3, '0', STR_PAD_LEFT);
+                        if ($departmentId) {
+                            $apStmt = $conn->prepare("INSERT INTO admin_profiles (user_id, employee_id, department_id, designation, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())");
+                            $apStmt->bind_param("isis", $newId, $empId, $departmentId, $designation);
+                        } else {
+                            $apStmt = $conn->prepare("INSERT INTO admin_profiles (user_id, employee_id, department_id, designation, created_at, updated_at) VALUES (?, ?, NULL, ?, NOW(), NOW())");
+                            $apStmt->bind_param("iss", $newId, $empId, $designation);
+                        }
+                        if ($apStmt) {
+                            $apStmt->execute();
+                            $apStmt->close();
+                        }
+
                         $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
                         $details = "Super Admin provisioned new Administrator #{$newId} ({$email})";
+                        if ($departmentId) {
+                            $details .= " assigned to department #{$departmentId}";
+                        }
                         $aud = $conn->prepare("INSERT INTO audit_logs (user_id, action, resource, resource_id, details, ip_address) VALUES (?, 'ADMIN_PROVISIONED', 'users', ?, ?, ?)");
                         if ($aud) {
                             $aud->bind_param("iiss", $currentUserId, $newId, $details, $ip);
@@ -101,6 +119,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $email = sanitize($_POST['email'] ?? '');
         $roleId = (int)($_POST['role_id'] ?? 2); // 1 = Super Admin, 2 = Admin
         $isActive = isset($_POST['is_active']) ? (int)$_POST['is_active'] : 1;
+        $departmentId = !empty($_POST['department_id']) ? (int)$_POST['department_id'] : null;
 
         if ($targetUserId <= 0 || empty($firstName) || empty($lastName) || empty($email)) {
             $errorMsg = 'Please complete all required fields (First Name, Last Name, Email).';
@@ -121,8 +140,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($up) {
                         $up->bind_param("sssiii", $firstName, $lastName, $email, $roleId, $isActive, $targetUserId);
                         if ($up->execute()) {
+                            // Update or insert admin_profiles
+                            $apCheck = $conn->prepare("SELECT id FROM admin_profiles WHERE user_id = ?");
+                            $apCheck->bind_param("i", $targetUserId);
+                            $apCheck->execute();
+                            $hasProfile = $apCheck->get_result()->fetch_assoc();
+                            $apCheck->close();
+
+                            if ($hasProfile) {
+                                if ($departmentId) {
+                                    $apUp = $conn->prepare("UPDATE admin_profiles SET department_id = ?, updated_at = NOW() WHERE user_id = ?");
+                                    $apUp->bind_param("ii", $departmentId, $targetUserId);
+                                } else {
+                                    $apUp = $conn->prepare("UPDATE admin_profiles SET department_id = NULL, updated_at = NOW() WHERE user_id = ?");
+                                    $apUp->bind_param("i", $targetUserId);
+                                }
+                                if ($apUp) {
+                                    $apUp->execute();
+                                    $apUp->close();
+                                }
+                            } else {
+                                $empId = 'ADM-' . str_pad($targetUserId, 3, '0', STR_PAD_LEFT);
+                                $desig = ($roleId === 1) ? 'Super Administrator' : 'Department Administrator';
+                                if ($departmentId) {
+                                    $apIns = $conn->prepare("INSERT INTO admin_profiles (user_id, employee_id, department_id, designation, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())");
+                                    $apIns->bind_param("isis", $targetUserId, $empId, $departmentId, $desig);
+                                } else {
+                                    $apIns = $conn->prepare("INSERT INTO admin_profiles (user_id, employee_id, department_id, designation, created_at, updated_at) VALUES (?, ?, NULL, ?, NOW(), NOW())");
+                                    $apIns->bind_param("iss", $targetUserId, $empId, $desig);
+                                }
+                                if ($apIns) {
+                                    $apIns->execute();
+                                    $apIns->close();
+                                }
+                            }
+
                             $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
                             $details = "Super Admin updated details for Administrator #{$targetUserId} ({$email})";
+                            if ($departmentId) {
+                                $details .= " assigned to department #{$departmentId}";
+                            } else {
+                                $details .= " set to campus-wide scope";
+                            }
                             $aud = $conn->prepare("INSERT INTO audit_logs (user_id, action, resource, resource_id, details, ip_address) VALUES (?, 'ADMIN_UPDATED', 'users', ?, ?, ?)");
                             if ($aud) {
                                 $aud->bind_param("iiss", $currentUserId, $targetUserId, $details, $ip);
@@ -140,12 +199,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+// Fetch active departments for assignment
+$departmentsList = [];
+if ($conn) {
+    $deptRes = $conn->query("SELECT id, code, name FROM departments WHERE status = 'active' ORDER BY name ASC");
+    if ($deptRes) {
+        $departmentsList = $deptRes->fetch_all(MYSQLI_ASSOC);
+    }
+}
+
 // Fetch real administrators
 $adminsList = [];
 if ($conn) {
-    $res = $conn->query("SELECT u.id, u.email, u.first_name, u.last_name, u.role_id, r.name as role_name, u.is_active, u.created_at, u.last_login_at 
+    $res = $conn->query("SELECT u.id, u.email, u.first_name, u.last_name, u.role_id, r.name as role_name, u.is_active, u.created_at, u.last_login_at,
+                                ap.employee_id, ap.department_id, ap.designation,
+                                d.name as department_name, d.code as department_code
                          FROM users u 
                          LEFT JOIN roles r ON u.role_id = r.id 
+                         LEFT JOIN admin_profiles ap ON ap.user_id = u.id
+                         LEFT JOIN departments d ON ap.department_id = d.id
                          WHERE u.role_id IN (1, 2) AND u.deleted_at IS NULL 
                          ORDER BY u.role_id ASC, u.id ASC");
     if ($res) {
@@ -199,7 +271,8 @@ include_once __DIR__ . '/../components/header.php';
                                         <th>Name</th>
                                         <th>Email Address</th>
                                         <th>Role Group</th>
-                                        <th>Access Scope</th>
+                                        <th>Department</th>
+                                        <th>Designation / Scope</th>
                                         <th>Last Login</th>
                                         <th>Status</th>
                                         <th style="text-align: right;">Actions</th>
@@ -216,6 +289,11 @@ include_once __DIR__ . '/../components/header.php';
                                                 <div style="font-weight: 600; color: var(--text-primary);">
                                                     <?php echo htmlspecialchars($adm['first_name'] . ' ' . $adm['last_name']); ?>
                                                 </div>
+                                                <?php if (!empty($adm['employee_id'])): ?>
+                                                    <div style="font-size: 11px; color: var(--text-muted);">
+                                                        <code><?php echo htmlspecialchars($adm['employee_id']); ?></code>
+                                                    </div>
+                                                <?php endif; ?>
                                             </td>
                                             <td><code><?php echo htmlspecialchars($adm['email']); ?></code></td>
                                             <td>
@@ -224,8 +302,26 @@ include_once __DIR__ . '/../components/header.php';
                                                 </span>
                                             </td>
                                             <td>
+                                                <?php if (!empty($adm['department_name'])): ?>
+                                                    <span class="badge badge-info" title="<?php echo htmlspecialchars($adm['department_name']); ?>">
+                                                        <i class="fas fa-building" style="margin-right: 4px;"></i>
+                                                        <?php echo htmlspecialchars($adm['department_code'] ?? $adm['department_name']); ?>
+                                                    </span>
+                                                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                                                        <?php echo htmlspecialchars($adm['department_name']); ?>
+                                                    </div>
+                                                <?php else: ?>
+                                                    <span class="badge badge-purple">
+                                                        <i class="fas fa-globe" style="margin-right: 4px;"></i> Campus-Wide
+                                                    </span>
+                                                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                                                        All Departments
+                                                    </div>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
                                                 <span style="font-size: 12.5px; color: var(--text-secondary);">
-                                                    <?php echo $isRoot ? 'Universal Root Tier' : 'Institutional Ops'; ?>
+                                                    <?php echo !empty($adm['designation']) ? htmlspecialchars($adm['designation']) : ($isRoot ? 'Universal Root Tier' : 'Institutional Ops'); ?>
                                                 </span>
                                             </td>
                                             <td>
@@ -355,6 +451,21 @@ include_once __DIR__ . '/../components/header.php';
                     </select>
                 </div>
 
+                <div class="form-group" style="margin-bottom: 14px;">
+                    <label for="provDept">Assigned Department</label>
+                    <select name="department_id" id="provDept" class="form-control">
+                        <option value="">Campus-Wide / All Departments (Root Tier)</option>
+                        <?php foreach ($departmentsList as $dept): ?>
+                            <option value="<?php echo (int)$dept['id']; ?>">
+                                <?php echo htmlspecialchars($dept['name']); ?> (<?php echo htmlspecialchars($dept['code']); ?>)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <small style="font-size: 11.5px; color: var(--text-muted); display: block; margin-top: 4px;">
+                        Leave empty for campus-wide institutional scope or bind to a specific academic department.
+                    </small>
+                </div>
+
                 <div class="form-group" style="margin-bottom: 22px;">
                     <label for="provPassword">Initial Temporary Password <span style="color: var(--danger);">*</span></label>
                     <input type="password" name="password" id="provPassword" class="form-control" placeholder="Minimum 8 characters" required>
@@ -401,7 +512,7 @@ include_once __DIR__ . '/../components/header.php';
                     <input type="email" name="email" id="editAdminEmail" class="form-control" required>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
                     <div class="form-group">
                         <label for="editAdminRole">Role Group <span style="color: var(--danger);">*</span></label>
                         <select name="role_id" id="editAdminRole" class="form-control" required>
@@ -416,6 +527,21 @@ include_once __DIR__ . '/../components/header.php';
                             <option value="0">Disabled</option>
                         </select>
                     </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label for="editAdminDept">Assigned Department</label>
+                    <select name="department_id" id="editAdminDept" class="form-control">
+                        <option value="">Campus-Wide / All Departments (Root Tier)</option>
+                        <?php foreach ($departmentsList as $dept): ?>
+                            <option value="<?php echo (int)$dept['id']; ?>">
+                                <?php echo htmlspecialchars($dept['name']); ?> (<?php echo htmlspecialchars($dept['code']); ?>)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <small style="font-size: 11.5px; color: var(--text-muted); display: block; margin-top: 4px;">
+                        Select an academic department or keep Campus-Wide for universal administrative scope.
+                    </small>
                 </div>
 
                 <div style="display: flex; justify-content: flex-end; gap: 10px;">
@@ -451,6 +577,7 @@ include_once __DIR__ . '/../components/header.php';
         document.getElementById('editAdminEmail').value = adm.email || '';
         document.getElementById('editAdminRole').value = adm.role_id || 2;
         document.getElementById('editAdminStatus').value = (adm.is_active !== undefined) ? adm.is_active : 1;
+        document.getElementById('editAdminDept').value = adm.department_id || '';
         document.getElementById('editAdminModal').style.display = 'flex';
     }
 

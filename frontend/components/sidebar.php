@@ -65,6 +65,7 @@ elseif ($userRole == 1) {
         ['label' => 'Admins', 'icon' => 'fa-user-shield', 'url' => '/super-admin/admins.php'],
         ['label' => 'Students', 'icon' => 'fa-user-graduate', 'url' => '/super-admin/students.php'],
         ['label' => 'Users', 'icon' => 'fa-users', 'url' => '/super-admin/users.php'],
+        ['label' => 'Departments', 'icon' => 'fa-building', 'url' => '/super-admin/departments.php'],
         ['label' => 'Semesters', 'icon' => 'fa-calendar-alt', 'url' => '/super-admin/semesters.php'],
         ['label' => 'Subjects', 'icon' => 'fa-book', 'url' => '/super-admin/subjects.php'],
         ['label' => 'Assignments', 'icon' => 'fa-file-alt', 'url' => '/super-admin/assignments.php'],

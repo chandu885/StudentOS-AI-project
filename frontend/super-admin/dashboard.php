@@ -164,6 +164,13 @@ if ($conn) {
         $docCount = (int)$dRes->fetch_assoc()['cnt'];
     }
 
+    // Active Academic Departments
+    $totalDeptsCount = 0;
+    $deptRes = $conn->query("SELECT COUNT(*) as cnt FROM departments WHERE status = 'active'");
+    if ($deptRes) {
+        $totalDeptsCount = (int)$deptRes->fetch_assoc()['cnt'];
+    }
+
     // DB Ping
     $pStart = microtime(true);
     $conn->query("SELECT 1");
@@ -360,6 +367,25 @@ include_once __DIR__ . '/../components/header.php';
                                     <i class="fas fa-sync"></i> Sync Vectors
                                 </button>
                             </form>
+                        </div>
+
+                        <div class="admin-option-card">
+                            <div>
+                                <div class="admin-option-header">
+                                    <div class="admin-option-icon" style="background: rgba(14, 165, 233, 0.15); color: var(--info);">
+                                        <i class="fas fa-building"></i>
+                                    </div>
+                                    <div class="admin-option-title">Academic Departments</div>
+                                </div>
+                                <div class="admin-option-desc">
+                                    Manage <?php echo $totalDeptsCount; ?> active university faculties, appoint HODs, and review department-wise student enrollments.
+                                </div>
+                            </div>
+                            <div>
+                                <a href="departments.php" class="btn btn-outline btn-block" style="font-size: 12px; border-color: var(--info); color: var(--info); text-decoration: none;">
+                                    <i class="fas fa-arrow-right"></i> Open Departments Hub
+                                </a>
+                            </div>
                         </div>
                     </div>
                 </div>
