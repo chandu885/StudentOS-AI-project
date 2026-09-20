@@ -307,12 +307,12 @@ if ($loggedIn && $currentUser) {
                     </div>
 
                     <div class="feature-card">
-                        <div class="feature-icon"><i class="fas fa-file-pdf"></i></div>
-                        <h3>PDF Q&A & Document RAG</h3>
-                        <p>Upload lecture slides, textbooks, and syllabus files. Ask questions and get answers grounded strictly with page citations.</p>
+                        <div class="feature-icon"><i class="fas fa-folder-open"></i></div>
+                        <h3>Smart Course Materials</h3>
+                        <p>Upload lecture slides, textbooks, and syllabus files. Organize and access all your study documents in one centralized repository.</p>
                         <div class="feature-tags">
-                            <span class="badge badge-primary">Chunk Indexing</span>
-                            <span class="badge badge-success">Zero Hallucination</span>
+                            <span class="badge badge-primary">Organized Notes</span>
+                            <span class="badge badge-success">Instant Access</span>
                         </div>
                     </div>
 
@@ -401,7 +401,7 @@ if ($loggedIn && $currentUser) {
                 <div class="testimonials-grid">
                     <div class="testimonial-card">
                         <div class="testimonial-rating">★★★★★</div>
-                        <p>"The PDF Q&A feature saved me during semester finals. Being able to ask questions directly to a 300-page operating systems book with page citations is sheer magic!"</p>
+                        <p>"The AI Study Assistant saved me during semester finals. Being able to get conceptual breakdowns and step-by-step math derivations anytime is sheer magic!"</p>
                         <div class="testimonial-author">
                             <div class="author-avatar">AJ</div>
                             <div>
@@ -460,11 +460,11 @@ if ($loggedIn && $currentUser) {
 
                     <div class="faq-item">
                         <button class="faq-question" onclick="toggleFaq(this)">
-                            <span>How does the PDF Q&A (RAG) feature work?</span>
+                            <span>How does the AI Study Assistant work?</span>
                             <i class="fas fa-chevron-down"></i>
                         </button>
                         <div class="faq-answer">
-                            When you upload course notes or textbooks, our backend text extraction engine segments documents into semantic chunks with 50-word sliding windows. When you ask a query, relevant text excerpts are retrieved and provided to Google Gemini as verified context, eliminating hallucinated answers.
+                            Our integrated Google Gemini AI engine breaks down complex academic concepts into direct summaries, step-by-step explanations, and knowledge cards tailored to your syllabus and course questions.
                         </div>
                     </div>
 

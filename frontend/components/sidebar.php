@@ -20,7 +20,6 @@ if ($userRole == 4) {
         ['label' => 'Tasks', 'icon' => 'fa-tasks', 'url' => '/student/tasks.php'],
         ['label' => 'Notes', 'icon' => 'fa-sticky-note', 'url' => '/student/notes.php'],
         ['label' => 'AI Assistant', 'icon' => 'fa-robot', 'url' => '/student/ai-assistant.php'],
-        ['label' => 'PDF Q&A', 'icon' => 'fa-file-pdf', 'url' => '/student/pdf-qa.php'],
         ['label' => 'Help & Support', 'icon' => 'fa-life-ring', 'url' => '/student/support.php']
     ];
 }

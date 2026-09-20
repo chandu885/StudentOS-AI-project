@@ -79,7 +79,7 @@
 | Method | Endpoint | Description | Auth Required |
 |:---|:---|:---|:---:|
 | `POST` | `/ai/assistant` | Send conversational study prompt | Any |
-| `POST` | `/ai/pdf-qa` | Ingest document & ask contextual question | Any |
+| `POST` | `/ai/pdf-qa` | [Disabled] Contextual PDF Q&A | Any |
 | `POST` | `/ai/planner` | Generate personalized study timetable | Student |
 | `POST` | `/ai/quiz` | Generate multiple-choice quiz questions | Any |
 | `POST` | `/ai/summarize` | Summarize long texts or lecture notes | Any |

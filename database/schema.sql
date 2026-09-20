@@ -630,7 +630,7 @@ CREATE TABLE `ai_conversations` (
     `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     `user_id` INT UNSIGNED NOT NULL,
     `title` VARCHAR(255) NOT NULL DEFAULT 'New Academic Chat',
-    `mode` ENUM('assistant', 'search', 'planner', 'pdf_qa') DEFAULT 'assistant',
+    `mode` ENUM('assistant', 'search', 'planner') DEFAULT 'assistant',
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT `fk_aiconv_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE

@@ -18,7 +18,7 @@ StudentOS AI enforces a strict multi-tier Role-Based Access Control model anchor
 |:---|:---:|:---:|:---:|:---:|
 | **View Own Dashboard & Profile** | Yes | Yes | Yes | Yes |
 | **Submit Assignments & View Marks** | Yes | No | No | No |
-| **AI Study Assistant & PDF Q&A** | Yes | Yes | Yes | Yes |
+| **AI Study Assistant** | Yes | Yes | Yes | Yes |
 | **Grade Assignments & Record Attendance** | No | Yes | Yes | Yes |
 | **Create Exams & Manage Question Bank** | No | Yes | Yes | Yes |
 | **Manage Departments & Courses** | No | No | Yes | Yes |

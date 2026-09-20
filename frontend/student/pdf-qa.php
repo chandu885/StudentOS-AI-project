@@ -10,8 +10,9 @@ require_once __DIR__ . '/../../backend/utils/PDFExtractor.php';
 
 requireRole('student');
 
-$userId = (int)$_SESSION['user']['id'];
-$db = getDbConnection();
+// PDF Q&A feature has been disabled and removed
+header('Location: ' . url('/student/dashboard.php'));
+exit;
 
 $successMsg = '';
 $errorMsg = '';

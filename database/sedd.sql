@@ -100,7 +100,7 @@ CREATE TABLE `ai_conversations` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `user_id` int(10) unsigned NOT NULL,
   `title` varchar(255) NOT NULL DEFAULT 'New Academic Chat',
-  `mode` enum('assistant','search','planner','pdf_qa') DEFAULT 'assistant',
+  `mode` enum('assistant','search','planner') DEFAULT 'assistant',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`),
@@ -274,7 +274,6 @@ INSERT INTO `ai_settings` VALUES
 (2,'default_model','gemini-3.6-flash','Default LLM model identifier','2026-09-19 09:40:00'),
 (3,'temperature','0.7','Sampling temperature for responses','2026-09-19 09:40:00'),
 (4,'max_output_tokens','4096','Maximum tokens per response','2026-09-19 09:40:00'),
-(5,'enable_rag','1','Enable PDF document chunking and contextual Q&A','2026-09-19 09:40:00'),
 (6,'gemini_key_name','chandan','Gemini Key Identifier Name','2026-09-19 09:40:00'),
 (7,'gemini_project_name','project/406491916720','Google Cloud Project Name','2026-09-19 09:40:00'),
 (8,'gemini_project_number','406491916720','Google Cloud Project Number','2026-09-19 09:40:00');
@@ -344,7 +343,7 @@ CREATE TABLE `ai_usage_logs` (
 
 LOCK TABLES `ai_usage_logs` WRITE;
 /*!40000 ALTER TABLE `ai_usage_logs` DISABLE KEYS */;
-INSERT INTO `ai_usage_logs` VALUES (1,4,'assistant',3,115,'gemini-1.5-flash',0.000000,'2026-09-08 08:56:20'),(2,4,'pdf_qa',97,170,'gemini-1.5-flash',0.000000,'2026-09-08 08:56:26'),(3,4,'assistant',7,119,'gemini-1.5-flash',0.000000,'2026-09-08 09:20:59'),(4,4,'pdf_qa',236,241,'gemini-1.5-flash',0.000000,'2026-09-08 09:20:59'),(5,15,'assistant',18,172,'gemini-1.5-flash',0.000000,'2026-09-08 15:54:23'),(6,15,'assistant',18,172,'gemini-1.5-flash',0.000000,'2026-09-08 15:55:01'),(7,15,'assistant',2,115,'gemini-1.5-flash',0.000000,'2026-09-08 15:55:21');
+INSERT INTO `ai_usage_logs` VALUES (1,4,'assistant',3,115,'gemini-1.5-flash',0.000000,'2026-09-08 08:56:20'),(3,4,'assistant',7,119,'gemini-1.5-flash',0.000000,'2026-09-08 09:20:59'),(5,15,'assistant',18,172,'gemini-1.5-flash',0.000000,'2026-09-08 15:54:23'),(6,15,'assistant',18,172,'gemini-1.5-flash',0.000000,'2026-09-08 15:55:01'),(7,15,'assistant',2,115,'gemini-1.5-flash',0.000000,'2026-09-08 15:55:21');
 /*!40000 ALTER TABLE `ai_usage_logs` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1257,7 +1256,7 @@ CREATE TABLE `permissions` (
 
 LOCK TABLES `permissions` WRITE;
 /*!40000 ALTER TABLE `permissions` DISABLE KEYS */;
-INSERT INTO `permissions` VALUES (1,'system','system.full_control','Full System Control','Unrestricted administrative platform access','2026-09-05 18:36:28'),(2,'users','users.manage','Manage Users','Create, update, activate and deactivate users','2026-09-05 18:36:28'),(3,'academic','academic.manage','Manage Academic','Manage departments, courses, subjects, schedules','2026-09-05 18:36:28'),(4,'students','students.manage','Manage Students','Manage student records and enrollments','2026-09-05 18:36:28'),(5,'faculty','faculty.manage','Manage Faculty','Manage faculty appointments and assignments','2026-09-05 18:36:28'),(6,'attendance','attendance.mark','Mark Attendance','Record and modify attendance records','2026-09-05 18:36:28'),(7,'assignments','assignments.manage','Manage Assignments','Create and grade assignments','2026-09-05 18:36:28'),(8,'exams','exams.manage','Manage Examinations','Schedule exams and evaluate submissions','2026-09-05 18:36:28'),(9,'ai','ai.use','Use AI Tools','Access AI Assistant, PDF Q&A and Study Planner','2026-09-05 18:36:28'),(10,'ai','ai.settings','Manage AI Settings','Configure API keys, models and token quotas','2026-09-05 18:36:28'),(11,'logs','logs.view','View Logs','Inspect audit and security logs','2026-09-05 18:36:28'),(12,'backup','backup.manage','Database Backup','Generate and restore database backups','2026-09-05 18:36:28');
+INSERT INTO `permissions` VALUES (1,'system','system.full_control','Full System Control','Unrestricted administrative platform access','2026-09-05 18:36:28'),(2,'users','users.manage','Manage Users','Create, update, activate and deactivate users','2026-09-05 18:36:28'),(3,'academic','academic.manage','Manage Academic','Manage departments, courses, subjects, schedules','2026-09-05 18:36:28'),(4,'students','students.manage','Manage Students','Manage student records and enrollments','2026-09-05 18:36:28'),(5,'faculty','faculty.manage','Manage Faculty','Manage faculty appointments and assignments','2026-09-05 18:36:28'),(6,'attendance','attendance.mark','Mark Attendance','Record and modify attendance records','2026-09-05 18:36:28'),(7,'assignments','assignments.manage','Manage Assignments','Create and grade assignments','2026-09-05 18:36:28'),(8,'exams','exams.manage','Manage Examinations','Schedule exams and evaluate submissions','2026-09-05 18:36:28'),(9,'ai','ai.use','Use AI Tools','Access AI Assistant and Study Planner','2026-09-05 18:36:28'),(10,'ai','ai.settings','Manage AI Settings','Configure API keys, models and token quotas','2026-09-05 18:36:28'),(11,'logs','logs.view','View Logs','Inspect audit and security logs','2026-09-05 18:36:28'),(12,'backup','backup.manage','Database Backup','Generate and restore database backups','2026-09-05 18:36:28');
 /*!40000 ALTER TABLE `permissions` ENABLE KEYS */;
 UNLOCK TABLES;
 

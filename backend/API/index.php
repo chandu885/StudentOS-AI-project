@@ -530,30 +530,7 @@ try {
                     jsonOut($aiService->askAssistant($user['id'], $q, $convId, $key));
                 }
             } elseif ($action === 'pdf-qa' && $method === 'POST') {
-                $docId = (int)($input['document_id'] ?? 1);
-                $q = $input['question'] ?? '';
-                $key = $input['api_key'] ?? ($_SESSION['ai_api_key'] ?? null);
-
-                $stream = !empty($input['stream']) || !empty($_GET['stream']) || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'text/event-stream') !== false);
-                if ($stream) {
-                    if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
-                    header('Content-Type: text/event-stream; charset=utf-8');
-                    header('Cache-Control: no-cache, no-transform');
-                    header('Connection: keep-alive');
-                    header('X-Accel-Buffering: no');
-
-                    while (ob_get_level() > 0) ob_end_flush();
-                    ob_implicit_flush(true);
-
-                    $aiService->streamDocument($user['id'], $docId, $q, $key, function($token, $done) {
-                        echo "data: " . json_encode(['token' => $token, 'done' => $done]) . "\n\n";
-                        if (ob_get_level() > 0) ob_flush();
-                        flush();
-                    });
-                    exit;
-                }
-
-                jsonOut($aiService->askDocument($user['id'], $docId, $q));
+                jsonOut(['success' => false, 'error' => 'PDF Q&A feature has been disabled and removed.']);
             } elseif ($action === 'planner' && $method === 'POST') {
                 $subId = (int)($input['subject_id'] ?? 1);
                 $examDate = $input['exam_date'] ?? date('Y-m-d', strtotime('+14 days'));

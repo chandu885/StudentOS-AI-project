@@ -52,6 +52,7 @@ if ($db) {
             $documents[] = [
                 'id' => $row['id'],
                 'name' => $row['title'],
+                'file_path' => $row['file_path'],
                 'size' => $row['file_size'],
                 'type' => strtoupper(pathinfo($row['title'], PATHINFO_EXTENSION) ?: 'PDF'),
                 'subject' => $row['subject_name'] ?? 'General Resource',
@@ -68,10 +69,9 @@ include_once __DIR__ . '/../components/header.php';
                 <div class="page-header">
                     <div>
                         <h1>Documents & Textbooks</h1>
-                        <p class="page-subtitle">Syllabus PDFs, lecture slides, and AI-searchable course materials</p>
+                        <p class="page-subtitle">Syllabus PDFs, lecture slides, and course materials</p>
                     </div>
                     <div class="header-actions">
-                        <a href="pdf-qa.php" class="btn btn-outline"><i class="fas fa-file-pdf"></i> Ask Document (RAG)</a>
                         <button class="btn btn-primary" onclick="openModal('uploadDocModal')"><i class="fas fa-upload"></i> Upload PDF</button>
                     </div>
                 </div>
@@ -91,7 +91,7 @@ include_once __DIR__ . '/../components/header.php';
                             <div style="text-align: center; padding: 48px; color: var(--text-muted);">
                                 <i class="fas fa-file-alt" style="font-size: 36px; margin-bottom: 12px; display: block;"></i>
                                 <strong style="color: var(--text-primary);">No Course Documents Uploaded</strong>
-                                <p style="font-size: 13px; margin-top: 4px; margin-bottom: 16px;">Upload course textbook chapters or syllabus PDFs to search with RAG.</p>
+                                <p style="font-size: 13px; margin-top: 4px; margin-bottom: 16px;">Upload course textbook chapters or syllabus PDFs for study.</p>
                                 <button class="btn btn-primary" onclick="openModal('uploadDocModal')"><i class="fas fa-upload"></i> Upload PDF</button>
                             </div>
                         <?php else: ?>
@@ -119,8 +119,8 @@ include_once __DIR__ . '/../components/header.php';
                                                 <td><?php echo formatFileSize($doc['size']); ?></td>
                                                 <td><?php echo date('M d, Y', strtotime($doc['uploaded_at'])); ?></td>
                                                 <td>
-                                                    <a href="pdf-qa.php?doc_id=<?php echo $doc['id']; ?>" class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;">
-                                                        <i class="fas fa-robot"></i> Chat with Doc
+                                                    <a href="<?php echo htmlspecialchars(url($doc['file_path'])); ?>" target="_blank" class="btn btn-outline" style="padding: 4px 10px; font-size: 11px;">
+                                                        <i class="fas fa-eye"></i> View PDF
                                                     </a>
                                                 </td>
                                             </tr>

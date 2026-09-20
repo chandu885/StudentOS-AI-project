@@ -336,7 +336,7 @@ include_once __DIR__ . '/../components/header.php';
                                     <div class="admin-option-title">Re-sync AI Embeddings</div>
                                 </div>
                                 <div class="admin-option-desc">
-                                    Syncs FAISS vector embeddings database for PDF Q&A and AI search across all uploaded documents.
+                                    Syncs FAISS vector embeddings database for semantic AI search across all uploaded documents.
                                 </div>
                             </div>
                             <form method="POST" action="tasks.php">

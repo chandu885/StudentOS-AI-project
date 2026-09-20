@@ -52,7 +52,7 @@ class Config {
             'gemini_key_name' => 'chandan',
             'gemini_project_name' => 'project/406491916720',
             'gemini_project_number' => '406491916720',
-            'enable_rag' => true,
+            'enable_rag' => false,
             
             // Mail settings
             'smtp_host' => 'smtp.mailtrap.io',

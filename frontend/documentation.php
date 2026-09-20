@@ -578,7 +578,7 @@ if (!in_array($requestedRole, ['student', 'faculty', 'admin', 'superadmin'])) {
         user_rag: {
             role: 'User (Student)',
             roleClass: 'badge-primary',
-            title: 'Gemini RAG PDF Q&A & Document Grounding',
+            title: 'Gemini AI Context & Academic Concept Grounding',
             action: 'Query: "Explain B+ Tree Split Conditions from Operating Systems textbook"',
             html: `<div style="background: rgba(99, 102, 241, 0.08); border-left: 3px solid #6366F1; padding: 12px; margin-bottom: 12px; border-radius: 4px;">
                      <div style="font-weight: 700; color: #818CF8; margin-bottom: 4px;"><i class="fas fa-search"></i> Vector Context Retrieval (Similarity Score: 0.942)</div>

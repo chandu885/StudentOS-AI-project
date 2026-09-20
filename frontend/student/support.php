@@ -120,7 +120,7 @@ include_once __DIR__ . '/../components/header.php';
                                             <option value="Attendance Dispute">Attendance Correction</option>
                                             <option value="Examination">Exam Registration / Hall Ticket</option>
                                             <option value="Technical Bug">Technical Bug / Portal Error</option>
-                                            <option value="AI Assistant">AI Assistant & PDF Q&A</option>
+                                            <option value="AI Assistant">AI Assistant</option>
                                         </select>
                                     </div>
                                     <div class="form-group">
@@ -205,15 +205,15 @@ include_once __DIR__ . '/../components/header.php';
                                             Navigate to <strong>Assignments</strong>, locate the submission, and click "Resubmit Assignment" before the deadline.
                                         </div>
                                     </div>
-                                    <div class="faq-item">
-                                        <button class="faq-question" onclick="toggleFaq(this)">
-                                            <span>Why did the PDF Q&A say "information not found"?</span>
-                                            <i class="fas fa-chevron-down"></i>
-                                        </button>
-                                        <div class="faq-answer">
-                                            StudentOS AI uses RAG grounded retrieval. If the uploaded document lacks relevant material, the AI alerts you rather than fabricating facts.
-                                        </div>
-                                    </div>
+                                     <div class="faq-item">
+                                         <button class="faq-question" onclick="toggleFaq(this)">
+                                             <span>Why did the AI Assistant say "information not found"?</span>
+                                             <i class="fas fa-chevron-down"></i>
+                                         </button>
+                                         <div class="faq-answer">
+                                             StudentOS AI answers based on verified academic curriculum and syllabus details. If a specific topic is unavailable, try rephrasing your prompt or asking for broader concepts.
+                                         </div>
+                                     </div>
                                 </div>
                             </div>
                         </div>

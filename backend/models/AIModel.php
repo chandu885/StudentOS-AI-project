@@ -32,7 +32,7 @@ class AIModel {
             'gemini_project_number' => $config->get('gemini_project_number', '406491916720'),
             'temperature' => '0.7',
             'max_output_tokens' => '4096',
-            'enable_rag' => '1'
+            'enable_rag' => '0'
         ];
 
         try {
