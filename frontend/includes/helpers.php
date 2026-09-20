@@ -37,6 +37,24 @@ if (!function_exists('resolveAssetUrl')) {
     }
 }
 
+if (!function_exists('storageUrl')) {
+    function storageUrl($path = '') {
+        if (empty($path)) return '';
+        if (strpos($path, 'http://') === 0 || strpos($path, 'https://') === 0) {
+            return $path;
+        }
+        $root = '';
+        if (isset($_SERVER['SCRIPT_NAME']) && preg_match('#^(.*?)(?:/frontend|/backend)#i', $_SERVER['SCRIPT_NAME'], $m)) {
+            $root = $m[1];
+        }
+        $cleanPath = '/' . ltrim($path, '/');
+        if (strpos($cleanPath, '/storage/') !== 0) {
+            $cleanPath = '/storage/' . ltrim($cleanPath, '/');
+        }
+        return rtrim($root, '/') . $cleanPath;
+    }
+}
+
 function redirect($url) {
     header('Location: ' . url($url));
     exit;

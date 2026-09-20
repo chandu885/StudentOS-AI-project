@@ -261,4 +261,117 @@ class Role {
 
         return true;
     }
+
+    /**
+     * Create a new permission
+     */
+    public function createPermission($module, $slug, $name, $description = null) {
+        $cleanModule = strtolower(trim(preg_replace('/[^a-z0-9_]/', '', $module)));
+        $cleanSlug = strtolower(trim(preg_replace('/[^a-z0-9_.]/', '', $slug)));
+        $cleanName = trim($name);
+        $cleanDesc = $description !== null ? trim($description) : null;
+
+        if (empty($cleanModule)) {
+            return ['success' => false, 'error' => 'Module name is required.'];
+        }
+        if (empty($cleanSlug)) {
+            return ['success' => false, 'error' => 'Permission slug identifier is required (e.g. academic.schedules).'];
+        }
+        if (empty($cleanName)) {
+            return ['success' => false, 'error' => 'Permission display title is required.'];
+        }
+
+        // Check if slug exists
+        $stmt = $this->db->prepare("SELECT id FROM permissions WHERE slug = ?");
+        $stmt->bind_param("s", $cleanSlug);
+        $stmt->execute();
+        if ($stmt->get_result()->num_rows > 0) {
+            $stmt->close();
+            return ['success' => false, 'error' => "Permission slug '{$cleanSlug}' already exists."];
+        }
+        $stmt->close();
+
+        $ins = $this->db->prepare("INSERT INTO permissions (module, slug, name, description) VALUES (?, ?, ?, ?)");
+        $ins->bind_param("ssss", $cleanModule, $cleanSlug, $cleanName, $cleanDesc);
+        if ($ins->execute()) {
+            $newId = $this->db->lastInsertId();
+            $ins->close();
+            // Automatically grant to Super Admin (role 1)
+            $grant = $this->db->prepare("INSERT IGNORE INTO role_permissions (role_id, permission_id) VALUES (1, ?)");
+            if ($grant) {
+                $grant->bind_param("i", $newId);
+                $grant->execute();
+                $grant->close();
+            }
+            return ['success' => true, 'id' => $newId, 'message' => "Permission '{$cleanName}' created successfully!"];
+        }
+        return ['success' => false, 'error' => 'Failed to insert permission: ' . $this->db->getConnection()->error];
+    }
+
+    /**
+     * Update an existing permission
+     */
+    public function updatePermission($id, $module, $name, $description = null) {
+        $id = (int)$id;
+        $cleanModule = strtolower(trim(preg_replace('/[^a-z0-9_]/', '', $module)));
+        $cleanName = trim($name);
+        $cleanDesc = $description !== null ? trim($description) : null;
+
+        if (empty($cleanName)) {
+            return ['success' => false, 'error' => 'Permission title cannot be empty.'];
+        }
+
+        $stmt = $this->db->prepare("UPDATE permissions SET module = ?, name = ?, description = ? WHERE id = ?");
+        $stmt->bind_param("sssi", $cleanModule, $cleanName, $cleanDesc, $id);
+        if ($stmt->execute()) {
+            $stmt->close();
+            return ['success' => true, 'message' => 'Permission updated successfully!'];
+        }
+        return ['success' => false, 'error' => 'Failed to update permission: ' . $this->db->getConnection()->error];
+    }
+
+    /**
+     * Delete a custom permission
+     */
+    public function deletePermission($id) {
+        $id = (int)$id;
+        // Protect core system permissions (IDs 1-12)
+        if ($id <= 12) {
+            return ['success' => false, 'error' => 'Core built-in platform permissions cannot be deleted.'];
+        }
+
+        $stmt = $this->db->prepare("DELETE FROM permissions WHERE id = ?");
+        $stmt->bind_param("i", $id);
+        if ($stmt->execute()) {
+            $stmt->close();
+            return ['success' => true, 'message' => 'Custom permission deleted successfully.'];
+        }
+        return ['success' => false, 'error' => 'Failed to delete permission: ' . $this->db->getConnection()->error];
+    }
+
+    /**
+     * Synchronize multiple roles permissions matrix at once
+     */
+    public function syncRolePermissionsMatrix(array $matrix) {
+        $this->db->beginTransaction();
+        try {
+            foreach ($matrix as $roleId => $permIds) {
+                $roleId = (int)$roleId;
+                if ($roleId <= 0) continue;
+
+                // For Super Admin (role 1), preserve master control
+                if ($roleId === 1) {
+                    $this->db->query("INSERT IGNORE INTO role_permissions (role_id, permission_id) SELECT 1, id FROM permissions");
+                    continue;
+                }
+
+                $this->syncPermissions($roleId, (array)$permIds);
+            }
+            $this->db->commit();
+            return ['success' => true, 'message' => 'All role permissions synchronized successfully!'];
+        } catch (Throwable $e) {
+            $this->db->rollback();
+            return ['success' => false, 'error' => 'Matrix synchronization failed: ' . $e->getMessage()];
+        }
+    }
 }

@@ -137,22 +137,50 @@ if ($db && $userId) {
         }
     }
 
-    // 2. Pending Assignments from database
-    $stmt = $db->prepare(
-        "SELECT a.*, s.name as subject_name 
-         FROM assignments a
-         JOIN subjects s ON a.subject_id = s.id
-         JOIN student_subjects ss ON ss.subject_id = s.id
-         WHERE ss.student_id = ? 
-         AND a.id NOT IN (SELECT assignment_id FROM assignment_submissions WHERE student_id = ?)
-         ORDER BY a.deadline ASC
-         LIMIT 5"
-    );
-    if ($stmt) {
-        $stmt->bind_param("ii", $userId, $userId);
-        $stmt->execute();
-        $pendingAssignments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-        $stmt->close();
+    // 2. Pending Assignments from database (strictly matching student's semester)
+    $studentSem = (string)($studentProfile['semester'] ?? '1');
+    $studentDeptId = !empty($studentProfile['department_id']) ? (int)$studentProfile['department_id'] : null;
+
+    if ($studentDeptId !== null) {
+        $stmt = $db->prepare(
+            "SELECT a.*, s.name as subject_name, s.code as subject_code
+             FROM assignments a
+             JOIN subjects s ON a.subject_id = s.id
+             WHERE a.deleted_at IS NULL
+               AND COALESCE(a.semester, s.semester) = ?
+               AND (
+                   a.department_id = ?
+                   OR s.department_id = ?
+                   OR a.subject_id IN (SELECT subject_id FROM student_subjects WHERE student_id = ?)
+                   OR a.department_id IS NULL
+               )
+               AND a.id NOT IN (SELECT assignment_id FROM assignment_submissions WHERE student_id = ?)
+             ORDER BY a.deadline ASC
+             LIMIT 5"
+        );
+        if ($stmt) {
+            $stmt->bind_param("siiii", $studentSem, $studentDeptId, $studentDeptId, $userId, $userId);
+            $stmt->execute();
+            $pendingAssignments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+            $stmt->close();
+        }
+    } else {
+        $stmt = $db->prepare(
+            "SELECT a.*, s.name as subject_name, s.code as subject_code
+             FROM assignments a
+             JOIN subjects s ON a.subject_id = s.id
+             WHERE a.deleted_at IS NULL
+               AND COALESCE(a.semester, s.semester) = ?
+               AND a.id NOT IN (SELECT assignment_id FROM assignment_submissions WHERE student_id = ?)
+             ORDER BY a.deadline ASC
+             LIMIT 5"
+        );
+        if ($stmt) {
+            $stmt->bind_param("si", $studentSem, $userId);
+            $stmt->execute();
+            $pendingAssignments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+            $stmt->close();
+        }
     }
 
     // 3. Attendance Summary from database

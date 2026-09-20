@@ -29,10 +29,30 @@ class AuthService {
             $data['student_id'] = strtoupper(trim($data['student_id']));
         }
 
-        // Normalize Department (BBA / BCA)
-        $department = !empty($data['department']) ? strtoupper(trim($data['department'])) : 'BCA';
-        if (!in_array($department, ['BBA', 'BCA'])) {
-            $department = 'BCA';
+        // Resolve Department against database
+        $deptInput = !empty($data['department']) ? trim($data['department']) : '';
+        $deptId = !empty($data['department_id']) ? (int)$data['department_id'] : null;
+        $department = 'BCA';
+
+        $db = Database::getInstance();
+        $deptRow = null;
+        if ($deptId) {
+            $dStmt = $db->prepare("SELECT id, code, name FROM departments WHERE id = ? LIMIT 1");
+            $dStmt->bind_param("i", $deptId);
+            $dStmt->execute();
+            $deptRow = $dStmt->get_result()->fetch_assoc();
+        } elseif (!empty($deptInput)) {
+            $dStmt = $db->prepare("SELECT id, code, name FROM departments WHERE code = ? OR name = ? OR id = ? LIMIT 1");
+            $dStmt->bind_param("sss", $deptInput, $deptInput, $deptInput);
+            $dStmt->execute();
+            $deptRow = $dStmt->get_result()->fetch_assoc();
+        }
+
+        if ($deptRow) {
+            $department = $deptRow['code'];
+            $deptId = (int)$deptRow['id'];
+        } elseif (!empty($deptInput)) {
+            $department = strtoupper($deptInput);
         }
 
         // Validate required fields
@@ -95,6 +115,7 @@ class AuthService {
                 'user_id' => $user['id'],
                 'student_id' => $data['student_id'],
                 'department' => $department,
+                'department_id' => $deptId,
                 'semester' => $data['semester'] ?? '1',
                 'roll_number' => $data['roll_number'] ?? null,
                 'date_of_birth' => $data['date_of_birth'] ?? null,

@@ -13,22 +13,24 @@ class Student {
     public function create($data) {
         $userId = (int)$data['user_id'];
         $studentId = strtoupper(trim($data['student_id']));
-        $department = !empty($data['department']) ? strtoupper(trim($data['department'])) : 'BCA';
-        if (!in_array($department, ['BBA', 'BCA'])) {
-            $department = 'BCA';
-        }
+        $department = !empty($data['department']) ? strtoupper(trim($data['department'])) : '';
         $departmentId = !empty($data['department_id']) ? (int)$data['department_id'] : null;
-        if (!$departmentId) {
-            $deptStmt = $this->db->prepare("SELECT id FROM departments WHERE code = ? LIMIT 1");
+
+        if (!$departmentId && !empty($department)) {
+            $deptStmt = $this->db->prepare("SELECT id, code FROM departments WHERE code = ? OR name = ? OR id = ? LIMIT 1");
             if ($deptStmt) {
-                $deptStmt->bind_param("s", $department);
+                $deptStmt->bind_param("sss", $department, $department, $department);
                 $deptStmt->execute();
                 $dRow = $deptStmt->get_result()->fetch_assoc();
                 if ($dRow) {
                     $departmentId = (int)$dRow['id'];
+                    $department = $dRow['code'];
                 }
                 $deptStmt->close();
             }
+        }
+        if (empty($department)) {
+            $department = 'BCA';
         }
         $semester = (string)($data['semester'] ?? '1');
         $rollNumber = !empty($data['roll_number']) ? (string)$data['roll_number'] : null;
@@ -107,21 +109,22 @@ class Student {
 
         if (isset($data['department'])) {
             $dept = strtoupper(trim($data['department']));
-            if (in_array($dept, ['BBA', 'BCA'])) {
-                $data['department'] = $dept;
-                // auto set department_id if not explicitly provided
-                if (!isset($data['department_id'])) {
-                    $deptStmt = $this->db->prepare("SELECT id FROM departments WHERE code = ? LIMIT 1");
-                    if ($deptStmt) {
-                        $deptStmt->bind_param("s", $dept);
-                        $deptStmt->execute();
-                        $dRow = $deptStmt->get_result()->fetch_assoc();
-                        if ($dRow) {
-                            $data['department_id'] = (int)$dRow['id'];
-                        }
-                        $deptStmt->close();
+            $deptStmt = $this->db->prepare("SELECT id, code FROM departments WHERE code = ? LIMIT 1");
+            if ($deptStmt) {
+                $deptStmt->bind_param("s", $dept);
+                $deptStmt->execute();
+                $dRow = $deptStmt->get_result()->fetch_assoc();
+                if ($dRow) {
+                    $data['department'] = $dRow['code'];
+                    if (!isset($data['department_id'])) {
+                        $data['department_id'] = (int)$dRow['id'];
                     }
+                } else {
+                    $data['department'] = $dept;
                 }
+                $deptStmt->close();
+            } else {
+                $data['department'] = $dept;
             }
         }
         

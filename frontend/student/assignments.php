@@ -110,35 +110,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $assignments = [];
+$studentSem = '1';
+$studentDeptId = null;
+$studentDeptCode = '';
+$studentDeptName = '';
 
 if ($db && $userId > 0) {
-    $stmt = $db->prepare(
-        "SELECT a.*, s.name AS subject_name, s.code AS subject_code,
-                sub.id AS submission_id, sub.status AS submission_status, sub.marks_obtained AS sub_marks, sub.feedback, sub.submitted_at,
-                CASE 
-                    WHEN sub.id IS NOT NULL THEN COALESCE(sub.status, 'submitted')
-                    WHEN a.deadline < NOW() THEN 'overdue'
-                    ELSE 'pending'
-                END AS computed_status
-         FROM assignments a
-         JOIN subjects s ON a.subject_id = s.id
-         JOIN student_subjects ss ON ss.subject_id = s.id
-         LEFT JOIN assignment_submissions sub ON sub.assignment_id = a.id AND sub.student_id = ?
-         WHERE ss.student_id = ? AND a.deleted_at IS NULL
-         ORDER BY a.deadline DESC"
+    $spStmt = $db->prepare(
+        "SELECT sp.semester, sp.department_id, d.code AS dept_code, d.name AS dept_name 
+         FROM student_profiles sp 
+         LEFT JOIN departments d ON sp.department_id = d.id 
+         WHERE sp.user_id = ?"
     );
-    if ($stmt) {
-        $stmt->bind_param("ii", $userId, $userId);
-        $stmt->execute();
-        $assignments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-        $stmt->close();
+    if ($spStmt) {
+        $spStmt->bind_param("i", $userId);
+        $spStmt->execute();
+        $spRow = $spStmt->get_result()->fetch_assoc();
+        if ($spRow) {
+            $studentSem = (string)($spRow['semester'] ?? '1');
+            $studentDeptId = !empty($spRow['department_id']) ? (int)$spRow['department_id'] : null;
+            $studentDeptCode = $spRow['dept_code'] ?? '';
+            $studentDeptName = $spRow['dept_name'] ?? '';
+        }
+        $spStmt->close();
     }
 
-    // Fallback: If no assignments found for specific enrolled subjects, display active coursework
-    if (empty($assignments)) {
-        $stmtAll = $db->prepare(
+    if ($studentDeptId !== null) {
+        $stmt = $db->prepare(
             "SELECT a.*, s.name AS subject_name, s.code AS subject_code,
-                    sub.id AS submission_id, sub.status AS submission_status, sub.marks_obtained AS sub_marks, sub.feedback, sub.submitted_at,
+                    COALESCE(d.name, dept_s.name, 'Academics') AS department_name,
+                    COALESCE(d.code, dept_s.code, 'ACAD') AS department_code,
+                    COALESCE(a.semester, s.semester) AS assignment_semester,
+                    COALESCE(CONCAT(u.first_name, ' ', u.last_name), 'Instructor') AS faculty_name,
+                    sub.id AS submission_id, sub.status AS submission_status, sub.marks_obtained AS sub_marks, sub.feedback, sub.submitted_at, sub.file_path AS submission_file,
                     CASE 
                         WHEN sub.id IS NOT NULL THEN COALESCE(sub.status, 'submitted')
                         WHEN a.deadline < NOW() THEN 'overdue'
@@ -146,15 +150,54 @@ if ($db && $userId > 0) {
                     END AS computed_status
              FROM assignments a
              JOIN subjects s ON a.subject_id = s.id
+             LEFT JOIN departments d ON a.department_id = d.id
+             LEFT JOIN departments dept_s ON s.department_id = dept_s.id
+             LEFT JOIN users u ON a.faculty_id = u.id
              LEFT JOIN assignment_submissions sub ON sub.assignment_id = a.id AND sub.student_id = ?
              WHERE a.deleted_at IS NULL
+               AND COALESCE(a.semester, s.semester) = ?
+               AND (
+                   a.department_id = ?
+                   OR s.department_id = ?
+                   OR a.subject_id IN (SELECT subject_id FROM student_subjects WHERE student_id = ?)
+                   OR a.department_id IS NULL
+               )
              ORDER BY a.deadline DESC"
         );
-        if ($stmtAll) {
-            $stmtAll->bind_param("i", $userId);
-            $stmtAll->execute();
-            $assignments = $stmtAll->get_result()->fetch_all(MYSQLI_ASSOC);
-            $stmtAll->close();
+        if ($stmt) {
+            $stmt->bind_param("isiii", $userId, $studentSem, $studentDeptId, $studentDeptId, $userId);
+            $stmt->execute();
+            $assignments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+            $stmt->close();
+        }
+    } else {
+        $stmt = $db->prepare(
+            "SELECT a.*, s.name AS subject_name, s.code AS subject_code,
+                    COALESCE(d.name, dept_s.name, 'Academics') AS department_name,
+                    COALESCE(d.code, dept_s.code, 'ACAD') AS department_code,
+                    COALESCE(a.semester, s.semester) AS assignment_semester,
+                    COALESCE(CONCAT(u.first_name, ' ', u.last_name), 'Instructor') AS faculty_name,
+                    sub.id AS submission_id, sub.status AS submission_status, sub.marks_obtained AS sub_marks, sub.feedback, sub.submitted_at, sub.file_path AS submission_file,
+                    CASE 
+                        WHEN sub.id IS NOT NULL THEN COALESCE(sub.status, 'submitted')
+                        WHEN a.deadline < NOW() THEN 'overdue'
+                        ELSE 'pending'
+                    END AS computed_status
+             FROM assignments a
+             JOIN subjects s ON a.subject_id = s.id
+             LEFT JOIN departments d ON a.department_id = d.id
+             LEFT JOIN departments dept_s ON s.department_id = dept_s.id
+             LEFT JOIN users u ON a.faculty_id = u.id
+             LEFT JOIN assignment_submissions sub ON sub.assignment_id = a.id AND sub.student_id = ?
+             WHERE a.deleted_at IS NULL
+               AND COALESCE(a.semester, s.semester) = ?
+             ORDER BY a.deadline DESC"
+        );
+        if ($stmt) {
+            $stmt->bind_param("is", $userId, $studentSem);
+            $stmt->execute();
+            $assignments = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+            $stmt->close();
         }
     }
 }
@@ -165,8 +208,18 @@ include_once __DIR__ . '/../components/header.php';
 ?>
                 <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                     <div>
-                        <h1>Coursework & Assignments</h1>
-                        <p class="page-subtitle">Track, solve with live AI assistance, submit, and review grades for your coursework</p>
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px; flex-wrap: wrap;">
+                            <h1 style="margin: 0;">Coursework &amp; Assignments</h1>
+                            <span class="badge badge-primary" style="font-size: 12px; padding: 4px 10px; font-weight: 600;">
+                                <i class="fas fa-graduation-cap"></i> Semester <?php echo htmlspecialchars($studentSem); ?>
+                            </span>
+                            <?php if (!empty($studentDeptCode)): ?>
+                                <span class="badge badge-info" style="font-size: 12px; padding: 4px 10px; font-weight: 600;">
+                                    <i class="fas fa-building"></i> <?php echo htmlspecialchars($studentDeptCode); ?>
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                        <p class="page-subtitle" style="margin: 0;">Tasks &amp; problem statements assigned for your semester, with PDF problem sheets and live AI assistance</p>
                     </div>
                     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                         <button class="btn btn-primary" style="background: linear-gradient(135deg, #4F46E5, #7C3AED); border: none; box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35); display: inline-flex; align-items: center; gap: 8px;" onclick="openGeneralAISolver()">
@@ -228,7 +281,9 @@ include_once __DIR__ . '/../components/header.php';
                             <table class="data-table">
                                 <thead>
                                     <tr>
-                                        <th>Title & Subject</th>
+                                        <th>Title &amp; Subject</th>
+                                        <th>Target Scope</th>
+                                        <th>Problem PDF</th>
                                         <th>Due Date</th>
                                         <th>Max Marks</th>
                                         <th>Status</th>
@@ -239,10 +294,10 @@ include_once __DIR__ . '/../components/header.php';
                                 <tbody>
                                     <?php if (empty($assignments)): ?>
                                         <tr>
-                                            <td colspan="6" style="text-align: center; padding: 36px; color: var(--text-muted);">
+                                            <td colspan="8" style="text-align: center; padding: 36px; color: var(--text-muted);">
                                                 <i class="fas fa-file-signature" style="font-size: 32px; margin-bottom: 8px; display: block;"></i>
-                                                <strong style="color: var(--text-primary);">No Coursework Assigned Yet</strong>
-                                                <p style="font-size: 13px; margin-top: 4px;">You are all caught up! Assignments published by faculty will appear here.</p>
+                                                <strong style="color: var(--text-primary);">No Coursework Assigned Yet for Semester <?php echo htmlspecialchars($studentSem); ?></strong>
+                                                <p style="font-size: 13px; margin-top: 4px;">You are all caught up! Assignments published for your semester and subjects will appear here.</p>
                                             </td>
                                         </tr>
                                     <?php else: ?>
@@ -258,7 +313,8 @@ include_once __DIR__ . '/../components/header.php';
                                                 'description' => $asg['description'] ?? '',
                                                 'instructions' => $asg['instructions'] ?? '',
                                                 'max_marks' => $asg['max_marks'] ?? 100,
-                                                'deadline' => $asg['deadline'] ?? ''
+                                                'deadline' => $asg['deadline'] ?? '',
+                                                'attachment_path' => !empty($asg['attachment_path']) ? storageUrl($asg['attachment_path']) : null
                                             ]);
                                         ?>
                                             <tr>
@@ -266,9 +322,24 @@ include_once __DIR__ . '/../components/header.php';
                                                     <strong style="color: var(--text-primary); font-size: 14px;"><?php echo htmlspecialchars($asg['title']); ?></strong>
                                                     <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;"><?php echo htmlspecialchars($asg['subject_name']); ?></div>
                                                     <?php if (!empty($asg['description'])): ?>
-                                                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px; max-width: 450px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                                                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px; max-width: 380px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
                                                             <?php echo htmlspecialchars($asg['description']); ?>
                                                         </div>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td>
+                                                    <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                                                        <span class="badge badge-primary" style="font-size: 11px;">Sem <?php echo htmlspecialchars($asg['assignment_semester']); ?></span>
+                                                        <span class="badge badge-info" style="font-size: 11px;"><?php echo htmlspecialchars($asg['department_code']); ?></span>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <?php if (!empty($asg['attachment_path'])): ?>
+                                                        <a href="<?php echo htmlspecialchars(storageUrl($asg['attachment_path'])); ?>" target="_blank" class="btn btn-outline btn-sm" style="padding: 4px 10px; font-size: 11px; color: #EF4444; border-color: #EF4444; display: inline-flex; align-items: center; gap: 5px; border-radius: 6px;" title="View Problem Statement PDF">
+                                                            <i class="fas fa-file-pdf"></i> View PDF
+                                                        </a>
+                                                    <?php else: ?>
+                                                        <span style="font-size: 12px; color: var(--text-muted);">Text Only</span>
                                                     <?php endif; ?>
                                                 </td>
                                                 <td>
@@ -297,7 +368,7 @@ include_once __DIR__ . '/../components/header.php';
                                                     <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
                                                         <!-- Live AI Solve Button -->
                                                         <button class="btn btn-sm" style="background: linear-gradient(135deg, #4F46E5, #7C3AED); color: #fff; border: none; padding: 6px 12px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; border-radius: var(--radius-sm); font-weight: 600; box-shadow: 0 2px 8px rgba(79,70,229,0.3); cursor: pointer;" onclick='openAIAssignmentModal(<?php echo htmlspecialchars($asgJson, ENT_QUOTES, "UTF-8"); ?>)' title="Open AI Assignment Solver & Step-by-Step Tutor">
-                                                            <i class="fas fa-robot"></i> AI Solve & Tutor
+                                                            <i class="fas fa-robot"></i> AI Solve &amp; Tutor
                                                         </button>
 
                                                         <?php if ($hasSubmitted): ?>
@@ -361,6 +432,11 @@ include_once __DIR__ . '/../components/header.php';
                     </div>
                     <h4 id="aiProblemTitle" style="font-size: 14px; margin: 0 0 6px 0; color: var(--text-primary);">Assignment Title</h4>
                     <p id="aiProblemDesc" style="font-size: 13px; color: var(--text-secondary); margin: 0; line-height: 1.5;">Problem description...</p>
+                    <div id="aiPdfWrapper" style="margin-top: 10px;">
+                        <a id="aiProblemPdfLink" href="#" target="_blank" class="btn btn-outline btn-sm" style="font-size: 11px; color: #EF4444; border-color: #EF4444; display: none; align-items: center; gap: 5px; border-radius: 6px;">
+                            <i class="fas fa-file-pdf"></i> View Problem Statement PDF
+                        </a>
+                    </div>
                 </div>
 
                 <!-- One-Click Quick Actions -->
@@ -499,6 +575,16 @@ include_once __DIR__ . '/../components/header.php';
         document.getElementById('aiProblemTitle').textContent = asg.title || 'Coursework Assignment';
         document.getElementById('aiProblemDesc').textContent = asg.description || 'No detailed problem statement provided. Use custom question bar below.';
         
+        const pdfLink = document.getElementById('aiProblemPdfLink');
+        if (pdfLink) {
+            if (asg.attachment_path) {
+                pdfLink.href = asg.attachment_path;
+                pdfLink.style.display = 'inline-flex';
+            } else {
+                pdfLink.style.display = 'none';
+            }
+        }
+
         // Reset output box
         document.getElementById('aiEmptyPlaceholder').style.display = 'block';
         document.getElementById('aiLoadingIndicator').style.display = 'none';

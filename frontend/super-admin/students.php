@@ -12,6 +12,19 @@ $successMsg = '';
 $errorMsg = '';
 $db = getDbConnection();
 
+// Fetch active departments from database
+$departmentsList = [];
+$deptMap = [];
+if ($db) {
+    $dRes = $db->query("SELECT id, name, code FROM departments WHERE status = 'active' ORDER BY name ASC");
+    if ($dRes) {
+        while ($dRow = $dRes->fetch_assoc()) {
+            $departmentsList[] = $dRow;
+            $deptMap[strtoupper($dRow['code'])] = (int)$dRow['id'];
+        }
+    }
+}
+
 // Handle Actions (Add, Edit, Delete)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -91,9 +104,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $email = sanitize($_POST['email'] ?? '');
         $rollNumber = sanitize($_POST['roll_number'] ?? '');
         $semester = sanitize($_POST['semester'] ?? '1');
-        $department = strtoupper(sanitize($_POST['department'] ?? 'BCA'));
-        if (!in_array($department, ['BBA', 'BCA'])) {
-            $department = 'BCA';
+        $department = strtoupper(sanitize($_POST['department'] ?? ''));
+        if (!isset($deptMap[$department])) {
+            $department = !empty($departmentsList) ? strtoupper($departmentsList[0]['code']) : 'BCA';
         }
         $isActive = isset($_POST['is_active']) ? (int)$_POST['is_active'] : 1;
         $newPassword = $_POST['new_password'] ?? '';
@@ -124,15 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $upUser->close();
 
                     // Lookup department_id
-                    $dId = null;
-                    $dSt = $db->prepare("SELECT id FROM departments WHERE code = ? LIMIT 1");
-                    if ($dSt) {
-                        $dSt->bind_param("s", $department);
-                        $dSt->execute();
-                        $dRow = $dSt->get_result()->fetch_assoc();
-                        if ($dRow) $dId = (int)$dRow['id'];
-                        $dSt->close();
-                    }
+                    $dId = $deptMap[$department] ?? null;
 
                     $upProf = $db->prepare("UPDATE student_profiles SET department = ?, department_id = ?, roll_number = ?, semester = ?, updated_at = NOW() WHERE user_id = ?");
                     if ($upProf) {
@@ -171,9 +176,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $email = sanitize($_POST['email'] ?? '');
         $rollNumber = sanitize($_POST['roll_number'] ?? '');
         $semester = sanitize($_POST['semester'] ?? '1');
-        $department = strtoupper(sanitize($_POST['department'] ?? 'BCA'));
-        if (!in_array($department, ['BBA', 'BCA'])) {
-            $department = 'BCA';
+        $department = strtoupper(sanitize($_POST['department'] ?? ''));
+        if (!isset($deptMap[$department])) {
+            $department = !empty($departmentsList) ? strtoupper($departmentsList[0]['code']) : 'BCA';
         }
         $rawPassword = $_POST['password'] ?? 'Student@123';
         if (empty($rawPassword)) {
@@ -202,15 +207,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $insUser->close();
 
                         // Lookup department_id
-                        $dId = null;
-                        $dSt = $db->prepare("SELECT id FROM departments WHERE code = ? LIMIT 1");
-                        if ($dSt) {
-                            $dSt->bind_param("s", $department);
-                            $dSt->execute();
-                            $dRow = $dSt->get_result()->fetch_assoc();
-                            if ($dRow) $dId = (int)$dRow['id'];
-                            $dSt->close();
-                        }
+                        $dId = $deptMap[$department] ?? null;
 
                         $stuCode = 'STU-' . date('Y') . '-' . str_pad($newId, 4, '0', STR_PAD_LEFT);
                         $insProf = $db->prepare("INSERT INTO student_profiles (user_id, student_id, department, department_id, semester, roll_number, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())");
@@ -416,10 +413,9 @@ if ($db) {
         $q .= "AND u.is_active = 0 ";
     }
 
-    if ($deptFilter === 'BBA') {
-        $q .= "AND sp.department = 'BBA' ";
-    } elseif ($deptFilter === 'BCA') {
-        $q .= "AND sp.department = 'BCA' ";
+    if ($deptFilter !== 'all' && isset($deptMap[strtoupper($deptFilter)])) {
+        $cleanDept = $db->real_escape_string(strtoupper($deptFilter));
+        $q .= "AND sp.department = '$cleanDept' ";
     }
 
     if ($promFilter === 'opted_in') {
@@ -578,12 +574,11 @@ include_once __DIR__ . '/../components/header.php';
                             <a href="students.php?status=<?php echo urlencode($statusFilter); ?>&department=all&promotion_status=<?php echo urlencode($promFilter); ?>" class="task-filter-btn <?php echo $deptFilter === 'all' ? 'active' : ''; ?>">
                                 <i class="fas fa-building"></i> All Departments
                             </a>
-                            <a href="students.php?status=<?php echo urlencode($statusFilter); ?>&department=BBA&promotion_status=<?php echo urlencode($promFilter); ?>" class="task-filter-btn <?php echo $deptFilter === 'BBA' ? 'active' : ''; ?>">
-                                <i class="fas fa-briefcase"></i> BBA
-                            </a>
-                            <a href="students.php?status=<?php echo urlencode($statusFilter); ?>&department=BCA&promotion_status=<?php echo urlencode($promFilter); ?>" class="task-filter-btn <?php echo $deptFilter === 'BCA' ? 'active' : ''; ?>">
-                                <i class="fas fa-laptop-code"></i> BCA
-                            </a>
+                            <?php foreach ($departmentsList as $deptItem): ?>
+                                <a href="students.php?status=<?php echo urlencode($statusFilter); ?>&department=<?php echo urlencode($deptItem['code']); ?>&promotion_status=<?php echo urlencode($promFilter); ?>" class="task-filter-btn <?php echo $deptFilter === $deptItem['code'] ? 'active' : ''; ?>">
+                                    <i class="fas fa-graduation-cap"></i> <?php echo htmlspecialchars($deptItem['code']); ?>
+                                </a>
+                            <?php endforeach; ?>
                         </div>
                     </div>
 
@@ -757,8 +752,16 @@ include_once __DIR__ . '/../components/header.php';
                         <div class="form-group">
                             <label for="dept">Department *</label>
                             <select name="department" id="dept" class="form-control" required>
-                                <option value="BCA" selected>BCA (Bachelor of Computer Applications)</option>
-                                <option value="BBA">BBA (Bachelor of Business Administration)</option>
+                                <?php if (!empty($departmentsList)): ?>
+                                    <?php foreach ($departmentsList as $deptItem): ?>
+                                        <option value="<?php echo htmlspecialchars($deptItem['code']); ?>">
+                                            <?php echo htmlspecialchars($deptItem['name'] . ' (' . $deptItem['code'] . ')'); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                <?php else: ?>
+                                    <option value="BCA">BCA (Bachelor of Computer Applications)</option>
+                                    <option value="BBA">BBA (Bachelor of Business Administration)</option>
+                                <?php endif; ?>
                             </select>
                         </div>
                         <div class="form-group">
@@ -817,8 +820,16 @@ include_once __DIR__ . '/../components/header.php';
                         <div class="form-group">
                             <label for="editStuDept">Department *</label>
                             <select name="department" id="editStuDept" class="form-control" required>
-                                <option value="BCA">BCA (Bachelor of Computer Applications)</option>
-                                <option value="BBA">BBA (Bachelor of Business Administration)</option>
+                                <?php if (!empty($departmentsList)): ?>
+                                    <?php foreach ($departmentsList as $deptItem): ?>
+                                        <option value="<?php echo htmlspecialchars($deptItem['code']); ?>">
+                                            <?php echo htmlspecialchars($deptItem['name'] . ' (' . $deptItem['code'] . ')'); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                <?php else: ?>
+                                    <option value="BCA">BCA (Bachelor of Computer Applications)</option>
+                                    <option value="BBA">BBA (Bachelor of Business Administration)</option>
+                                <?php endif; ?>
                             </select>
                         </div>
                         <div class="form-group">
@@ -1026,9 +1037,11 @@ include_once __DIR__ . '/../components/header.php';
                         <label for="bulkDept">Select Degree / Department</label>
                         <select name="department" id="bulkDept" class="form-control">
                             <option value="all">All Degrees & Departments</option>
-                            <option value="BCA">BCA - Bachelor of Computer Applications</option>
-                            <option value="BBA">BBA - Bachelor of Business Administration</option>
-                            <option value="CSE">CSE - Computer Science & Engineering</option>
+                            <?php foreach ($departmentsList as $deptItem): ?>
+                                <option value="<?php echo htmlspecialchars($deptItem['code']); ?>">
+                                    <?php echo htmlspecialchars($deptItem['code'] . ' - ' . $deptItem['name']); ?>
+                                </option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
 

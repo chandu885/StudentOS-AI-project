@@ -13,13 +13,17 @@ class Assignment {
     public function create($data) {
         $stmt = $this->db->prepare(
             "INSERT INTO assignments 
-             (subject_id, faculty_id, title, description, instructions, deadline, max_marks, attachment_path, status) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+             (subject_id, department_id, semester, faculty_id, title, description, instructions, deadline, max_marks, attachment_path, status) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
         $status = $data['status'] ?? 'published';
+        $deptId = !empty($data['department_id']) ? (int)$data['department_id'] : null;
+        $semester = !empty($data['semester']) ? (string)$data['semester'] : null;
         $stmt->bind_param(
-            "iissssiss",
+            "iisissssiss",
             $data['subject_id'],
+            $deptId,
+            $semester,
             $data['faculty_id'],
             $data['title'],
             $data['description'],
@@ -38,9 +42,12 @@ class Assignment {
     public function findById($id) {
         $stmt = $this->db->prepare(
             "SELECT a.*, s.name AS subject_name, s.code AS subject_code,
+                    COALESCE(d.name, dept_s.name, 'Department') AS department_name,
                     u.first_name AS faculty_first, u.last_name AS faculty_last
              FROM assignments a
              JOIN subjects s ON a.subject_id = s.id
+             LEFT JOIN departments d ON a.department_id = d.id
+             LEFT JOIN departments dept_s ON s.department_id = dept_s.id
              JOIN users u ON a.faculty_id = u.id
              WHERE a.id = ? AND a.deleted_at IS NULL"
         );
@@ -59,16 +66,29 @@ class Assignment {
     public function getPendingForStudent($studentUserId) {
         $stmt = $this->db->prepare(
             "SELECT a.*, s.name AS subject_name, s.code AS subject_code,
+                    COALESCE(d.name, dept_s.name, 'Department') AS department_name,
+                    COALESCE(a.semester, s.semester) AS assignment_semester,
                     u.first_name AS faculty_first, u.last_name AS faculty_last
              FROM assignments a
              JOIN subjects s ON a.subject_id = s.id
-             JOIN student_subjects ss ON s.id = ss.subject_id
+             LEFT JOIN departments d ON a.department_id = d.id
+             LEFT JOIN departments dept_s ON s.department_id = dept_s.id
              JOIN users u ON a.faculty_id = u.id
+             LEFT JOIN student_profiles sp ON sp.user_id = ?
              LEFT JOIN assignment_submissions asub ON a.id = asub.assignment_id AND asub.student_id = ?
-             WHERE ss.student_id = ? AND a.deleted_at IS NULL AND asub.id IS NULL AND a.deadline >= NOW()
+             WHERE a.deleted_at IS NULL 
+               AND asub.id IS NULL 
+               AND a.deadline >= NOW()
+               AND COALESCE(a.semester, s.semester) = sp.semester
+               AND (
+                   sp.department_id IS NULL
+                   OR a.department_id = sp.department_id
+                   OR s.department_id = sp.department_id
+                   OR a.subject_id IN (SELECT subject_id FROM student_subjects WHERE student_id = ?)
+               )
              ORDER BY a.deadline ASC"
         );
-        $stmt->bind_param("ii", $studentUserId, $studentUserId);
+        $stmt->bind_param("iii", $studentUserId, $studentUserId, $studentUserId);
         $stmt->execute();
         return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     }
@@ -76,18 +96,29 @@ class Assignment {
     public function getAllForStudent($studentUserId) {
         $stmt = $this->db->prepare(
             "SELECT a.*, s.name AS subject_name, s.code AS subject_code,
+                    COALESCE(d.name, dept_s.name, 'Department') AS department_name,
+                    COALESCE(a.semester, s.semester) AS assignment_semester,
                     u.first_name AS faculty_first, u.last_name AS faculty_last,
                     asub.id AS submission_id, asub.file_path AS submission_file,
                     asub.marks_obtained, asub.feedback, asub.submitted_at, asub.status AS submission_status
              FROM assignments a
              JOIN subjects s ON a.subject_id = s.id
-             JOIN student_subjects ss ON s.id = ss.subject_id
+             LEFT JOIN departments d ON a.department_id = d.id
+             LEFT JOIN departments dept_s ON s.department_id = dept_s.id
              JOIN users u ON a.faculty_id = u.id
+             LEFT JOIN student_profiles sp ON sp.user_id = ?
              LEFT JOIN assignment_submissions asub ON a.id = asub.assignment_id AND asub.student_id = ?
-             WHERE ss.student_id = ? AND a.deleted_at IS NULL
+             WHERE a.deleted_at IS NULL
+               AND COALESCE(a.semester, s.semester) = sp.semester
+               AND (
+                   sp.department_id IS NULL
+                   OR a.department_id = sp.department_id
+                   OR s.department_id = sp.department_id
+                   OR a.subject_id IN (SELECT subject_id FROM student_subjects WHERE student_id = ?)
+               )
              ORDER BY a.deadline DESC"
         );
-        $stmt->bind_param("ii", $studentUserId, $studentUserId);
+        $stmt->bind_param("iii", $studentUserId, $studentUserId, $studentUserId);
         $stmt->execute();
         return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     }

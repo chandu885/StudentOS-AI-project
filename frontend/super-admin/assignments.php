@@ -1,16 +1,98 @@
 <?php
-// frontend/admin/assignments.php
+// frontend/super-admin/assignments.php
 session_start();
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/helpers.php';
 
-requireRole('admin');
+requireRole('super-admin');
 
-$userId = (int)($_SESSION['user']['id'] ?? 0);
+$userId = (int)($_SESSION['user']['id'] ?? 1);
 $successMsg = '';
 $errorMsg = '';
 $db = getDbConnection();
+
+// Handle actions
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    $action = $_POST['action'];
+
+    if ($action === 'create_assignment') {
+        $title = sanitize($_POST['title'] ?? '');
+        $departmentId = (int)($_POST['department_id'] ?? 0);
+        $semester = sanitize($_POST['semester'] ?? '');
+        $subjectId = (int)($_POST['subject_id'] ?? 0);
+        $description = sanitize($_POST['description'] ?? '');
+        $deadline = sanitize($_POST['deadline'] ?? date('Y-m-d H:i:s', strtotime('+7 days')));
+        $maxMarks = (int)($_POST['max_marks'] ?? 50);
+
+        // Validate PDF file upload
+        $attachmentPath = null;
+        if (!isset($_FILES['problem_pdf']) || $_FILES['problem_pdf']['error'] !== UPLOAD_ERR_OK) {
+            $errorMsg = 'Please upload a PDF containing the instructions and problem statement.';
+        } else {
+            $file = $_FILES['problem_pdf'];
+            $origName = $file['name'];
+            $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+
+            if ($ext !== 'pdf') {
+                $errorMsg = 'Invalid file format. Only PDF documents (.pdf) are allowed.';
+            } elseif ($file['size'] <= 0) {
+                $errorMsg = 'The uploaded PDF file is empty.';
+            } elseif ($file['size'] > 25 * 1024 * 1024) {
+                $errorMsg = 'Uploaded PDF exceeds maximum 25MB file size limit.';
+            } else {
+                $uploadDir = BASE_PATH . '/storage/assignments/';
+                if (!is_dir($uploadDir)) {
+                    @mkdir($uploadDir, 0777, true);
+                }
+                $safeBase = preg_replace('/[^a-zA-Z0-9_-]/', '_', pathinfo($origName, PATHINFO_FILENAME));
+                $safeName = 'asg_' . time() . '_' . substr($safeBase, 0, 20) . '_' . bin2hex(random_bytes(3)) . '.pdf';
+                $dest = $uploadDir . $safeName;
+
+                if (move_uploaded_file($file['tmp_name'], $dest)) {
+                    $attachmentPath = 'storage/assignments/' . $safeName;
+                } else {
+                    $errorMsg = 'Failed to write uploaded PDF file to server storage.';
+                }
+            }
+        }
+
+        if (empty($errorMsg)) {
+            if (!empty($title) && $subjectId > 0 && !empty($semester) && $departmentId > 0 && $db) {
+                $stmt = $db->prepare(
+                    "INSERT INTO assignments 
+                     (subject_id, department_id, semester, faculty_id, title, description, instructions, deadline, max_marks, attachment_path, status, created_at, updated_at) 
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', NOW(), NOW())"
+                );
+                if ($stmt) {
+                    $stmt->bind_param("iisissssis", $subjectId, $departmentId, $semester, $userId, $title, $description, $description, $deadline, $maxMarks, $attachmentPath);
+                    if ($stmt->execute()) {
+                        $successMsg = 'Assignment created and published institution-wide with problem statement PDF!';
+                    } else {
+                        $errorMsg = 'Failed to save assignment: ' . $stmt->error;
+                    }
+                    $stmt->close();
+                }
+            } else {
+                $errorMsg = 'Please complete all required fields (Department, Semester, Subject, Title, Deadline).';
+            }
+        }
+    } elseif ($action === 'delete_assignment') {
+        $deleteId = (int)($_POST['assignment_id'] ?? 0);
+        if ($deleteId > 0 && $db) {
+            $stmt = $db->prepare("UPDATE assignments SET deleted_at = NOW() WHERE id = ?");
+            if ($stmt) {
+                $stmt->bind_param("i", $deleteId);
+                if ($stmt->execute()) {
+                    $successMsg = 'Assignment removed successfully.';
+                } else {
+                    $errorMsg = 'Failed to remove assignment: ' . $stmt->error;
+                }
+                $stmt->close();
+            }
+        }
+    }
+}
 
 // Fetch departments for dropdown
 $departments = [];
@@ -30,72 +112,11 @@ if ($db) {
     }
 }
 
-// Handle assignment creation by Admin
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'create_assignment') {
-    $title = sanitize($_POST['title'] ?? '');
-    $departmentId = (int)($_POST['department_id'] ?? 0);
-    $semester = sanitize($_POST['semester'] ?? '');
-    $subjectId = (int)($_POST['subject_id'] ?? 0);
-    $description = sanitize($_POST['description'] ?? '');
-    $deadline = sanitize($_POST['deadline'] ?? date('Y-m-d H:i:s', strtotime('+7 days')));
-    $maxMarks = (int)($_POST['max_marks'] ?? 50);
-
-    // Validate PDF file upload
-    $attachmentPath = null;
-    if (!isset($_FILES['problem_pdf']) || $_FILES['problem_pdf']['error'] !== UPLOAD_ERR_OK) {
-        $errorMsg = 'Please upload a PDF containing the instructions and problem statement.';
-    } else {
-        $file = $_FILES['problem_pdf'];
-        $origName = $file['name'];
-        $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
-
-        if ($ext !== 'pdf') {
-            $errorMsg = 'Invalid file format. Only PDF documents (.pdf) are allowed.';
-        } elseif ($file['size'] <= 0) {
-            $errorMsg = 'The uploaded PDF file is empty.';
-        } elseif ($file['size'] > 25 * 1024 * 1024) {
-            $errorMsg = 'Uploaded PDF exceeds maximum 25MB file size limit.';
-        } else {
-            $uploadDir = BASE_PATH . '/storage/assignments/';
-            if (!is_dir($uploadDir)) {
-                @mkdir($uploadDir, 0777, true);
-            }
-            $safeBase = preg_replace('/[^a-zA-Z0-9_-]/', '_', pathinfo($origName, PATHINFO_FILENAME));
-            $safeName = 'asg_' . time() . '_' . substr($safeBase, 0, 20) . '_' . bin2hex(random_bytes(3)) . '.pdf';
-            $dest = $uploadDir . $safeName;
-
-            if (move_uploaded_file($file['tmp_name'], $dest)) {
-                $attachmentPath = 'storage/assignments/' . $safeName;
-            } else {
-                $errorMsg = 'Failed to write uploaded PDF file to server storage.';
-            }
-        }
-    }
-
-    if (empty($errorMsg)) {
-        if (!empty($title) && $subjectId > 0 && !empty($semester) && $departmentId > 0 && $db) {
-            $stmt = $db->prepare(
-                "INSERT INTO assignments 
-                 (subject_id, department_id, semester, faculty_id, title, description, instructions, deadline, max_marks, attachment_path, status, created_at, updated_at) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', NOW(), NOW())"
-            );
-            if ($stmt) {
-                $stmt->bind_param("iisissssis", $subjectId, $departmentId, $semester, $userId, $title, $description, $description, $deadline, $maxMarks, $attachmentPath);
-                if ($stmt->execute()) {
-                    $successMsg = 'Assignment created and published institution-wide with problem statement PDF!';
-                } else {
-                    $errorMsg = 'Failed to save assignment in database: ' . $stmt->error;
-                }
-                $stmt->close();
-            }
-        } else {
-            $errorMsg = 'Please complete all required fields (Department, Semester, Subject, Title, Deadline).';
-        }
-    }
-}
-
-// Fetch all assignments across departments
+// Fetch all assignments across all departments
 $assignments = [];
+$totalSubmissionsCount = 0;
+$uniqueDepts = [];
+
 if ($db) {
     $res = $db->query(
         "SELECT a.id, a.title, a.deadline, a.max_marks, a.status, a.attachment_path,
@@ -103,10 +124,10 @@ if ($db) {
                 COALESCE(d.name, dept_s.name, 'Academics') AS department_name,
                 COALESCE(d.code, dept_s.code, 'ACAD') AS department_code,
                 COALESCE(a.semester, s.semester) AS assignment_semester,
-                COALESCE(CONCAT(u.first_name, ' ', u.last_name), 'Administrator') AS creator_name,
+                COALESCE(CONCAT(u.first_name, ' ', u.last_name), 'System Administrator') AS creator_name,
                 r.name AS creator_role,
                 (SELECT COUNT(*) FROM assignment_submissions WHERE assignment_id = a.id) AS submission_count,
-                (SELECT COUNT(DISTINCT student_id) FROM student_subjects WHERE subject_id = a.subject_id) AS enrolled_count
+                (SELECT COUNT(*) FROM assignment_submissions WHERE assignment_id = a.id AND status = 'graded') AS graded_count
          FROM assignments a
          JOIN subjects s ON a.subject_id = s.id
          LEFT JOIN departments d ON a.department_id = d.id
@@ -118,41 +139,96 @@ if ($db) {
     );
     if ($res) {
         $assignments = $res->fetch_all(MYSQLI_ASSOC);
+        foreach ($assignments as $a) {
+            $totalSubmissionsCount += (int)$a['submission_count'];
+            $uniqueDepts[$a['department_code']] = true;
+        }
     }
 }
 ?>
 <?php
-$pageTitle = 'Coursework & Assignments - StudentOS AI';
+$pageTitle = 'Master Coursework & Assignments - StudentOS AI';
 include_once __DIR__ . '/../components/header.php';
 ?>
-                <div class="page-header">
+                <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
                     <div>
-                        <h1>Institution-Wide Coursework &amp; Assignments</h1>
-                        <p class="page-subtitle">Assign tasks with instructions &amp; problem statement PDFs, specify departments and semesters, and monitor submission rates</p>
+                        <h1><i class="fas fa-file-signature" style="color: var(--primary); margin-right: 8px;"></i> Master Coursework &amp; Assignments</h1>
+                        <p class="page-subtitle">Universal assignment authority: Assign tasks with instructions &amp; problem statement PDFs for specific semesters and departments</p>
                     </div>
                     <div class="header-actions">
-                        <button class="btn btn-primary" onclick="openModal('createAsgModal')">
-                            <i class="fas fa-plus"></i> Create Assignment
+                        <button class="btn btn-primary" onclick="openModal('createAsgModal')" style="display: inline-flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-plus-circle"></i> Create Assignment
                         </button>
                     </div>
                 </div>
 
+                <!-- Operational Metrics -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                    <div class="card" style="padding: 18px; display: flex; align-items: center; gap: 14px;">
+                        <div style="width: 48px; height: 48px; border-radius: 12px; background: rgba(79, 70, 229, 0.12); color: #4F46E5; display: flex; align-items: center; justify-content: center; font-size: 22px;">
+                            <i class="fas fa-file-alt"></i>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Total Coursework</div>
+                            <div style="font-size: 24px; font-weight: 800; color: var(--text-primary); line-height: 1.2;"><?php echo count($assignments); ?></div>
+                        </div>
+                    </div>
+
+                    <div class="card" style="padding: 18px; display: flex; align-items: center; gap: 14px;">
+                        <div style="width: 48px; height: 48px; border-radius: 12px; background: rgba(16, 185, 129, 0.12); color: #10B981; display: flex; align-items: center; justify-content: center; font-size: 22px;">
+                            <i class="fas fa-upload"></i>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Total Submissions</div>
+                            <div style="font-size: 24px; font-weight: 800; color: var(--text-primary); line-height: 1.2;"><?php echo $totalSubmissionsCount; ?></div>
+                        </div>
+                    </div>
+
+                    <div class="card" style="padding: 18px; display: flex; align-items: center; gap: 14px;">
+                        <div style="width: 48px; height: 48px; border-radius: 12px; background: rgba(6, 182, 212, 0.12); color: #06B6D4; display: flex; align-items: center; justify-content: center; font-size: 22px;">
+                            <i class="fas fa-building"></i>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Departments Covered</div>
+                            <div style="font-size: 24px; font-weight: 800; color: var(--text-primary); line-height: 1.2;"><?php echo count($uniqueDepts); ?></div>
+                        </div>
+                    </div>
+
+                    <div class="card" style="padding: 18px; display: flex; align-items: center; gap: 14px;">
+                        <div style="width: 48px; height: 48px; border-radius: 12px; background: rgba(245, 158, 11, 0.12); color: #F59E0B; display: flex; align-items: center; justify-content: center; font-size: 22px;">
+                            <i class="fas fa-file-pdf"></i>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">PDF Problem Sheets</div>
+                            <div style="font-size: 24px; font-weight: 800; color: var(--text-primary); line-height: 1.2;">
+                                <?php 
+                                $pdfCount = 0;
+                                foreach ($assignments as $a) {
+                                    if (!empty($a['attachment_path'])) $pdfCount++;
+                                }
+                                echo $pdfCount;
+                                ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <?php if ($successMsg): ?>
-                    <div class="alert alert-success" style="background: rgba(34, 197, 94, 0.15); border: 1px solid var(--success); color: var(--success); padding: 12px 16px; border-radius: var(--radius-md); margin-bottom: 20px;">
+                    <div class="alert alert-success" style="background: rgba(34, 197, 94, 0.15); border: 1px solid var(--success); color: var(--success); padding: 12px 16px; border-radius: var(--radius-md); margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
                         <i class="fas fa-check-circle"></i> <?php echo htmlspecialchars($successMsg); ?>
                     </div>
                 <?php endif; ?>
 
                 <?php if ($errorMsg): ?>
-                    <div class="alert alert-error" style="background: rgba(239, 68, 68, 0.15); border: 1px solid var(--danger); color: var(--danger); padding: 12px 16px; border-radius: var(--radius-md); margin-bottom: 20px;">
+                    <div class="alert alert-error" style="background: rgba(239, 68, 68, 0.15); border: 1px solid var(--danger); color: var(--danger); padding: 12px 16px; border-radius: var(--radius-md); margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
                         <i class="fas fa-exclamation-circle"></i> <?php echo htmlspecialchars($errorMsg); ?>
                     </div>
                 <?php endif; ?>
 
                 <div class="card">
                     <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                        <h3><i class="fas fa-file-alt"></i> Active Coursework (<?php echo count($assignments); ?>)</h3>
-                        <span style="font-size: 12px; color: var(--text-muted);">Institutional Overview</span>
+                        <h3><i class="fas fa-list-check"></i> Institution-Wide Coursework (<?php echo count($assignments); ?>)</h3>
+                        <span style="font-size: 12px; color: var(--text-muted);">Super Administrator View</span>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
@@ -166,13 +242,14 @@ include_once __DIR__ . '/../components/header.php';
                                         <th>Problem PDF</th>
                                         <th>Submission Due</th>
                                         <th>Submissions</th>
+                                        <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php if (empty($assignments)): ?>
                                         <tr>
-                                            <td colspan="7" style="text-align: center; padding: 28px; color: var(--text-muted);">
-                                                <i class="fas fa-file-alt" style="font-size: 28px; margin-bottom: 8px; display: block;"></i>
+                                            <td colspan="8" style="text-align: center; padding: 36px; color: var(--text-muted);">
+                                                <i class="fas fa-file-alt" style="font-size: 32px; margin-bottom: 8px; display: block;"></i>
                                                 No active coursework assignments recorded. Click "Create Assignment" to assign tasks.
                                             </td>
                                         </tr>
@@ -182,10 +259,13 @@ include_once __DIR__ . '/../components/header.php';
                                         ?>
                                             <tr>
                                                 <td>
-                                                    <strong><?php echo htmlspecialchars($asg['title']); ?></strong>
+                                                    <strong style="color: var(--text-primary); font-size: 14px;"><?php echo htmlspecialchars($asg['title']); ?></strong>
                                                     <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Max Marks: <?php echo (int)$asg['max_marks']; ?> pts</div>
                                                 </td>
-                                                <td><span class="badge badge-secondary"><?php echo htmlspecialchars($asg['subject_code'] ?? $asg['subject_name']); ?></span></td>
+                                                <td>
+                                                    <span class="badge badge-secondary"><?php echo htmlspecialchars($asg['subject_code'] ?? $asg['subject_name']); ?></span>
+                                                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;"><?php echo htmlspecialchars($asg['subject_name']); ?></div>
+                                                </td>
                                                 <td>
                                                     <div style="display: flex; gap: 4px; flex-wrap: wrap;">
                                                         <span class="badge badge-primary" style="font-size: 11px;">Sem <?php echo htmlspecialchars($asg['assignment_semester']); ?></span>
@@ -195,23 +275,36 @@ include_once __DIR__ . '/../components/header.php';
                                                 <td>
                                                     <span style="font-weight: 500;"><?php echo htmlspecialchars($asg['creator_name']); ?></span>
                                                     <?php if (!empty($asg['creator_role'])): ?>
-                                                        <span class="badge badge-dark" style="font-size: 10px;"><?php echo htmlspecialchars(ucfirst(str_replace('_', ' ', $asg['creator_role']))); ?></span>
+                                                        <div style="margin-top: 2px;">
+                                                            <span class="badge badge-dark" style="font-size: 10px;"><?php echo htmlspecialchars(ucfirst(str_replace('_', ' ', $asg['creator_role']))); ?></span>
+                                                        </div>
                                                     <?php endif; ?>
                                                 </td>
                                                 <td>
                                                     <?php if (!empty($asg['attachment_path'])): ?>
-                                                        <a href="<?php echo htmlspecialchars(storageUrl($asg['attachment_path'])); ?>" target="_blank" class="btn btn-outline" style="padding: 4px 8px; font-size: 11px; color: #EF4444; border-color: #EF4444; display: inline-flex; align-items: center; gap: 4px;">
+                                                        <a href="<?php echo htmlspecialchars(storageUrl($asg['attachment_path'])); ?>" target="_blank" class="btn btn-outline" style="padding: 4px 10px; font-size: 11px; color: #EF4444; border-color: #EF4444; display: inline-flex; align-items: center; gap: 5px; border-radius: 6px;">
                                                             <i class="fas fa-file-pdf"></i> View PDF
                                                         </a>
                                                     <?php else: ?>
                                                         <span style="font-size: 12px; color: var(--text-muted);">No PDF</span>
                                                     <?php endif; ?>
                                                 </td>
-                                                <td><?php echo date('M d, Y h:i A', strtotime($asg['deadline'])); ?></td>
+                                                <td>
+                                                    <span style="font-size: 12.5px;"><?php echo date('M d, Y h:i A', strtotime($asg['deadline'])); ?></span>
+                                                </td>
                                                 <td>
                                                     <span class="badge badge-info">
                                                         <?php echo $subCount; ?> submitted
                                                     </span>
+                                                </td>
+                                                <td>
+                                                    <form method="POST" action="assignments.php" onsubmit="return confirm('Are you sure you want to remove this assignment?');" style="display: inline;">
+                                                        <input type="hidden" name="action" value="delete_assignment">
+                                                        <input type="hidden" name="assignment_id" value="<?php echo (int)$asg['id']; ?>">
+                                                        <button type="submit" class="btn btn-sm btn-outline" style="color: var(--danger); border-color: var(--danger); padding: 4px 8px; font-size: 11px;" title="Delete Assignment">
+                                                            <i class="fas fa-trash-alt"></i>
+                                                        </button>
+                                                    </form>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
@@ -267,7 +360,7 @@ include_once __DIR__ . '/../components/header.php';
 
                     <div class="form-group">
                         <label for="asgTitle">Assignment Title *</label>
-                        <input type="text" name="title" id="asgTitle" class="form-control" placeholder="e.g. Midterm Problem Set: Graph Theory &amp; Dijkstra" required>
+                        <input type="text" name="title" id="asgTitle" class="form-control" placeholder="e.g. Midterm Problem Set: Database Architecture &amp; Indexing" required>
                     </div>
 
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
@@ -335,7 +428,7 @@ include_once __DIR__ . '/../components/header.php';
             if (fallback.length > 0) {
                 const opt = document.createElement('option');
                 opt.value = '';
-                opt.textContent = '-- No exact sem ' + sem + ' match; select course subject: --';
+                opt.textContent = '-- No exact sem ' + sem + ' match; select department subject: --';
                 subSelect.appendChild(opt);
                 fallback.forEach(s => {
                     const o = document.createElement('option');

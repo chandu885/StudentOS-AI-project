@@ -22,14 +22,21 @@ $error = '';
 $success = '';
 $formData = [];
 
-$regSummary = [];
+$db = getDbConnection();
+$departments = [];
+if ($db) {
+    $deptRes = $db->query("SELECT id, name, code FROM departments WHERE status = 'active' ORDER BY name ASC");
+    if ($deptRes) {
+        $departments = $deptRes->fetch_all(MYSQLI_ASSOC);
+    }
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $formData = [
         'first_name' => sanitize($_POST['first_name'] ?? ''),
         'last_name' => sanitize($_POST['last_name'] ?? ''),
         'email' => sanitize($_POST['email'] ?? ''),
-        'department' => strtoupper(sanitize($_POST['department'] ?? 'BCA')),
+        'department' => strtoupper(sanitize($_POST['department'] ?? '')),
         'password' => $_POST['password'] ?? '',
         'password_confirm' => $_POST['password_confirm'] ?? '',
         'student_id' => strtoupper(sanitize($_POST['student_id'] ?? '')),
@@ -45,8 +52,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    if (!in_array($formData['department'], ['BBA', 'BCA'])) {
-        $errors[] = 'Department must be either BBA or BCA';
+    // Validate department dynamically against active departments in the database
+    $validDept = false;
+    $deptCode = $formData['department'];
+    $deptId = null;
+
+    foreach ($departments as $d) {
+        if (strtoupper($d['code']) === $deptCode || (string)$d['id'] === $deptCode) {
+            $validDept = true;
+            $deptCode = strtoupper($d['code']);
+            $deptId = (int)$d['id'];
+            break;
+        }
+    }
+
+    if (!$validDept && !empty($formData['department'])) {
+        $errors[] = 'Please select a valid academic department from the list.';
+    } else {
+        $formData['department'] = $deptCode;
+        $formData['department_id'] = $deptId;
     }
     
     if ($formData['password'] !== $formData['password_confirm']) {
@@ -115,16 +139,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         $uIns->close();
 
                                         // Lookup department_id
-                                        $deptId = null;
-                                        $deptStmt = $db->prepare("SELECT id FROM departments WHERE code = ? LIMIT 1");
-                                        if ($deptStmt) {
-                                            $deptStmt->bind_param("s", $formData['department']);
-                                            $deptStmt->execute();
-                                            $dRow = $deptStmt->get_result()->fetch_assoc();
-                                            if ($dRow) {
-                                                $deptId = (int)$dRow['id'];
+                                        $deptId = $formData['department_id'] ?? null;
+                                        if (!$deptId) {
+                                            $deptStmt = $db->prepare("SELECT id FROM departments WHERE code = ? OR id = ? LIMIT 1");
+                                            if ($deptStmt) {
+                                                $deptStmt->bind_param("ss", $formData['department'], $formData['department']);
+                                                $deptStmt->execute();
+                                                $dRow = $deptStmt->get_result()->fetch_assoc();
+                                                if ($dRow) {
+                                                    $deptId = (int)$dRow['id'];
+                                                }
+                                                $deptStmt->close();
                                             }
-                                            $deptStmt->close();
                                         }
 
                                         $spIns = $db->prepare("INSERT INTO student_profiles (user_id, student_id, department, department_id, semester, roll_number, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())");
@@ -292,9 +318,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <div class="input-group">
                             <span class="input-icon"><i class="fas fa-building"></i></span>
                             <select id="department" name="department" class="form-control" style="padding-left: 40px;" required>
-                                <option value="">Select Department</option>
-                                <option value="BBA" <?php echo (($formData['department'] ?? '') === 'BBA') ? 'selected' : ''; ?>>BBA (Bachelor of Business Administration)</option>
-                                <option value="BCA" <?php echo (($formData['department'] ?? 'BCA') === 'BCA') ? 'selected' : ''; ?>>BCA (Bachelor of Computer Applications)</option>
+                                <option value="">-- Select Academic Department --</option>
+                                <?php foreach ($departments as $d): ?>
+                                    <option value="<?php echo htmlspecialchars($d['code']); ?>" 
+                                        <?php echo (($formData['department'] ?? '') === strtoupper($d['code'])) ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars($d['name'] . ' (' . $d['code'] . ')'); ?>
+                                    </option>
+                                <?php endforeach; ?>
                             </select>
                         </div>
                     </div>

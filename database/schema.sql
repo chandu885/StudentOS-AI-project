@@ -349,6 +349,8 @@ CREATE TABLE `class_schedules` (
 CREATE TABLE `assignments` (
     `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     `subject_id` INT UNSIGNED NOT NULL,
+    `department_id` INT UNSIGNED NULL,
+    `semester` VARCHAR(20) NULL,
     `faculty_id` INT UNSIGNED NOT NULL,
     `title` VARCHAR(255) NOT NULL,
     `description` TEXT NULL,
@@ -361,6 +363,7 @@ CREATE TABLE `assignments` (
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `deleted_at` DATETIME NULL,
     CONSTRAINT `fk_asg_subject` FOREIGN KEY (`subject_id`) REFERENCES `subjects` (`id`) ON DELETE CASCADE,
+    CONSTRAINT `fk_asg_department` FOREIGN KEY (`department_id`) REFERENCES `departments` (`id`) ON DELETE SET NULL,
     CONSTRAINT `fk_asg_faculty` FOREIGN KEY (`faculty_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
