@@ -96,6 +96,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($up) {
                         $up->bind_param("sssiii", $firstName, $lastName, $email, $roleId, $isActive, $targetUserId);
                         if ($up->execute()) {
+                            if ($targetUserId === $currentUserId) {
+                                $_SESSION['user']['first_name'] = $firstName;
+                                $_SESSION['user']['last_name'] = $lastName;
+                                $_SESSION['user']['email'] = $email;
+                                $_SESSION['user']['role_id'] = $roleId;
+                            }
+
+                            // If role is Admin or Super Admin, ensure admin_profiles exists
+                            if (in_array($roleId, [1, 2])) {
+                                $apChk = $conn->prepare("SELECT id FROM admin_profiles WHERE user_id = ?");
+                                if ($apChk) {
+                                    $apChk->bind_param("i", $targetUserId);
+                                    $apChk->execute();
+                                    if (!$apChk->get_result()->fetch_assoc()) {
+                                        $empId = 'ADM-' . str_pad($targetUserId, 3, '0', STR_PAD_LEFT);
+                                        $desig = ($roleId === 1) ? 'Super Administrator' : 'Department Administrator';
+                                        $apIns = $conn->prepare("INSERT INTO admin_profiles (user_id, employee_id, designation, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())");
+                                        if ($apIns) {
+                                            $apIns->bind_param("iss", $targetUserId, $empId, $desig);
+                                            $apIns->execute();
+                                            $apIns->close();
+                                        }
+                                    }
+                                    $apChk->close();
+                                }
+                            }
+
                             $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
                             $details = "Super Admin updated user #{$targetUserId} ({$email}, Role: {$roleId})";
                             $aud = $conn->prepare("INSERT INTO audit_logs (user_id, action, resource, resource_id, details, ip_address) VALUES (?, 'USER_UPDATED', 'users', ?, ?, ?)");
@@ -391,7 +418,7 @@ include_once __DIR__ . '/../components/header.php';
 
     <!-- Password Change Modal -->
     <div id="passwordModal" class="modal-backdrop" style="display: none; align-items: center; justify-content: center; z-index: 1000;">
-        <div class="modal" style="width: 100%; max-width: 500px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-xl); box-shadow: 0 24px 60px rgba(0,0,0,0.8); overflow: hidden;">
+        <div class="modal modal-card" style="width: 100%; max-width: 500px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-xl); box-shadow: 0 24px 60px rgba(0,0,0,0.8); overflow: hidden;">
             <div class="modal-header" style="padding: 18px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
                 <h3 style="font-size: 16px; margin: 0; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
                     <i class="fas fa-shield-alt" style="color: #F59E0B;"></i> Super Admin Password Reset
@@ -449,7 +476,7 @@ include_once __DIR__ . '/../components/header.php';
 
     <!-- Edit User Modal -->
     <div id="editUserModal" class="modal-backdrop" style="display: none; align-items: center; justify-content: center; z-index: 1000;">
-        <div class="modal" style="width: 100%; max-width: 520px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-xl); box-shadow: 0 24px 60px rgba(0,0,0,0.8); overflow: hidden;">
+        <div class="modal modal-card" style="width: 100%; max-width: 520px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-xl); box-shadow: 0 24px 60px rgba(0,0,0,0.8); overflow: hidden;">
             <div class="modal-header" style="padding: 18px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
                 <h3 style="font-size: 16px; margin: 0; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
                     <i class="fas fa-user-edit" style="color: var(--primary);"></i> Edit User Account
@@ -511,7 +538,7 @@ include_once __DIR__ . '/../components/header.php';
 
     <!-- View User Details Modal -->
     <div id="viewUserModal" class="modal-backdrop" style="display: none; align-items: center; justify-content: center; z-index: 1000;">
-        <div class="modal" style="width: 100%; max-width: 520px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-xl); box-shadow: 0 24px 60px rgba(0,0,0,0.8); overflow: hidden;">
+        <div class="modal modal-card" style="width: 100%; max-width: 520px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-xl); box-shadow: 0 24px 60px rgba(0,0,0,0.8); overflow: hidden;">
             <div class="modal-header" style="padding: 18px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
                 <h3 style="font-size: 16px; margin: 0; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
                     <i class="fas fa-id-card" style="color: var(--primary);"></i> User Profile & Contact Details
@@ -573,7 +600,7 @@ include_once __DIR__ . '/../components/header.php';
 
     <!-- Delete User Modal -->
     <div id="deleteUserModal" class="modal-backdrop" style="display: none; align-items: center; justify-content: center; z-index: 1000;">
-        <div class="modal" style="width: 100%; max-width: 520px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-xl); box-shadow: 0 24px 60px rgba(0,0,0,0.8); overflow: hidden;">
+        <div class="modal modal-card" style="width: 100%; max-width: 520px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-xl); box-shadow: 0 24px 60px rgba(0,0,0,0.8); overflow: hidden;">
             <div class="modal-header" style="background: rgba(239, 68, 68, 0.1); border-bottom: 1px solid rgba(239, 68, 68, 0.2); padding: 18px 24px; display: flex; justify-content: space-between; align-items: center;">
                 <h3 style="color: var(--danger); margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px;">
                     <i class="fas fa-user-slash"></i> User Account Deletion & Deactivation
@@ -650,12 +677,11 @@ include_once __DIR__ . '/../components/header.php';
         document.getElementById('modalTargetRole').textContent = role;
         document.getElementById('modalNewPassword').value = '';
         document.getElementById('modalConfirmPassword').value = '';
-        const modal = document.getElementById('passwordModal');
-        modal.style.display = 'flex';
+        openModal('passwordModal');
     }
 
     function closePasswordModal() {
-        document.getElementById('passwordModal').style.display = 'none';
+        closeModal('passwordModal');
     }
 
     function openEditUserModal(u) {
@@ -665,11 +691,11 @@ include_once __DIR__ . '/../components/header.php';
         document.getElementById('editUserEmail').value = u.email || '';
         document.getElementById('editUserRole').value = u.role_id || 4;
         document.getElementById('editUserStatus').value = (u.is_active !== undefined) ? u.is_active : 1;
-        document.getElementById('editUserModal').style.display = 'flex';
+        openModal('editUserModal');
     }
 
     function closeEditUserModal() {
-        document.getElementById('editUserModal').style.display = 'none';
+        closeModal('editUserModal');
     }
 
     function openViewUserModal(u) {
@@ -693,11 +719,11 @@ include_once __DIR__ . '/../components/header.php';
         } else {
             stuSec.style.display = 'none';
         }
-        document.getElementById('viewUserModal').style.display = 'flex';
+        openModal('viewUserModal');
     }
 
     function closeViewUserModal() {
-        document.getElementById('viewUserModal').style.display = 'none';
+        closeModal('viewUserModal');
     }
 
     function openDeleteUserModal(u) {
@@ -714,11 +740,11 @@ include_once __DIR__ . '/../components/header.php';
         } else {
             box.style.display = 'none';
         }
-        document.getElementById('deleteUserModal').style.display = 'flex';
+        openModal('deleteUserModal');
     }
 
     function closeDeleteUserModal() {
-        document.getElementById('deleteUserModal').style.display = 'none';
+        closeModal('deleteUserModal');
     }
 
     function toggleModalPass(id, btn) {

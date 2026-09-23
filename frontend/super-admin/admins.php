@@ -175,6 +175,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 }
                             }
 
+                            if ($targetUserId === $currentUserId) {
+                                $_SESSION['user']['first_name'] = $firstName;
+                                $_SESSION['user']['last_name'] = $lastName;
+                                $_SESSION['user']['email'] = $email;
+                                $_SESSION['user']['role_id'] = $roleId;
+                            }
+
                             $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
                             $details = "Super Admin updated details for Administrator #{$targetUserId} ({$email})";
                             if ($departmentId) {
@@ -360,7 +367,7 @@ include_once __DIR__ . '/../components/header.php';
 
     <!-- Password Change Modal -->
     <div id="adminPasswordModal" class="modal-backdrop" style="display: none; align-items: center; justify-content: center; z-index: 1000;">
-        <div class="modal" style="width: 100%; max-width: 500px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-xl); box-shadow: 0 24px 60px rgba(0,0,0,0.8); overflow: hidden;">
+        <div class="modal modal-card" style="width: 100%; max-width: 500px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-xl); box-shadow: 0 24px 60px rgba(0,0,0,0.8); overflow: hidden;">
             <div class="modal-header" style="padding: 18px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
                 <h3 style="font-size: 16px; margin: 0; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
                     <i class="fas fa-key" style="color: #F59E0B;"></i> Change Admin Password
@@ -415,7 +422,7 @@ include_once __DIR__ . '/../components/header.php';
 
     <!-- Provision Admin Modal -->
     <div id="provisionModal" class="modal-backdrop" style="display: none; align-items: center; justify-content: center; z-index: 1000;">
-        <div class="modal" style="width: 100%; max-width: 520px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-xl); box-shadow: 0 24px 60px rgba(0,0,0,0.8); overflow: hidden;">
+        <div class="modal modal-card" style="width: 100%; max-width: 520px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-xl); box-shadow: 0 24px 60px rgba(0,0,0,0.8); overflow: hidden;">
             <div class="modal-header" style="padding: 18px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
                 <h3 style="font-size: 16px; margin: 0; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
                     <i class="fas fa-user-plus" style="color: var(--primary);"></i> Provision New Administrator
@@ -439,18 +446,11 @@ include_once __DIR__ . '/../components/header.php';
                 </div>
 
                 <div class="form-group" style="margin-bottom: 14px;">
-                    <label for="provEmail">Institutional Admin Email <span style="color: var(--danger);">*</span></label>
+                    <label for="provEmail">Email Address <span style="color: var(--danger);">*</span></label>
                     <input type="email" name="email" id="provEmail" class="form-control" placeholder="admin@studentos.ai" required>
                 </div>
 
                 <div class="form-group" style="margin-bottom: 14px;">
-                    <label for="provRole">Administrative Tier <span style="color: var(--danger);">*</span></label>
-                    <select name="role_id" id="provRole" class="form-control" required>
-                        <option value="2" selected>Institutional Admin (Tier 2)</option>
-                        <option value="1">Super Administrator (Tier 1 - Root)</option>
-                    </select>
-                </div>
-
                 <div class="form-group" style="margin-bottom: 14px;">
                     <label for="provDept">Assigned Department</label>
                     <select name="department_id" id="provDept" class="form-control">
@@ -483,7 +483,7 @@ include_once __DIR__ . '/../components/header.php';
 
     <!-- Edit Admin Modal -->
     <div id="editAdminModal" class="modal-backdrop" style="display: none; align-items: center; justify-content: center; z-index: 1000;">
-        <div class="modal" style="width: 100%; max-width: 520px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-xl); box-shadow: 0 24px 60px rgba(0,0,0,0.8); overflow: hidden;">
+        <div class="modal modal-card" style="width: 100%; max-width: 520px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-xl); box-shadow: 0 24px 60px rgba(0,0,0,0.8); overflow: hidden;">
             <div class="modal-header" style="padding: 18px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
                 <h3 style="font-size: 16px; margin: 0; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
                     <i class="fas fa-user-edit" style="color: var(--primary);"></i> Edit Administrator Details
@@ -563,11 +563,11 @@ include_once __DIR__ . '/../components/header.php';
         document.getElementById('modalAdminEmail').textContent = email;
         document.getElementById('adminNewPass').value = '';
         document.getElementById('adminConfirmPass').value = '';
-        document.getElementById('adminPasswordModal').style.display = 'flex';
+        openModal('adminPasswordModal');
     }
 
     function closeAdminPasswordModal() {
-        document.getElementById('adminPasswordModal').style.display = 'none';
+        closeModal('adminPasswordModal');
     }
 
     function openEditAdminModal(adm) {
@@ -578,19 +578,19 @@ include_once __DIR__ . '/../components/header.php';
         document.getElementById('editAdminRole').value = adm.role_id || 2;
         document.getElementById('editAdminStatus').value = (adm.is_active !== undefined) ? adm.is_active : 1;
         document.getElementById('editAdminDept').value = adm.department_id || '';
-        document.getElementById('editAdminModal').style.display = 'flex';
+        openModal('editAdminModal');
     }
 
     function closeEditAdminModal() {
-        document.getElementById('editAdminModal').style.display = 'none';
+        closeModal('editAdminModal');
     }
 
     function openProvisionModal() {
-        document.getElementById('provisionModal').style.display = 'flex';
+        openModal('provisionModal');
     }
 
     function closeProvisionModal() {
-        document.getElementById('provisionModal').style.display = 'none';
+        closeModal('provisionModal');
     }
 
     function togglePass(id, btn) {

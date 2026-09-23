@@ -8,14 +8,42 @@ require_once __DIR__ . '/../includes/helpers.php';
 requireRole('admin');
 
 $userId = (int)($_SESSION['user']['id'] ?? 0);
-$user = $_SESSION['user'];
+$user = $_SESSION['user'] ?? [];
 $successMsg = '';
 $errorMsg = '';
+$conn = getDbConnection();
+
+// Load profile details from database
+if ($conn && $userId > 0) {
+    $uStmt = $conn->prepare("SELECT id, first_name, last_name, email, role_id, is_active FROM users WHERE id = ?");
+    if ($uStmt) {
+        $uStmt->bind_param("i", $userId);
+        $uStmt->execute();
+        $dbUser = $uStmt->get_result()->fetch_assoc();
+        $uStmt->close();
+        if ($dbUser) {
+            $user = array_merge($user, $dbUser);
+        }
+    }
+
+    $apStmt = $conn->prepare("SELECT phone, designation, employee_id, office_location FROM admin_profiles WHERE user_id = ?");
+    if ($apStmt) {
+        $apStmt->bind_param("i", $userId);
+        $apStmt->execute();
+        $apData = $apStmt->get_result()->fetch_assoc();
+        $apStmt->close();
+        if ($apData) {
+            $user['phone'] = $apData['phone'] ?? ($user['phone'] ?? '');
+            $user['designation'] = $apData['designation'] ?? ($user['designation'] ?? '');
+            $user['employee_id'] = $apData['employee_id'] ?? ($user['employee_id'] ?? '');
+            $user['office_location'] = $apData['office_location'] ?? ($user['office_location'] ?? '');
+        }
+    }
+}
 
 $action = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? 'update_profile';
-    $conn = getDbConnection();
 
     if ($action === 'update_profile') {
         $firstName = sanitize($_POST['first_name'] ?? '');
@@ -24,14 +52,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (!empty($firstName) && !empty($lastName)) {
             if ($conn) {
-                $stmt = $conn->prepare("UPDATE users SET first_name = ?, last_name = ?, phone = ?, updated_at = NOW() WHERE id = ?");
-                $stmt->bind_param("sssi", $firstName, $lastName, $phone, $userId);
-                $stmt->execute();
+                // Update users table (first_name, last_name)
+                $stmt = $conn->prepare("UPDATE users SET first_name = ?, last_name = ?, updated_at = NOW() WHERE id = ?");
+                if ($stmt) {
+                    $stmt->bind_param("ssi", $firstName, $lastName, $userId);
+                    $stmt->execute();
+                    $stmt->close();
+                }
+
+                // Update or insert admin_profiles table (phone)
+                $apCheck = $conn->prepare("SELECT id FROM admin_profiles WHERE user_id = ?");
+                if ($apCheck) {
+                    $apCheck->bind_param("i", $userId);
+                    $apCheck->execute();
+                    $hasProfile = $apCheck->get_result()->fetch_assoc();
+                    $apCheck->close();
+
+                    if ($hasProfile) {
+                        $apUp = $conn->prepare("UPDATE admin_profiles SET phone = ?, updated_at = NOW() WHERE user_id = ?");
+                        if ($apUp) {
+                            $apUp->bind_param("si", $phone, $userId);
+                            $apUp->execute();
+                            $apUp->close();
+                        }
+                    } else {
+                        $empId = 'ADM-' . str_pad($userId, 3, '0', STR_PAD_LEFT);
+                        $desig = ((int)($user['role_id'] ?? 2) === 1) ? 'Super Administrator' : 'Administrator';
+                        $apIns = $conn->prepare("INSERT INTO admin_profiles (user_id, employee_id, designation, phone, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())");
+                        if ($apIns) {
+                            $apIns->bind_param("isss", $userId, $empId, $desig, $phone);
+                            $apIns->execute();
+                            $apIns->close();
+                        }
+                    }
+                }
             }
             $_SESSION['user']['first_name'] = $firstName;
             $_SESSION['user']['last_name'] = $lastName;
             $_SESSION['user']['phone'] = $phone;
-            $user = $_SESSION['user'];
+            $user['first_name'] = $firstName;
+            $user['last_name'] = $lastName;
+            $user['phone'] = $phone;
             $successMsg = 'Administrator profile updated successfully!';
         } else {
             $errorMsg = 'First and Last name are required.';

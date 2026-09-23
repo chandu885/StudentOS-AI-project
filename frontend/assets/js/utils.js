@@ -46,6 +46,7 @@ function openModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
         modal.classList.add('show');
+        modal.style.display = 'flex';
         document.body.style.overflow = 'hidden';
     }
 }
@@ -54,6 +55,7 @@ function closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
         modal.classList.remove('show');
+        modal.style.display = 'none';
         document.body.style.overflow = '';
     }
 }
@@ -61,7 +63,10 @@ function closeModal(modalId) {
 // Close modal on escape key or clicking backdrop
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-        document.querySelectorAll('.modal-backdrop.show').forEach(m => m.classList.remove('show'));
+        document.querySelectorAll('.modal-backdrop').forEach(m => {
+            m.classList.remove('show');
+            m.style.display = 'none';
+        });
         document.body.style.overflow = '';
     }
 });
@@ -69,6 +74,7 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('click', (e) => {
     if (e.target.classList.contains('modal-backdrop')) {
         e.target.classList.remove('show');
+        e.target.style.display = 'none';
         document.body.style.overflow = '';
     }
 });

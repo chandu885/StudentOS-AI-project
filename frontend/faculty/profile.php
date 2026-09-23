@@ -24,9 +24,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (!empty($firstName) && !empty($lastName)) {
             if ($conn) {
-                $stmt = $conn->prepare("UPDATE users SET first_name = ?, last_name = ?, phone = ?, updated_at = NOW() WHERE id = ?");
-                $stmt->bind_param("sssi", $firstName, $lastName, $phone, $userId);
-                $stmt->execute();
+                $stmt = $conn->prepare("UPDATE users SET first_name = ?, last_name = ?, updated_at = NOW() WHERE id = ?");
+                if ($stmt) {
+                    $stmt->bind_param("ssi", $firstName, $lastName, $userId);
+                    $stmt->execute();
+                    $stmt->close();
+                }
+
+                $fpUp = $conn->prepare("UPDATE faculty_profiles SET phone = ?, updated_at = NOW() WHERE user_id = ?");
+                if ($fpUp) {
+                    $fpUp->bind_param("si", $phone, $userId);
+                    $fpUp->execute();
+                    $fpUp->close();
+                }
             }
             $_SESSION['user']['first_name'] = $firstName;
             $_SESSION['user']['last_name'] = $lastName;
