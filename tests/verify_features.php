@@ -81,7 +81,7 @@ foreach (array_slice($subjects, 0, 4) as $sub) {
 // Create test subject
 $testSubData = [
     'course_id' => 1,
-    'department_id' => 4,
+    'department_id' => 6,
     'faculty_id' => null,
     'code' => 'TEST999',
     'name' => 'Advanced Neural Interfaces',
