@@ -344,10 +344,6 @@ include_once __DIR__ . '/../components/header.php';
                                                 <?php endif; ?>
                                             </td>
                                             <td style="text-align: right;">
-                                                <button type="button" class="btn btn-outline" style="font-size: 11.5px; padding: 5px 10px; margin-right: 4px;"
-                                                        onclick='openEditAdminModal(<?php echo htmlspecialchars(json_encode($adm), ENT_QUOTES, "UTF-8"); ?>)'>
-                                                    <i class="fas fa-edit" style="color: var(--primary);"></i> Edit
-                                                </button>
                                                 <button type="button" class="btn btn-outline" style="font-size: 11.5px; padding: 5px 10px;"
                                                         onclick="openAdminPasswordModal('<?php echo $adm['id']; ?>', '<?php echo addslashes($adm['first_name'] . ' ' . $adm['last_name']); ?>', '<?php echo addslashes($adm['email']); ?>')">
                                                     <i class="fas fa-key" style="color: #F59E0B;"></i> Change Password
