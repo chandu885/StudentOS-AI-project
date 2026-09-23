@@ -100,10 +100,19 @@ $subjects = $academic->getSubjects($filterCourse, $filterSem, $filterDept, $sear
 $departments = $academic->getDepartments();
 $courses = $academic->getCourses();
 
-// Faculty members
+// Instructors (Super Admin, Admin, Faculty)
 $facultyList = [];
+$roleMap = [
+    1 => 'superadmin',
+    2 => 'admin',
+    3 => 'faculty'
+];
 if ($conn) {
-    $facRes = $conn->query("SELECT id, first_name, last_name, email FROM users WHERE role_id = 3 AND deleted_at IS NULL ORDER BY first_name ASC");
+    $facRes = $conn->query("SELECT u.id, u.first_name, u.last_name, u.email, u.role_id, r.name AS role_name 
+        FROM users u 
+        JOIN roles r ON u.role_id = r.id 
+        WHERE u.role_id IN (1, 2, 3) AND u.deleted_at IS NULL 
+        ORDER BY u.first_name ASC, u.last_name ASC");
     if ($facRes) {
         $facultyList = $facRes->fetch_all(MYSQLI_ASSOC);
     }
@@ -417,12 +426,14 @@ include_once __DIR__ . '/../components/header.php';
 
                     <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 14px;">
                         <div class="form-group">
-                            <label for="create_sub_faculty">Assigned Faculty Instructor</label>
+                            <label for="create_sub_faculty">Assigned Instructor</label>
                             <select name="faculty_id" id="create_sub_faculty" class="form-control">
                                 <option value="">-- Unassigned (Select later) --</option>
-                                <?php foreach ($facultyList as $fac): ?>
+                                <?php foreach ($facultyList as $fac): 
+                                    $roleLabel = $roleMap[(int)$fac['role_id']] ?? strtolower(str_replace(['_', '-'], '', $fac['role_name'] ?? 'faculty'));
+                                ?>
                                     <option value="<?php echo (int)$fac['id']; ?>">
-                                        <?php echo htmlspecialchars($fac['first_name'] . ' ' . $fac['last_name'] . ' (' . $fac['email'] . ')'); ?>
+                                        <?php echo htmlspecialchars($fac['first_name'] . ' ' . $fac['last_name'] . ' (' . $roleLabel . ')'); ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
@@ -524,12 +535,14 @@ include_once __DIR__ . '/../components/header.php';
 
                     <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 14px;">
                         <div class="form-group">
-                            <label for="edit_sub_faculty">Assigned Faculty Instructor</label>
+                            <label for="edit_sub_faculty">Assigned Instructor</label>
                             <select name="faculty_id" id="edit_sub_faculty" class="form-control">
                                 <option value="">-- Unassigned --</option>
-                                <?php foreach ($facultyList as $fac): ?>
+                                <?php foreach ($facultyList as $fac): 
+                                    $roleLabel = $roleMap[(int)$fac['role_id']] ?? strtolower(str_replace(['_', '-'], '', $fac['role_name'] ?? 'faculty'));
+                                ?>
                                     <option value="<?php echo (int)$fac['id']; ?>">
-                                        <?php echo htmlspecialchars($fac['first_name'] . ' ' . $fac['last_name'] . ' (' . $fac['email'] . ')'); ?>
+                                        <?php echo htmlspecialchars($fac['first_name'] . ' ' . $fac['last_name'] . ' (' . $roleLabel . ')'); ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
