@@ -70,6 +70,7 @@ elseif ($userRole == 1) {
         ['label' => 'Subjects', 'icon' => 'fa-book', 'url' => '/super-admin/subjects.php'],
         ['label' => 'Assignments', 'icon' => 'fa-file-alt', 'url' => '/super-admin/assignments.php'],
         ['label' => 'Submissions', 'icon' => 'fa-upload', 'url' => '/super-admin/submissions.php'],
+        ['label' => 'Schedule', 'icon' => 'fa-calendar', 'url' => '/super-admin/schedules.php'],
         ['label' => 'Tasks & Operations', 'icon' => 'fa-tasks', 'url' => '/super-admin/tasks.php'],
         ['label' => 'Roles', 'icon' => 'fa-user-tag', 'url' => '/super-admin/roles.php'],
         ['label' => 'Permissions', 'icon' => 'fa-key', 'url' => '/super-admin/permissions.php'],
