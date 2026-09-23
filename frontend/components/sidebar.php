@@ -69,6 +69,7 @@ elseif ($userRole == 1) {
         ['label' => 'Semesters', 'icon' => 'fa-calendar-alt', 'url' => '/super-admin/semesters.php'],
         ['label' => 'Subjects', 'icon' => 'fa-book', 'url' => '/super-admin/subjects.php'],
         ['label' => 'Assignments', 'icon' => 'fa-file-alt', 'url' => '/super-admin/assignments.php'],
+        ['label' => 'Submissions', 'icon' => 'fa-upload', 'url' => '/super-admin/submissions.php'],
         ['label' => 'Tasks & Operations', 'icon' => 'fa-tasks', 'url' => '/super-admin/tasks.php'],
         ['label' => 'Roles', 'icon' => 'fa-user-tag', 'url' => '/super-admin/roles.php'],
         ['label' => 'Permissions', 'icon' => 'fa-key', 'url' => '/super-admin/permissions.php'],

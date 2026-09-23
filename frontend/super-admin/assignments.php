@@ -155,7 +155,10 @@ include_once __DIR__ . '/../components/header.php';
                         <h1><i class="fas fa-file-signature" style="color: var(--primary); margin-right: 8px;"></i> Master Coursework &amp; Assignments</h1>
                         <p class="page-subtitle">Universal assignment authority: Assign tasks with instructions &amp; problem statement PDFs for specific semesters and departments</p>
                     </div>
-                    <div class="header-actions">
+                    <div class="header-actions" style="display: flex; gap: 10px; align-items: center;">
+                        <a href="submissions.php" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-inbox"></i> View Submissions
+                        </a>
                         <button class="btn btn-primary" onclick="openModal('createAsgModal')" style="display: inline-flex; align-items: center; gap: 8px;">
                             <i class="fas fa-plus-circle"></i> Create Assignment
                         </button>
@@ -174,7 +177,7 @@ include_once __DIR__ . '/../components/header.php';
                         </div>
                     </div>
 
-                    <div class="card" style="padding: 18px; display: flex; align-items: center; gap: 14px;">
+                    <a href="submissions.php" class="card" style="padding: 18px; display: flex; align-items: center; gap: 14px; text-decoration: none; color: inherit; transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
                         <div style="width: 48px; height: 48px; border-radius: 12px; background: rgba(16, 185, 129, 0.12); color: #10B981; display: flex; align-items: center; justify-content: center; font-size: 22px;">
                             <i class="fas fa-upload"></i>
                         </div>
@@ -182,7 +185,7 @@ include_once __DIR__ . '/../components/header.php';
                             <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Total Submissions</div>
                             <div style="font-size: 24px; font-weight: 800; color: var(--text-primary); line-height: 1.2;"><?php echo $totalSubmissionsCount; ?></div>
                         </div>
-                    </div>
+                    </a>
 
                     <div class="card" style="padding: 18px; display: flex; align-items: center; gap: 14px;">
                         <div style="width: 48px; height: 48px; border-radius: 12px; background: rgba(6, 182, 212, 0.12); color: #06B6D4; display: flex; align-items: center; justify-content: center; font-size: 22px;">
@@ -293,11 +296,14 @@ include_once __DIR__ . '/../components/header.php';
                                                     <span style="font-size: 12.5px;"><?php echo date('M d, Y h:i A', strtotime($asg['deadline'])); ?></span>
                                                 </td>
                                                 <td>
-                                                    <span class="badge badge-info">
-                                                        <?php echo $subCount; ?> submitted
-                                                    </span>
+                                                    <a href="submissions.php?assignment_id=<?php echo (int)$asg['id']; ?>" class="badge badge-info" style="text-decoration: none; padding: 5px 9px; display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px;" title="View Submissions">
+                                                        <i class="fas fa-inbox"></i> <?php echo $subCount; ?> submitted
+                                                    </a>
                                                 </td>
-                                                <td>
+                                                <td style="white-space: nowrap;">
+                                                    <a href="submissions.php?assignment_id=<?php echo (int)$asg['id']; ?>" class="btn btn-sm btn-outline" style="color: var(--primary); border-color: var(--primary); padding: 4px 8px; font-size: 11px; margin-right: 4px;" title="View Submissions">
+                                                        <i class="fas fa-eye"></i>
+                                                    </a>
                                                     <form method="POST" action="assignments.php" onsubmit="return confirm('Are you sure you want to remove this assignment?');" style="display: inline;">
                                                         <input type="hidden" name="action" value="delete_assignment">
                                                         <input type="hidden" name="assignment_id" value="<?php echo (int)$asg['id']; ?>">
