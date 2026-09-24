@@ -45,4 +45,20 @@ class AssignmentService {
         }
         return ['success' => false, 'error' => 'Failed to grade submission'];
     }
+
+    public function deleteAssignment($id) {
+        $ok = $this->assignmentModel->delete($id);
+        if ($ok) {
+            return ['success' => true, 'message' => 'Assignment deleted successfully'];
+        }
+        return ['success' => false, 'error' => 'Failed to delete assignment'];
+    }
+
+    public function deleteSubmission($submissionId) {
+        $ok = $this->assignmentModel->deleteSubmission($submissionId);
+        if ($ok) {
+            return ['success' => true, 'message' => 'Submission deleted successfully'];
+        }
+        return ['success' => false, 'error' => 'Failed to delete submission'];
+    }
 }

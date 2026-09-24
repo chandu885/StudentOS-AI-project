@@ -1,4 +1,4 @@
-﻿/**
+/**
  * frontend/assets/css/faculty/questions.css
  * Dedicated stylesheet for frontend/faculty/questions.php
  */
@@ -12,3 +12,174 @@ body.page-faculty-questions .question-bank-item {
 body.page-faculty-questions .difficulty-pill-easy { color: var(--success); }
 body.page-faculty-questions .difficulty-pill-medium { color: var(--warning); }
 body.page-faculty-questions .difficulty-pill-hard { color: var(--danger); }
+
+/* Format Options Grid */
+body.page-faculty-questions .format-selector-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 22px;
+}
+
+body.page-faculty-questions .format-tile {
+    border: 2px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    background: var(--bg-primary, rgba(255, 255, 255, 0.03));
+    border-radius: var(--radius-md, 10px);
+    padding: 12px 10px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+    position: relative;
+}
+
+body.page-faculty-questions .format-tile:hover {
+    border-color: var(--primary);
+    background: rgba(79, 70, 229, 0.06);
+    transform: translateY(-2px);
+}
+
+body.page-faculty-questions .format-tile.active {
+    border-color: var(--primary);
+    background: rgba(79, 70, 229, 0.12);
+    box-shadow: 0 0 0 1px var(--primary);
+}
+
+body.page-faculty-questions .format-tile .tile-icon {
+    font-size: 24px;
+    line-height: 1;
+    margin-bottom: 2px;
+}
+
+body.page-faculty-questions .format-tile .tile-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+body.page-faculty-questions .format-tile .tile-ext {
+    font-size: 10.5px;
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.06);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: monospace;
+}
+
+body.page-faculty-questions .format-tile.active .tile-ext {
+    background: rgba(79, 70, 229, 0.25);
+    color: var(--primary-light, #a5b4fc);
+}
+
+/* Upload Panes */
+body.page-faculty-questions .format-panel {
+    display: none;
+    animation: fadeIn 0.25s ease-in-out;
+}
+
+body.page-faculty-questions .format-panel.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Guidelines and Dropzones */
+body.page-faculty-questions .guide-banner {
+    background: rgba(79, 70, 229, 0.08);
+    border: 1px solid rgba(79, 70, 229, 0.25);
+    border-radius: var(--radius-md, 8px);
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+body.page-faculty-questions .upload-dropzone {
+    border: 2px dashed var(--border-color, rgba(255, 255, 255, 0.18));
+    background: var(--bg-primary, rgba(0, 0, 0, 0.2));
+    border-radius: var(--radius-md, 10px);
+    padding: 22px 18px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-bottom: 16px;
+}
+
+body.page-faculty-questions .upload-dropzone:hover {
+    border-color: var(--primary);
+    background: rgba(79, 70, 229, 0.05);
+}
+
+body.page-faculty-questions .upload-dropzone input[type="file"] {
+    display: none;
+}
+
+/* MCQ Options manual row */
+body.page-faculty-questions .mcq-option-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+body.page-faculty-questions .mcq-option-letter {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: rgba(79, 70, 229, 0.14);
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 13px;
+    flex-shrink: 0;
+}
+
+body.page-faculty-questions .mcq-radio-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+/* Options preview in table */
+body.page-faculty-questions .options-badge-pill {
+    cursor: pointer;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+    transition: background 0.15s ease;
+}
+
+body.page-faculty-questions .options-badge-pill:hover {
+    background: rgba(79, 70, 229, 0.2);
+    color: var(--primary-light, #a5b4fc);
+}
+
+body.page-faculty-questions .options-popover-box {
+    margin-top: 6px;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    border-radius: 6px;
+    font-size: 12px;
+}

@@ -290,6 +290,12 @@ try {
                 $marks = (float)$input['marks'];
                 $feedback = $input['feedback'] ?? '';
                 jsonOut($asgService->gradeSubmission($subId, $marks, $feedback, $user['id']));
+            } elseif ($method === 'POST' && ($action === 'delete' || $action === 'delete_assignment')) {
+                $asgId = (int)($input['assignment_id'] ?? $id);
+                jsonOut($asgService->deleteAssignment($asgId));
+            } elseif ($method === 'POST' && $action === 'delete_submission') {
+                $subId = (int)($input['submission_id'] ?? $id);
+                jsonOut($asgService->deleteSubmission($subId));
             } else {
                 if ($user['role_id'] == 4) { // Student
                     jsonOut(['success' => true, 'assignments' => $asgModel->getAllForStudent($user['id'])]);

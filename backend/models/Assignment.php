@@ -178,4 +178,10 @@ class Assignment {
         $stmt->bind_param("i", $id);
         return $stmt->execute();
     }
+
+    public function deleteSubmission($submissionId) {
+        $stmt = $this->db->prepare("DELETE FROM assignment_submissions WHERE id = ?");
+        $stmt->bind_param("i", $submissionId);
+        return $stmt->execute();
+    }
 }

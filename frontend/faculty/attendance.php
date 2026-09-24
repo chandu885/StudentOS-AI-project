@@ -180,10 +180,15 @@ $pageTitle = 'Class Attendance Register - Faculty - StudentOS AI';
 include_once __DIR__ . '/../components/header.php';
 ?>
 
-<div class="page-header" style="margin-bottom: 24px;">
+<div class="page-header" style="margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
     <div>
         <h1><i class="fas fa-clipboard-check" style="color: var(--primary); margin-right: 8px;"></i> Class Attendance Register</h1>
         <p class="page-subtitle">Select Department, Semester, and Subject to display students belonging to that specific class and record attendance</p>
+    </div>
+    <div class="header-actions">
+        <a href="attendance_print.php<?php echo ($selectedDeptId > 0 && !empty($selectedSemester)) ? '?department_id=' . $selectedDeptId . '&semester=' . urlencode($selectedSemester) : ''; ?>" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px;">
+            <i class="fas fa-print"></i> Attendance Print / Report
+        </a>
     </div>
 </div>
 

@@ -1,14 +1,14 @@
 <?php
-// frontend/faculty/submissions.php
+// frontend/admin/submissions.php
 session_start();
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/helpers.php';
 require_once __DIR__ . '/../../backend/models/SystemModel.php';
 
-requireRole('faculty');
+requireRole('admin');
 
-$userId = (int)($_SESSION['user']['id'] ?? 0);
+$userId = (int)($_SESSION['user']['id'] ?? 1);
 $successMsg = '';
 $errorMsg = '';
 $db = getDbConnection();
@@ -16,7 +16,7 @@ $sysModel = new SystemModel();
 
 // Handle Grading / Feedback POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
-    if ($_POST['action'] === 'grade_submission' || $_POST['action'] === 'grade') {
+    if ($_POST['action'] === 'grade_submission') {
         $subId = (int)($_POST['submission_id'] ?? 0);
         $marks = (float)($_POST['marks'] ?? 0);
         $feedback = sanitize($_POST['feedback'] ?? '');
@@ -31,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $stmt->bind_param("dsii", $marks, $feedback, $userId, $subId);
                 if ($stmt->execute()) {
                     $successMsg = 'Submission grade and evaluation feedback updated successfully.';
-                    $sysModel->logAudit($userId, 'FACULTY_GRADE_SUBMISSION', 'assignment_submissions', $subId, "Faculty evaluated submission #{$subId} with marks {$marks}.");
+                    $sysModel->logAudit($userId, 'ADMIN_GRADE_SUBMISSION', 'assignment_submissions', $subId, "Admin evaluated submission #{$subId} with marks {$marks}.");
                 } else {
                     $errorMsg = 'Failed to update grade: ' . $stmt->error;
                 }
@@ -46,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $stmt->bind_param("i", $subId);
                 if ($stmt->execute()) {
                     $successMsg = 'Submission record deleted successfully.';
-                    $sysModel->logAudit($userId, 'FACULTY_DELETE_SUBMISSION', 'assignment_submissions', $subId, "Faculty deleted submission #{$subId}.");
+                    $sysModel->logAudit($userId, 'ADMIN_DELETE_SUBMISSION', 'assignment_submissions', $subId, "Admin deleted submission #{$subId}.");
                 } else {
                     $errorMsg = 'Failed to delete submission: ' . $stmt->error;
                 }
@@ -58,7 +58,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
 // Filters
 $filterAsg = !empty($_GET['assignment_id']) ? (int)$_GET['assignment_id'] : null;
-$filterSubject = !empty($_GET['subject_id']) ? (int)$_GET['subject_id'] : null;
 $filterDept = !empty($_GET['department_id']) ? (int)$_GET['department_id'] : null;
 $filterSem = !empty($_GET['semester']) ? trim($_GET['semester']) : null;
 $filterStatus = !empty($_GET['status']) ? trim($_GET['status']) : null;
@@ -73,28 +72,12 @@ if ($db) {
     }
 }
 
-// Fetch assignments list for filter (associated with faculty or all active coursework)
+// Fetch assignments list for filter
 $assignmentsList = [];
 if ($db) {
-    $stmtAsg = $db->prepare(
-        "SELECT a.id, a.title, s.code AS subject_code 
-         FROM assignments a 
-         JOIN subjects s ON a.subject_id = s.id 
-         WHERE a.deleted_at IS NULL AND (a.faculty_id = ? OR s.faculty_id = ?)
-         ORDER BY a.id DESC"
-    );
-    if ($stmtAsg) {
-        $stmtAsg->bind_param("ii", $userId, $userId);
-        $stmtAsg->execute();
-        $assignmentsList = $stmtAsg->get_result()->fetch_all(MYSQLI_ASSOC);
-        $stmtAsg->close();
-    }
-    // Fallback if none directly attached to this faculty
-    if (empty($assignmentsList)) {
-        $asgListRes = $db->query("SELECT a.id, a.title, s.code AS subject_code FROM assignments a JOIN subjects s ON a.subject_id = s.id WHERE a.deleted_at IS NULL ORDER BY a.id DESC LIMIT 50");
-        if ($asgListRes) {
-            $assignmentsList = $asgListRes->fetch_all(MYSQLI_ASSOC);
-        }
+    $asgListRes = $db->query("SELECT a.id, a.title, s.code AS subject_code FROM assignments a JOIN subjects s ON a.subject_id = s.id WHERE a.deleted_at IS NULL ORDER BY a.id DESC");
+    if ($asgListRes) {
+        $assignmentsList = $asgListRes->fetch_all(MYSQLI_ASSOC);
     }
 }
 
@@ -125,20 +108,14 @@ if ($db) {
             LEFT JOIN departments d ON sp.department_id = d.id
             LEFT JOIN departments dept_asg ON a.department_id = dept_asg.id
             LEFT JOIN users eval ON sub.graded_by = eval.id
-            WHERE (a.faculty_id = ? OR s.faculty_id = ?)";
+            WHERE 1=1";
 
-    $params = [$userId, $userId];
-    $types = "ii";
+    $params = [];
+    $types = "";
 
     if ($filterAsg) {
         $sql .= " AND sub.assignment_id = ?";
         $params[] = $filterAsg;
-        $types .= "i";
-    }
-
-    if ($filterSubject) {
-        $sql .= " AND a.subject_id = ?";
-        $params[] = $filterSubject;
         $types .= "i";
     }
 
@@ -176,44 +153,21 @@ if ($db) {
 
     $sql .= " ORDER BY sub.submitted_at DESC";
 
-    $stmt = $db->prepare($sql);
-    if ($stmt) {
-        $stmt->bind_param($types, ...$params);
-        $stmt->execute();
-        $res = $stmt->get_result();
+    if (!empty($params)) {
+        $stmt = $db->prepare($sql);
+        if ($stmt) {
+            $stmt->bind_param($types, ...$params);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($res) {
+                $submissions = $res->fetch_all(MYSQLI_ASSOC);
+            }
+            $stmt->close();
+        }
+    } else {
+        $res = $db->query($sql);
         if ($res) {
             $submissions = $res->fetch_all(MYSQLI_ASSOC);
-        }
-        $stmt->close();
-    }
-
-    // Fallback: If no submissions found for specific faculty ownership, show general submissions
-    if (empty($submissions) && !$filterAsg && !$filterSubject && !$filterDept && !$filterSem && !$filterStatus && !$search) {
-        $fallbackRes = $db->query(
-            "SELECT sub.id, sub.assignment_id, sub.student_id, sub.submission_text, sub.file_path,
-                   sub.marks_obtained, sub.feedback, sub.submitted_at, sub.graded_at, sub.status,
-                   CONCAT(u.first_name, ' ', u.last_name) AS student_name,
-                   u.email AS student_email,
-                   COALESCE(sp.roll_number, sp.student_id, CONCAT('STU-', u.id)) AS roll_number,
-                   COALESCE(sp.semester, a.semester, '1') AS semester,
-                   COALESCE(d.name, sp.department, dept_asg.name, 'General') AS department_name,
-                   COALESCE(d.code, sp.department, dept_asg.code, 'GEN') AS department_code,
-                   a.title AS assignment_title, a.max_marks, a.deadline,
-                   s.name AS subject_name, s.code AS subject_code,
-                   CONCAT(eval.first_name, ' ', eval.last_name) AS grader_name
-            FROM assignment_submissions sub
-            JOIN assignments a ON sub.assignment_id = a.id
-            JOIN subjects s ON a.subject_id = s.id
-            JOIN users u ON sub.student_id = u.id
-            LEFT JOIN student_profiles sp ON sp.user_id = u.id
-            LEFT JOIN departments d ON sp.department_id = d.id
-            LEFT JOIN departments dept_asg ON a.department_id = dept_asg.id
-            LEFT JOIN users eval ON sub.graded_by = eval.id
-            ORDER BY sub.submitted_at DESC
-            LIMIT 50"
-        );
-        if ($fallbackRes) {
-            $submissions = $fallbackRes->fetch_all(MYSQLI_ASSOC);
         }
     }
 
@@ -231,14 +185,14 @@ if ($db) {
     }
 }
 
-$pageTitle = 'Assignment Submissions - Faculty - StudentOS AI';
+$pageTitle = 'Assignment Submissions - Administrator - StudentOS AI';
 include_once __DIR__ . '/../components/header.php';
 ?>
 
 <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 24px;">
     <div>
         <h1><i class="fas fa-inbox" style="color: var(--primary); margin-right: 8px;"></i> Student Assignment Submissions</h1>
-        <p class="page-subtitle">Faculty review of submitted coursework, student files, PDF solutions, and grading evaluations</p>
+        <p class="page-subtitle">Administrator oversight of submitted coursework, student files, PDF solutions, and grading evaluations</p>
     </div>
     <div class="header-actions" style="display: flex; gap: 10px; align-items: center;">
         <a href="assignments.php" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 8px;">
@@ -359,7 +313,7 @@ include_once __DIR__ . '/../components/header.php';
             <button type="submit" class="btn btn-primary" style="height: 38px; padding: 0 16px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">
                 <i class="fas fa-filter"></i> Apply
             </button>
-            <?php if ($filterAsg || $filterSubject || $filterDept || $filterSem || $filterStatus || $search): ?>
+            <?php if ($filterAsg || $filterDept || $filterSem || $filterStatus || $search): ?>
                 <a href="submissions.php" class="btn btn-secondary" style="height: 38px; padding: 0 14px; font-size: 13px; display: inline-flex; align-items: center;" title="Clear Filters">
                     <i class="fas fa-times"></i>
                 </a>
@@ -372,7 +326,7 @@ include_once __DIR__ . '/../components/header.php';
 <div class="card">
     <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
         <h3><i class="fas fa-list"></i> Submissions List (<?php echo count($submissions); ?>)</h3>
-        <span style="font-size: 12px; color: var(--text-muted);">Showing coursework submissions received for your courses</span>
+        <span style="font-size: 12px; color: var(--text-muted);">Showing all received student coursework submissions</span>
     </div>
     <div class="card-body">
         <div class="table-responsive">
@@ -414,7 +368,7 @@ include_once __DIR__ . '/../components/header.php';
                                     <div style="display: flex; align-items: center; gap: 10px;">
                                         <div style="width: 34px; height: 34px; border-radius: 50%; background: rgba(79, 70, 229, 0.12); color: var(--primary); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0;">
                                             <?php 
-                                            $initials = '';
+                                             $initials = '';
                                             $names = explode(' ', trim($sub['student_name']));
                                             foreach (array_slice($names, 0, 2) as $n) {
                                                 $initials .= strtoupper(substr($n, 0, 1));
