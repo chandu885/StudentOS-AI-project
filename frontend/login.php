@@ -149,6 +149,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="assets/css/components.css">
     <link rel="stylesheet" href="assets/css/responsive.css">
     <link rel="stylesheet" href="assets/css/pages/login.css">
+
+    <!-- Theme System Controller (Runs early to prevent FOUC) -->
+    <script src="assets/js/theme.js"></script>
 </head>
 <body class="auth-page page-login">
     <div class="auth-container">

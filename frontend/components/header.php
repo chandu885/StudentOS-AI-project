@@ -142,10 +142,11 @@ if (!function_exists('resolveAssetUrl')) {
         if (strpos($path, 'http://') === 0 || strpos($path, 'https://') === 0) {
             return $path;
         }
-        if (function_exists('url')) {
-            return url($path);
+        $url = function_exists('url') ? url($path) : ('../' . ltrim($path, '/'));
+        if (strpos($url, '?') === false) {
+            $url .= '?v=2.4';
         }
-        return '../' . ltrim($path, '/');
+        return $url;
     }
 }
 ?>
@@ -179,6 +180,9 @@ if (!function_exists('resolveAssetUrl')) {
         <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl($cssHref)); ?>">
     <?php endforeach; ?>
 
+    <!-- Theme System Controller (Runs early to prevent FOUC) -->
+    <script src="<?php echo htmlspecialchars(resolveAssetUrl('/assets/js/theme.js')); ?>"></script>
+
     <!-- Additional Head Injections -->
     <?php if (!empty($extraHead)): ?>
         <?php echo $extraHead; ?>
@@ -188,6 +192,28 @@ if (!function_exists('resolveAssetUrl')) {
 <?php if ($headOnly) { return; } ?>
 
 <body class="<?php echo htmlspecialchars($bodyClass); ?>">
+
+    <!-- Header Opt-In Announcement Bar -->
+    <div class="header-optin-bar" id="headerOptinBar">
+        <div class="header-optin-content">
+            <div class="header-optin-badge">
+                <i class="fas fa-sparkles"></i> <span>NEXA PRO AI</span>
+            </div>
+            <div class="header-optin-text">
+                <span>Special Release: Unlock <strong>50,000 AI Credits</strong> &amp; Multimodal Intelligence Platform Access.</span>
+            </div>
+            <form class="header-optin-form" onsubmit="return handleOptinSubmit(event)">
+                <input type="email" placeholder="Enter work or campus email..." required>
+                <button type="submit" class="header-optin-btn">
+                    <span>Claim Access</span> <i class="fas fa-arrow-right"></i>
+                </button>
+            </form>
+        </div>
+        <button type="button" class="header-optin-close" onclick="dismissHeaderOptin(event)" title="Dismiss Announcement" aria-label="Close Announcement">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+
 
 <?php if ($openLayout): ?>
     <?php if ($includeNavbar): ?>

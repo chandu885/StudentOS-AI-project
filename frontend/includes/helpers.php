@@ -8,15 +8,24 @@ function sanitize($input) {
     return htmlspecialchars(trim($input), ENT_QUOTES, 'UTF-8');
 }
 
+function getAppBaseUrl() {
+    $script = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+    if (preg_match('#^(.*?/frontend)#i', $script, $m)) {
+        return rtrim($m[1], '/');
+    }
+    if (preg_match('#^(.*?)(?:/backend|/index\.php)#i', $script, $m)) {
+        $root = rtrim($m[1], '/');
+        return $root ? ($root . '/frontend') : '/frontend';
+    }
+    return '/frontend';
+}
+
 function url($path = '') {
     if (empty($path)) return '';
     if (strpos($path, 'http://') === 0 || strpos($path, 'https://') === 0) {
         return $path;
     }
-    $base = '';
-    if (isset($_SERVER['SCRIPT_NAME']) && preg_match('#^(.*?/frontend)#i', $_SERVER['SCRIPT_NAME'], $m)) {
-        $base = $m[1];
-    }
+    $base = getAppBaseUrl();
     $cleanPath = '/' . ltrim($path, '/');
     if ($base && strpos($cleanPath, $base) !== 0) {
         return $base . $cleanPath;
@@ -30,10 +39,11 @@ if (!function_exists('resolveAssetUrl')) {
         if (strpos($path, 'http://') === 0 || strpos($path, 'https://') === 0) {
             return $path;
         }
-        if (function_exists('url')) {
-            return url($path);
+        $url = url($path);
+        if (strpos($url, '?') === false) {
+            $url .= '?v=2.4';
         }
-        return '../' . ltrim($path, '/');
+        return $url;
     }
 }
 
@@ -43,9 +53,10 @@ if (!function_exists('storageUrl')) {
         if (strpos($path, 'http://') === 0 || strpos($path, 'https://') === 0) {
             return $path;
         }
+        $script = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
         $root = '';
-        if (isset($_SERVER['SCRIPT_NAME']) && preg_match('#^(.*?)(?:/frontend|/backend)#i', $_SERVER['SCRIPT_NAME'], $m)) {
-            $root = $m[1];
+        if (preg_match('#^(.*?)(?:/frontend|/backend|/index\.php)#i', $script, $m)) {
+            $root = rtrim($m[1], '/');
         }
         $cleanPath = '/' . ltrim($path, '/');
         if (strpos($cleanPath, '/storage/') !== 0) {

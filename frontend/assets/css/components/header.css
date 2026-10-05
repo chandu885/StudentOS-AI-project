@@ -1,9 +1,170 @@
 /**
  * frontend/assets/css/components/header.css
  * Dedicated stylesheet for frontend/components/header.php
+ * Includes Universal Dashboard Frame, Page Headers, and Top Opt-In Banner
  */
 
-/* Universal Header & Dashboard Content Frame */
+/* =============================================================================
+   Top Header Opt-In Banner Bar
+   ============================================================================= */
+.header-optin-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: var(--optin-height, 46px);
+    background: var(--bg-navbar);
+    border-bottom: 1px solid var(--border-color);
+    z-index: var(--z-optin, 1060);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    box-sizing: border-box;
+    box-shadow: var(--shadow-xs);
+    transition: transform 250ms ease, opacity 250ms ease, background-color 250ms ease, border-color 250ms ease;
+    overflow: hidden;
+}
+
+html.optin-dismissed .header-optin-bar,
+body.optin-dismissed .header-optin-bar {
+    display: none !important;
+}
+
+.header-optin-content {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+    min-width: 0;
+}
+
+.header-optin-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--primary-gradient);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    white-space: nowrap;
+    text-transform: uppercase;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+    flex-shrink: 0;
+}
+
+.header-optin-badge i {
+    font-size: 10px;
+}
+
+.header-optin-text {
+    font-size: 12.5px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: color 250ms ease;
+}
+
+.header-optin-text strong {
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.header-optin-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.header-optin-form input[type="email"] {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    padding: 5px 12px;
+    font-size: 12px;
+    outline: none;
+    width: 230px;
+    transition: border-color 200ms ease, box-shadow 200ms ease, background-color 250ms ease, color 250ms ease;
+    box-sizing: border-box;
+}
+
+.header-optin-form input[type="email"]:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px var(--primary-subtle);
+}
+
+.header-optin-btn {
+    background: var(--primary);
+    color: #ffffff;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 5px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    transition: background-color 200ms ease, transform 150ms ease, box-shadow 200ms ease;
+}
+
+.header-optin-btn:hover {
+    background: var(--primary-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+}
+
+.header-optin-close {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 6px;
+    margin-left: 12px;
+    border-radius: var(--radius-sm);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 150ms ease, background-color 150ms ease;
+    flex-shrink: 0;
+}
+
+.header-optin-close:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+@media (max-width: 992px) {
+    .header-optin-form input[type="email"] {
+        width: 170px;
+    }
+}
+
+@media (max-width: 820px) {
+    .header-optin-form input[type="email"] {
+        display: none;
+    }
+}
+
+@media (max-width: 620px) {
+    .header-optin-text {
+        display: none;
+    }
+}
+
+/* =============================================================================
+   Universal Dashboard Main & Content Frame
+   ============================================================================= */
 .dashboard-main {
     flex: 1;
     display: flex;
@@ -11,6 +172,7 @@
     min-height: calc(100vh - 72px);
     background-color: var(--bg-primary);
     overflow-x: hidden;
+    transition: background-color 250ms ease, color 250ms ease;
 }
 
 .dashboard-content {
@@ -38,12 +200,14 @@
     color: var(--text-primary);
     margin: 0;
     line-height: 1.3;
+    transition: color 250ms ease;
 }
 
 .page-subtitle {
     margin: 4px 0 0 0;
     font-size: 14px;
     color: var(--text-secondary);
+    transition: color 250ms ease;
 }
 
 .header-actions {
@@ -62,12 +226,13 @@
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
+    transition: color 250ms ease;
 }
 
 .breadcrumb-nav a {
     color: var(--text-secondary);
     text-decoration: none;
-    transition: color 0.15s ease;
+    transition: color 150ms ease;
 }
 
 .breadcrumb-nav a:hover {
@@ -92,7 +257,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    background: rgba(34, 197, 94, 0.15);
+    background: rgba(16, 185, 129, 0.12);
     border: 1px solid var(--success);
     color: var(--success);
     padding: 14px 18px;
@@ -104,7 +269,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    background: rgba(239, 68, 68, 0.15);
+    background: rgba(239, 68, 68, 0.12);
     border: 1px solid var(--danger);
     color: var(--danger);
     padding: 14px 18px;

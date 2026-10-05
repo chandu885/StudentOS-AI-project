@@ -109,19 +109,45 @@ if ($loggedIn && $currentUser) {
     <meta name="description" content="StudentOS AI is a next-generation academic management ecosystem powered by Generative AI, RAG document intelligence, and unified multi-role governance.">
     
     <!-- Offline Favicon & Local Resources -->
-    <link rel="icon" type="image/svg+xml" href="assets/images/favicon.svg">
-    <link rel="alternate icon" href="assets/images/favicon.ico">
-    <link rel="stylesheet" href="assets/icons/all.min.css">
-    <link rel="stylesheet" href="assets/css/normalize.min.css">
-    <link rel="stylesheet" href="assets/css/variables.css">
-    <link rel="stylesheet" href="assets/css/reset.css">
-    <link rel="stylesheet" href="assets/css/global.css">
-    <link rel="stylesheet" href="assets/css/components.css">
-    <link rel="stylesheet" href="assets/css/responsive.css">
-    <link rel="stylesheet" href="assets/css/animations.css">
-    <link rel="stylesheet" href="assets/css/pages/index.css">
+    <link rel="icon" type="image/svg+xml" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/images/favicon.svg')); ?>">
+    <link rel="alternate icon" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/images/favicon.ico')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/icons/all.min.css')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/normalize.min.css')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/variables.css')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/reset.css')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/global.css')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/components.css')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/responsive.css')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/animations.css')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/components/header.css')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/components/navbar.css')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/pages/index.css')); ?>">
+
+    <!-- Theme System Controller (Runs early to prevent FOUC) -->
+    <script src="<?php echo htmlspecialchars(resolveAssetUrl('/assets/js/theme.js')); ?>"></script>
 </head>
 <body class="landing-page page-landing">
+
+    <!-- Header Opt-In Announcement Bar -->
+    <div class="header-optin-bar" id="headerOptinBar">
+        <div class="header-optin-content">
+            <div class="header-optin-badge">
+                <i class="fas fa-sparkles"></i> <span>NEXA PRO AI</span>
+            </div>
+            <div class="header-optin-text">
+                <span>Special Release: Unlock <strong>50,000 AI Credits</strong> &amp; Multimodal Intelligence Platform Access.</span>
+            </div>
+            <form class="header-optin-form" onsubmit="return handleOptinSubmit(event)">
+                <input type="email" placeholder="Enter work or campus email..." required>
+                <button type="submit" class="header-optin-btn">
+                    <span>Claim Access</span> <i class="fas fa-arrow-right"></i>
+                </button>
+            </form>
+        </div>
+        <button type="button" class="header-optin-close" onclick="dismissHeaderOptin(event)" title="Dismiss Announcement" aria-label="Close Announcement">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
 
     <!-- Public Navigation Bar (No login required) -->
     <header class="landing-header">
@@ -138,6 +164,22 @@ if ($loggedIn && $currentUser) {
             </nav>
 
             <div class="landing-nav-actions">
+                <!-- Segmented Theme Switcher Pill (☀ Day | ◐ Deep | ☾ Night) -->
+                <div class="theme-switcher-pill" role="radiogroup" aria-label="Select Color Theme">
+                    <button type="button" class="theme-btn" data-theme-val="day" title="☀ Day Mode — Clean Professional" aria-label="Day Mode">
+                        <span class="theme-icon">☀</span>
+                        <span class="theme-text">Day</span>
+                    </button>
+                    <button type="button" class="theme-btn" data-theme-val="deep" title="◐ Deep Mode — Immersive Deep Slate" aria-label="Deep Mode">
+                        <span class="theme-icon">◐</span>
+                        <span class="theme-text">Deep</span>
+                    </button>
+                    <button type="button" class="theme-btn" data-theme-val="night" title="☾ Night Mode — Premium Tech Dark" aria-label="Night Mode">
+                        <span class="theme-icon">☾</span>
+                        <span class="theme-text">Night</span>
+                    </button>
+                </div>
+
                 <?php if ($loggedIn && $currentUser): ?>
                     <a href="<?php echo htmlspecialchars(url(getDashboardUrl())); ?>" class="btn btn-primary" role="button">
                         <i class="fas fa-chart-pie"></i> Go to Dashboard
@@ -146,10 +188,10 @@ if ($loggedIn && $currentUser) {
                         <i class="fas fa-sign-out-alt"></i> <span>Log Out</span>
                     </a>
                 <?php else: ?>
-                    <a href="<?php echo htmlspecialchars(url('/faculty/login.php')); ?>" class="btn btn-outline" role="button" style="display: inline-flex; align-items: center; gap: 6px; border-color: rgba(99, 102, 241, 0.4);">
+                    <a href="<?php echo htmlspecialchars(url('/faculty/login.php')); ?>" class="btn btn-outline" role="button" style="display: inline-flex; align-items: center; gap: 6px;">
                         <i class="fas fa-user-shield"></i> <span>Staff Login</span>
                     </a>
-                    <a href="<?php echo htmlspecialchars(url('/register.php')); ?>" class="btn btn-outline" role="button" style="display: inline-flex; align-items: center; gap: 6px; border-color: rgba(99, 102, 241, 0.4);">
+                    <a href="<?php echo htmlspecialchars(url('/register.php')); ?>" class="btn btn-outline" role="button" style="display: inline-flex; align-items: center; gap: 6px;">
                         <i class="fas fa-user-plus"></i> <span>Register</span>
                     </a>
                     <a href="<?php echo htmlspecialchars(url('/student/login.php')); ?>" class="btn btn-primary" role="button" style="display: inline-flex; align-items: center; gap: 6px;">
@@ -189,7 +231,7 @@ if ($loggedIn && $currentUser) {
                                 <a href="<?php echo htmlspecialchars(url('/login.php')); ?>" class="btn btn-primary btn-lg" role="button">
                                     <i class="fas fa-user-graduate"></i> Login
                                 </a>
-                                <a href="<?php echo htmlspecialchars(url('/register.php')); ?>" class="btn btn-outline btn-lg" role="button" style="border-color: rgba(99, 102, 241, 0.5); color: #fff;">
+                                <a href="<?php echo htmlspecialchars(url('/register.php')); ?>" class="btn btn-outline btn-lg" role="button" style="border-color: var(--primary); color: var(--primary);">
                                     <i class="fas fa-user-plus"></i> Register
                                 </a>
                             <?php endif; ?>
@@ -228,7 +270,7 @@ if ($loggedIn && $currentUser) {
 
                             <div class="interactive-body">
                                 <!-- Student Quick Snapshot -->
-                                <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: var(--radius-lg);">
+                                <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: var(--primary-subtle); border: 1px solid var(--border-color); border-radius: var(--radius-lg);">
                                     <div style="display: flex; align-items: center; gap: 12px;">
                                         <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, var(--primary), var(--ai-accent)); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700;">
                                             <?php echo htmlspecialchars($heroStudent['initials']); ?>
@@ -243,17 +285,17 @@ if ($loggedIn && $currentUser) {
 
                                 <!-- Key Academic Metrics -->
                                 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
-                                    <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px; text-align: center;">
+                                    <div style="background: var(--bg-hover); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px; text-align: center;">
                                         <span style="font-size: 10.5px; color: var(--text-muted); text-transform: uppercase;">SGPA / GPA</span>
                                         <div style="font-size: 18px; font-weight: 800; color: #34D399; margin: 2px 0;"><?php echo htmlspecialchars($heroStudent['sgpa']); ?></div>
                                         <span style="font-size: 10px; color: var(--text-secondary);">Standing</span>
                                     </div>
-                                    <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px; text-align: center;">
+                                    <div style="background: var(--bg-hover); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px; text-align: center;">
                                         <span style="font-size: 10.5px; color: var(--text-muted); text-transform: uppercase;">Attendance</span>
                                         <div style="font-size: 18px; font-weight: 800; color: #818CF8; margin: 2px 0;"><?php echo htmlspecialchars($heroStudent['attendance']); ?></div>
                                         <span style="font-size: 10px; color: var(--success);"><i class="fas fa-check-circle"></i> Verified</span>
                                     </div>
-                                    <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px; text-align: center;">
+                                    <div style="background: var(--bg-hover); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px; text-align: center;">
                                         <span style="font-size: 10.5px; color: var(--text-muted); text-transform: uppercase;">Credits / Role</span>
                                         <div style="font-size: 18px; font-weight: 800; color: #F59E0B; margin: 2px 0;"><?php echo htmlspecialchars($heroStudent['credits']); ?></div>
                                         <span style="font-size: 10px; color: var(--text-secondary);">On Track</span>
@@ -268,7 +310,7 @@ if ($loggedIn && $currentUser) {
                                         </span>
                                         <span class="badge badge-success" style="font-size: 9.5px; padding: 1px 6px;">Verified Source</span>
                                     </div>
-                                    <div style="background: rgba(99, 102, 241, 0.08); border-left: 3px solid var(--primary); padding: 8px 10px; border-radius: 4px; font-size: 12px; line-height: 1.4; color: var(--text-primary);">
+                                    <div style="background: var(--primary-subtle); border-left: 3px solid var(--primary); padding: 8px 10px; border-radius: 4px; font-size: 12px; line-height: 1.4; color: var(--text-primary);">
                                         "Exam preparation schedule generated for <strong>DBMS (CS301)</strong>. 3 key B-Tree topics indexed from course syllabus with 40 practice problems."
                                     </div>
                                 </div>
@@ -493,25 +535,25 @@ if ($loggedIn && $currentUser) {
     </main>
 
     <!-- Public Footer -->
-    <footer style="background: #070B14; border-top: 1px solid var(--border-color); padding: 50px 0 30px;">
+    <footer style="background: var(--bg-footer); border-top: 1px solid var(--border-color); padding: 50px 0 30px; transition: background-color 250ms ease, border-color 250ms ease;">
         <div class="container">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px; padding-bottom: 30px; border-bottom: 1px solid var(--border-color);">
                 <div style="display: flex; align-items: center; gap: 12px;">
                     <i class="fas fa-graduation-cap" style="color: var(--primary); font-size: 24px;"></i>
-                    <span style="font-size: 18px; font-weight: 700; color: var(--text-primary);">StudentOS AI</span>
+                    <span style="font-size: 18px; font-weight: 700; color: var(--text-footer);">StudentOS AI</span>
                 </div>
                 <div style="display: flex; gap: 24px; font-size: 13px;">
-                    <a href="#features" style="color: var(--text-secondary);">Features</a>
-                    <a href="#how-it-works" style="color: var(--text-secondary);">How It Works</a>
-                    <a href="#testimonials" style="color: var(--text-secondary);">Testimonials</a>
-                    <a href="#faq" style="color: var(--text-secondary);">FAQ</a>
+                    <a href="#features" style="color: var(--text-footer-muted);">Features</a>
+                    <a href="#how-it-works" style="color: var(--text-footer-muted);">How It Works</a>
+                    <a href="#testimonials" style="color: var(--text-footer-muted);">Testimonials</a>
+                    <a href="#faq" style="color: var(--text-footer-muted);">FAQ</a>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--success);">
                     <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--success); box-shadow: 0 0 8px var(--success);"></span>
                     All Systems Operational (v2.4 Enterprise)
                 </div>
             </div>
-            <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 24px; font-size: 12px; color: var(--text-muted); flex-wrap: wrap; gap: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 24px; font-size: 12px; color: var(--text-footer-muted); flex-wrap: wrap; gap: 10px;">
                 <div>&copy; <?php echo date('Y'); ?> StudentOS AI Platform. All rights reserved.</div>
                 <div>Engineered with PHP 8.2, MySQL, and Google Gemini AI.</div>
             </div>

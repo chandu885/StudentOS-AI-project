@@ -13,12 +13,13 @@ body.landing-page {
 /* Landing Navigation */
 .landing-header {
     position: sticky;
-    top: 0;
+    top: var(--optin-height, 0px);
     z-index: 1000;
-    background: rgba(11, 16, 32, 0.85);
-    backdrop-filter: blur(16px);
+    background: var(--bg-navbar);
     border-bottom: 1px solid var(--border-color);
-    padding: 16px 0;
+    padding: 14px 0;
+    box-shadow: var(--shadow-xs);
+    transition: top 250ms ease, background-color 250ms ease, border-color 250ms ease;
 }
 
 .landing-nav-container {
@@ -220,3 +221,87 @@ body.landing-page {
         display: none;
     }
 }
+
+/* ==========================================================================
+   Segmented Theme Switcher Pill (☀ Day | ◐ Auto | ☾ Night)
+   ========================================================================== */
+.theme-switcher-pill {
+    display: inline-flex;
+    align-items: center;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-full);
+    padding: 3px;
+    gap: 2px;
+    position: relative;
+    user-select: none;
+    box-sizing: border-box;
+    transition: background-color 250ms ease, border-color 250ms ease, box-shadow 250ms ease;
+    box-shadow: var(--shadow-xs);
+}
+
+.theme-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 11px;
+    border: none;
+    background: transparent;
+    border-radius: var(--radius-full);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color 200ms ease, background-color 200ms ease, transform 150ms ease, box-shadow 200ms ease;
+    position: relative;
+    z-index: 1;
+    outline: none;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.theme-btn .theme-icon {
+    font-size: 13px;
+    line-height: 1;
+}
+
+.theme-btn .theme-text {
+    font-size: 11.5px;
+    font-weight: 600;
+}
+
+.theme-btn:hover {
+    color: var(--text-primary);
+}
+
+.theme-btn.active {
+    background: var(--bg-card);
+    color: var(--primary);
+    font-weight: 700;
+    box-shadow: var(--shadow-sm);
+}
+
+[data-theme="deep"] .theme-btn.active,
+[data-theme="auto"] .theme-btn.active {
+    background: #2B3035;
+    color: #DEE2E6;
+    border: 1px solid #495057;
+    box-shadow: 0 0 10px rgba(222, 226, 230, 0.2);
+}
+
+[data-theme="night"] .theme-btn.active,
+[data-theme="dark"] .theme-btn.active {
+    background: #1E293B;
+    color: #60A5FA;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+@media (max-width: 600px) {
+    .theme-btn .theme-text {
+        display: none;
+    }
+    .theme-btn {
+        padding: 5px 8px;
+    }
+}
+

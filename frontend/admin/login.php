@@ -77,22 +77,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Administrator Control Portal - StudentOS AI</title>
-    <link rel="icon" type="image/svg+xml" href="../assets/images/favicon.svg">
-    <link rel="alternate icon" href="../assets/images/favicon.ico">
-    <link rel="stylesheet" href="../assets/icons/all.min.css">
-    <link rel="stylesheet" href="../assets/css/normalize.min.css">
-    <link rel="stylesheet" href="../assets/css/variables.css">
-    <link rel="stylesheet" href="../assets/css/reset.css">
-    <link rel="stylesheet" href="../assets/css/global.css">
-    <link rel="stylesheet" href="../assets/css/components.css">
-    <link rel="stylesheet" href="../assets/css/responsive.css">
-    <link rel="stylesheet" href="../assets/css/admin/login.css">
+    <link rel="icon" type="image/svg+xml" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/images/favicon.svg')); ?>">
+    <link rel="alternate icon" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/images/favicon.ico')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/icons/all.min.css')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/normalize.min.css')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/variables.css')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/reset.css')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/global.css')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/components.css')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/responsive.css')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/admin/login.css')); ?>">
+
+    <!-- Immediate Theme Initialization to Prevent FOUC -->
+    <script>
+        (function() {
+            var saved = localStorage.getItem('studentos_theme') || 'day';
+            var theme = (saved === 'auto' || saved === 'middle') ? 'deep' : saved;
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
+    <script src="<?php echo htmlspecialchars(resolveAssetUrl('/assets/js/theme.js')); ?>"></script>
 </head>
 <body class="auth-page page-admin-login">
     <div class="auth-container">
-        <a href="../index.php" class="auth-back-link">
-            <i class="fas fa-arrow-left"></i> Back to Home
-        </a>
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; max-width: 460px; margin-bottom: 16px;">
+            <a href="../index.php" class="auth-back-link" style="margin-bottom: 0;">
+                <i class="fas fa-arrow-left"></i> Back to Home
+            </a>
+            <div class="theme-switcher-pill" role="radiogroup" aria-label="Select Color Theme">
+                <button type="button" class="theme-btn" data-theme-val="day" title="☀ Day Mode" aria-label="Day Mode">
+                    <span class="theme-icon">☀</span>
+                </button>
+                <button type="button" class="theme-btn" data-theme-val="deep" title="◐ Deep Mode" aria-label="Deep Mode">
+                    <span class="theme-icon">◐</span>
+                </button>
+                <button type="button" class="theme-btn" data-theme-val="night" title="☾ Night Mode" aria-label="Night Mode">
+                    <span class="theme-icon">☾</span>
+                </button>
+            </div>
+        </div>
 
         <div class="auth-card" style="border-top: 3px solid #F59E0B;">
             <div class="auth-header">

@@ -34,23 +34,27 @@ if (!in_array($requestedRole, ['student', 'faculty', 'admin', 'superadmin'])) {
     <title>Documentation & Interactive Demos — StudentOS AI</title>
     <meta name="description" content="Comprehensive institutional architecture documentation, step-by-step guides, and interactive role simulation suite for StudentOS AI.">
     
-    <link rel="stylesheet" href="assets/css/variables.css">
-    <link rel="stylesheet" href="assets/css/reset.css">
-    <link rel="stylesheet" href="assets/css/global.css">
-    <link rel="stylesheet" href="assets/css/components.css">
-    <link rel="stylesheet" href="assets/css/responsive.css">
-    <link rel="stylesheet" href="assets/css/animations.css">
-    
-    <link rel="icon" type="image/svg+xml" href="assets/images/favicon.svg">
-    <link rel="alternate icon" href="assets/images/favicon.ico">
-    <link rel="stylesheet" href="assets/icons/all.min.css">
-    <link rel="stylesheet" href="assets/css/normalize.min.css">
-    <link rel="stylesheet" href="assets/css/variables.css">
-    <link rel="stylesheet" href="assets/css/reset.css">
-    <link rel="stylesheet" href="assets/css/global.css">
-    <link rel="stylesheet" href="assets/css/components.css">
-    <link rel="stylesheet" href="assets/css/responsive.css">
-    <link rel="stylesheet" href="assets/css/pages/documentation.css">
+    <link rel="icon" type="image/svg+xml" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/images/favicon.svg')); ?>">
+    <link rel="alternate icon" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/images/favicon.ico')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/icons/all.min.css')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/normalize.min.css')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/variables.css')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/reset.css')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/global.css')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/components.css')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/responsive.css')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/animations.css')); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(resolveAssetUrl('/assets/css/pages/documentation.css')); ?>">
+
+    <!-- Immediate Theme Initialization to Prevent FOUC -->
+    <script>
+        (function() {
+            var saved = localStorage.getItem('studentos_theme') || 'day';
+            var theme = (saved === 'auto' || saved === 'middle') ? 'deep' : saved;
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
+    <script src="<?php echo htmlspecialchars(resolveAssetUrl('/assets/js/theme.js')); ?>"></script>
 </head>
 <body class="landing-page page-documentation">
 
@@ -64,6 +68,22 @@ if (!in_array($requestedRole, ['student', 'faculty', 'admin', 'superadmin'])) {
             </a>
 
             <div class="doc-header-actions">
+                <!-- Theme Switcher Pill -->
+                <div class="theme-switcher-pill" role="radiogroup" aria-label="Select Color Theme">
+                    <button type="button" class="theme-btn" data-theme-val="day" title="☀ Day Mode" aria-label="Day Mode">
+                        <span class="theme-icon">☀</span>
+                        <span class="theme-text">Day</span>
+                    </button>
+                    <button type="button" class="theme-btn" data-theme-val="deep" title="◐ Deep Mode — Immersive Deep Slate" aria-label="Deep Mode">
+                        <span class="theme-icon">◐</span>
+                        <span class="theme-text">Deep</span>
+                    </button>
+                    <button type="button" class="theme-btn" data-theme-val="night" title="☾ Night Mode" aria-label="Night Mode">
+                        <span class="theme-icon">☾</span>
+                        <span class="theme-text">Night</span>
+                    </button>
+                </div>
+
                 <!-- Public Index Link (Opens in separate page) -->
                 <a href="<?php echo htmlspecialchars(url('/index.php')); ?>" class="btn btn-outline" target="_blank" rel="noopener noreferrer" style="padding: 7px 14px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;" title="Open Public Index in new tab">
                     <i class="fas fa-home"></i>

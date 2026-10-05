@@ -29,9 +29,9 @@ if (($user['role_id'] ?? 4) == 1) {
 ?>
 <header class="top-navbar">
     <div class="navbar-left">
-        <a href="<?php echo htmlspecialchars(url(getDashboardUrl())); ?>" class="sidebar-brand navbar-brand" title="BSTUDENTOS Dashboard" style="margin-right: 16px; display: inline-flex; align-items: center; text-decoration: none;">
+        <a href="<?php echo htmlspecialchars(url(getDashboardUrl())); ?>" class="sidebar-brand navbar-brand" title="StudentOS Dashboard" style="margin-right: 16px; display: inline-flex; align-items: center; text-decoration: none;">
             <i class="fas fa-graduation-cap"></i>
-            <span>BSTUDENTOS</span>
+            <span>StudentOS <span style="color: var(--primary);">AI</span></span>
         </a>
         <button class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle Sidebar" aria-label="Toggle Sidebar">
             <i class="fas fa-bars"></i>
@@ -45,6 +45,22 @@ if (($user['role_id'] ?? 4) == 1) {
     </div>
 
     <div class="navbar-right">
+        <!-- Segmented Theme Switcher Pill (☀ Day | ◐ Deep | ☾ Night) -->
+        <div class="theme-switcher-pill" role="radiogroup" aria-label="Select Color Theme">
+            <button type="button" class="theme-btn" data-theme-val="day" title="☀ Day Mode — Clean Professional" aria-label="Day Mode">
+                <span class="theme-icon">☀</span>
+                <span class="theme-text">Day</span>
+            </button>
+            <button type="button" class="theme-btn" data-theme-val="deep" title="◐ Deep Mode — Immersive Deep Slate" aria-label="Deep Mode">
+                <span class="theme-icon">◐</span>
+                <span class="theme-text">Deep</span>
+            </button>
+            <button type="button" class="theme-btn" data-theme-val="night" title="☾ Night Mode — Premium Tech Dark" aria-label="Night Mode">
+                <span class="theme-icon">☾</span>
+                <span class="theme-text">Night</span>
+            </button>
+        </div>
+
         <!-- Notification Bell -->
         <div style="position: relative;">
             <button class="nav-action-btn" id="notification-btn" onclick="toggleNotificationDropdown()" title="Notifications">

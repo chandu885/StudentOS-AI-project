@@ -6,12 +6,18 @@
     box-sizing: border-box;
 }
 
+html {
+    background: var(--bg-primary);
+    transition: background-color 250ms ease, color 250ms ease;
+}
+
 body {
     font-family: var(--font-family);
     background: var(--bg-primary);
     color: var(--text-primary);
     line-height: 1.6;
     min-height: 100vh;
+    transition: background-color 250ms ease, color 250ms ease;
 }
 
 a {
