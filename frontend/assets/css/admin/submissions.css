@@ -1,0 +1,24 @@
+/**
+ * frontend/assets/css/admin/submissions.css
+ * Dedicated stylesheet for frontend/admin/submissions.php
+ */
+
+body.page-admin-submissions .grade-input-box {
+    width: 80px;
+    text-align: center;
+}
+
+body.page-admin-submissions .submission-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+body.page-admin-submissions .filter-bar {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 20px;
+}

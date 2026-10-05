@@ -1,0 +1,12 @@
+/**
+ * frontend/assets/css/pages/dashboard.css
+ * Dedicated stylesheet for frontend/dashboard.php
+ */
+
+body.page-dashboard {
+    /* Minimal styles for root dashboard routing page */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}

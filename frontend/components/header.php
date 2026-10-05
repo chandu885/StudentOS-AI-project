@@ -94,12 +94,16 @@ foreach ($candidatePaths as $candidate) {
         $detectedPortal = $m[1];
         $detectedPage = $m[2];
         break;
+    } elseif (preg_match('#/(?:frontend/)?([^/]+)\.php$#', $normScript, $m) && !in_array($m[1], ['header', 'footer', 'sidebar', 'navbar', 'cards', 'tables', 'modals', 'loading'])) {
+        $detectedPortal = 'pages';
+        $detectedPage = $m[1];
+        break;
     }
 }
 
 // Scoped body class ensures page-level CSS isolation with zero conflicts across files
 if ($detectedPortal && $detectedPage) {
-    $pageClass = "page-{$detectedPortal}-{$detectedPage}";
+    $pageClass = ($detectedPortal === 'pages') ? "page-{$detectedPage}" : "page-{$detectedPortal}-{$detectedPage}";
     if (strpos($bodyClass, $pageClass) === false) {
         $bodyClass = trim($bodyClass . ' ' . $pageClass);
     }
@@ -125,7 +129,7 @@ foreach ($coreComponentStyles as $compStyle) {
 
 // Auto-include dedicated page stylesheet if available
 if ($detectedPortal && $detectedPage && $detectedPortal !== 'components') {
-    $pageCssFile = "/assets/css/{$detectedPortal}/{$detectedPage}.css";
+    $pageCssFile = ($detectedPortal === 'pages') ? "/assets/css/pages/{$detectedPage}.css" : "/assets/css/{$detectedPortal}/{$detectedPage}.css";
     if (!in_array($pageCssFile, $extraCss)) {
         $extraCss[] = $pageCssFile;
     }

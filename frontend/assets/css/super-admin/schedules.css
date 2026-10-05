@@ -1,0 +1,20 @@
+/**
+ * frontend/assets/css/super-admin/schedules.css
+ * Dedicated stylesheet for frontend/super-admin/schedules.php
+ */
+
+body.page-super-admin-schedules .day-tabs-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+}
+
+body.page-super-admin-schedules .schedule-slot-pill {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+}

@@ -1,0 +1,11 @@
+/**
+ * frontend/assets/css/pages/logout.css
+ * Dedicated stylesheet for frontend/logout.php
+ */
+
+body.page-logout {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
