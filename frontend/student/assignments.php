@@ -376,7 +376,6 @@ include_once __DIR__ . '/../components/header.php';
     </div>
 
     <script src="../assets/js/utils.js"></script>
-    <script src="../assets/js/notifications.js"></script>
     <script>
     function openSubmitModal(id, title) {
         document.getElementById('submitAsgId').value = id;

@@ -2,15 +2,12 @@
 // backend/services/AssignmentService.php
 
 require_once __DIR__ . '/../models/Assignment.php';
-require_once __DIR__ . '/../models/Notification.php';
 
 class AssignmentService {
     private $assignmentModel;
-    private $notificationModel;
 
     public function __construct() {
         $this->assignmentModel = new Assignment();
-        $this->notificationModel = new Notification();
     }
 
     public function getAssignment($id) {

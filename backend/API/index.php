@@ -401,14 +401,7 @@ try {
             $aiService = new AIService();
             $aiModel = new AIModel();
 
-            if ($action === 'assignment-assist' && $method === 'POST') {
-                $asgId = (int)($input['assignment_id'] ?? 0);
-                $q = $input['question'] ?? '';
-                $taskType = $input['task_type'] ?? 'solve';
-                $draftText = $input['draft_text'] ?? '';
-                $key = $input['api_key'] ?? ($_SESSION['ai_api_key'] ?? null);
-                jsonOut($aiService->askAssignmentAssist($user['id'], $asgId, $q, $taskType, $draftText, $key));
-            } elseif (($action === 'save-key' || $action === 'save-settings' || $action === 'update-settings') && $method === 'POST') {
+            if (($action === 'save-key' || $action === 'save-settings' || $action === 'update-settings') && $method === 'POST') {
                 $key = trim($input['api_key'] ?? Config::getInstance()->get('gemini_api_key', ''));
                 $name = trim($input['name'] ?? ($input['key_name'] ?? 'chandan'));
                 $projectName = trim($input['project_name'] ?? 'project/406491916720');

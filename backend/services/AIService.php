@@ -5,16 +5,10 @@ require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../models/AIModel.php';
 require_once __DIR__ . '/../models/Academic.php';
-require_once __DIR__ . '/../models/Note.php';
-require_once __DIR__ . '/../models/Assignment.php';
-require_once __DIR__ . '/../models/Exam.php';
 
 class AIService {
     private $aiModel;
     private $academicModel;
-    private $noteModel;
-    private $assignmentModel;
-    private $examModel;
 
     // AI Key Settings
     private $apiKey;
@@ -28,9 +22,6 @@ class AIService {
     public function __construct() {
         $this->aiModel = new AIModel();
         try { $this->academicModel = new Academic(); } catch (Throwable $t) { $this->academicModel = null; }
-        try { $this->noteModel = new Note(); } catch (Throwable $t) { $this->noteModel = null; }
-        try { $this->assignmentModel = new Assignment(); } catch (Throwable $t) { $this->assignmentModel = null; }
-        try { $this->examModel = new Exam(); } catch (Throwable $t) { $this->examModel = null; }
 
         $config = Config::getInstance();
         
@@ -347,76 +338,7 @@ class AIService {
         ];
     }
 
-    /**
-     * Dedicated AI Assignment Solver & Tutor
-     */
-    public function askAssignmentAssist($userId, $assignmentId, $question = '', $taskType = 'solve', $draftText = '', $customApiKey = null) {
-        $assignment = null;
-        if ($assignmentId > 0) {
-            $assignment = $this->assignmentModel->findById($assignmentId);
-        }
 
-        $asgTitle = $assignment['title'] ?? 'Coursework Assignment';
-        $subName = $assignment['subject_name'] ?? 'Academic Subject';
-        $desc = $assignment['description'] ?? '';
-        $instructions = $assignment['instructions'] ?? '';
-        $maxMarks = $assignment['max_marks'] ?? 100;
-
-        $systemPrompt = "You are StudentOS AI's Master Academic Assignment Solver & University Professor.\n"
-                      . "Your task is to provide publication-grade academic solutions, code, theoretical breakdowns, and grading evaluations.\n"
-                      . "Formatting Guidelines:\n"
-                      . "- Use clean Markdown formatting.\n"
-                      . "- Structure your response with clear sections: Executive Summary, Mathematical/Theoretical Foundation, Step-by-Step Complete Solution, Verified Code Implementation (if applicable), and Analysis/Checklist.\n"
-                      . "- For code, write complete, syntax-correct, modular, commented implementations with time/space complexity notes.\n"
-                      . "- For proofs or derivations, show every intermediate step clearly.\n"
-                      . "- Ensure the response directly helps the student achieve full marks ({$maxMarks} pts).";
-
-        $userPrompt = "ASSIGNMENT CONTEXT:\n"
-                    . "- Subject: $subName\n"
-                    . "- Assignment Title: $asgTitle\n"
-                    . "- Description / Problem Statement: $desc\n"
-                    . ($instructions ? "- Faculty Instructions: $instructions\n" : "")
-                    . "- Maximum Marks: $maxMarks pts\n\n";
-
-        if ($taskType === 'solve') {
-            $userPrompt .= "TASK: Provide a complete, step-by-step, comprehensive academic solution for this entire assignment.\n"
-                        . "Address all problem statements, show calculations/proofs, provide full working code if programming is required, and summarize final conclusions.";
-        } elseif ($taskType === 'code') {
-            $userPrompt .= "TASK: Generate the complete production-grade code implementation to solve this assignment.\n"
-                        . "Include comments explaining key algorithmic decisions, instructions on how to run/test the code, sample inputs/outputs, and edge case handling.";
-        } elseif ($taskType === 'explain') {
-            $userPrompt .= "TASK: Break down and explain the core theoretical principles, formulas, and concepts behind this assignment.\n"
-                        . "Provide an intuitive explanation, analogies, and a study roadmap so the student thoroughly understands the concepts.";
-        } elseif ($taskType === 'review') {
-            $userPrompt .= "TASK: Review and grade the student's draft response below for this assignment:\n"
-                        . "STUDENT'S DRAFT RESPONSE:\n" . ($draftText ?: 'No draft text provided.') . "\n\n"
-                        . "Provide a detailed evaluation: strengths, missing elements, logical/code errors, actionable fixes to get full marks, and estimated score out of $maxMarks.";
-        } else {
-            $userPrompt .= "STUDENT'S SPECIFIC QUESTION / REQUEST:\n" . ($question ?: "How do I solve this assignment step-by-step?");
-        }
-
-        if (!empty($question) && $taskType !== 'ask') {
-            $userPrompt .= "\n\nADDITIONAL STUDENT NOTE / QUESTION:\n" . $question;
-        }
-
-        $answer = $this->callGeminiApi($systemPrompt, $userPrompt, $customApiKey);
-
-        if (empty($answer)) {
-            $answer = "Unable to retrieve assignment solution from Google Gemini API. Please verify the API connection.";
-        }
-
-        $this->aiModel->recordUsage($userId, 'assignment_assist', strlen($userPrompt)/4, strlen($answer)/4, $this->modelName);
-
-        return [
-            'success' => true,
-            'assignment_id' => $assignmentId,
-            'assignment_title' => $asgTitle,
-            'subject_name' => $subName,
-            'task_type' => $taskType,
-            'answer' => $answer,
-            'provider' => $this->lastProviderUsed
-        ];
-    }
 
     /**
      * PDF Q&A / Document RAG

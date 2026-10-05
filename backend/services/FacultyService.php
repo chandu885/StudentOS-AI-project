@@ -1,25 +1,21 @@
 <?php
 // backend/services/FacultyService.php
 
-require_once __DIR__ . '/../models/User.php';
 require_once __DIR__ . '/../models/Faculty.php';
 require_once __DIR__ . '/../models/Academic.php';
 require_once __DIR__ . '/../models/Assignment.php';
-require_once __DIR__ . '/../models/Attendance.php';
 require_once __DIR__ . '/../models/Exam.php';
 
 class FacultyService {
     private $facultyModel;
     private $academicModel;
     private $assignmentModel;
-    private $attendanceModel;
     private $examModel;
 
     public function __construct() {
         $this->facultyModel = new Faculty();
         $this->academicModel = new Academic();
         $this->assignmentModel = new Assignment();
-        $this->attendanceModel = new Attendance();
         $this->examModel = new Exam();
     }
 

@@ -1,26 +1,14 @@
 <?php
 // backend/services/AdminService.php
 
-require_once __DIR__ . '/../models/User.php';
-require_once __DIR__ . '/../models/Student.php';
-require_once __DIR__ . '/../models/Faculty.php';
-require_once __DIR__ . '/../models/Academic.php';
 require_once __DIR__ . '/../models/SystemModel.php';
 
 class AdminService {
     private $db;
-    private $userModel;
-    private $studentModel;
-    private $facultyModel;
-    private $academicModel;
     private $systemModel;
 
     public function __construct() {
         $this->db = Database::getInstance();
-        $this->userModel = new User();
-        $this->studentModel = new Student();
-        $this->facultyModel = new Faculty();
-        $this->academicModel = new Academic();
         $this->systemModel = new SystemModel();
     }
 
